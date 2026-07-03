@@ -210,7 +210,11 @@ app.get('/api/health', async (req, res) => {
   }
   res.json({
     status: 'ok',
-    mode: 'read-only',
+    // Reads are unrestricted; execution is real but gated — every command
+    // requires explicit human approval before /api/execute runs it, and
+    // only against the fixed allowlist. Neither 'read-only' nor
+    // 'unrestricted' is true, so say what actually holds.
+    mode: 'governed',
     workspaceCount,
     memoryBridgeReady: memoryBridge.ready
   });
@@ -486,9 +490,12 @@ async function askGemini(query: string, history: any[] = []): Promise<{ reply: s
       contents: contentsPayload,
       systemInstruction: {
         parts: [{
-          text: 'You are the assistant for MyAI Portal, a secure, local, read-only developer dashboard.\n' +
+          text: 'You are the assistant for MyAI Portal, a secure, governed dashboard for non-technical stakeholders.\n' +
                 'You help users explore their workspaces, inspect files, check folder contents, and search code/docs.\n' +
                 'You must use the provided tools to fetch actual workspace data. Do not make up file paths or contents.\n' +
+                'If the user asks to build, test, lint, or check status/diff for a workspace, call proposeExecution — ' +
+                'never claim to have run or changed anything yourself. Execution only happens after the user explicitly ' +
+                'approves the proposal card, and only for the fixed set of safe commands proposeExecution allows.\n' +
                 'Always answer in natural language, be friendly and helpful, and do NOT use emojis in your response.'
         }]
       },
@@ -532,6 +539,23 @@ async function askGemini(query: string, history: any[] = []): Promise<{ reply: s
                   keyword: { type: 'STRING', description: 'The keyword or string to search for.' }
                 },
                 required: ['workspaceName', 'keyword']
+              }
+            },
+            {
+              name: 'proposeExecution',
+              description: 'Propose running a safe, allowlisted command in a workspace. This never executes anything directly — it only creates a card the user must explicitly approve before anything runs. Use this whenever the user asks to build, test, lint, or check status/diff for a workspace.',
+              parameters: {
+                type: 'OBJECT',
+                properties: {
+                  workspaceName: { type: 'STRING', description: 'The name of the workspace to run the command in.' },
+                  command: {
+                    type: 'STRING',
+                    enum: ['npm run test', 'npm test', 'npm run build', 'npm run lint', 'cargo check', 'cargo test', 'git diff', 'git status'],
+                    description: 'The exact allowlisted command to propose.'
+                  },
+                  reason: { type: 'STRING', description: 'A short, plain-language reason this command answers the request.' }
+                },
+                required: ['workspaceName', 'command']
               }
             }
           ]
@@ -588,6 +612,15 @@ async function askGemini(query: string, history: any[] = []): Promise<{ reply: s
           const results = await searchFilesInWorkspace(args.workspaceName, args.keyword);
           toolResult = { results };
           uiComponent = { type: 'SearchResults', data: { workspace: args.workspaceName, keyword: args.keyword, results } };
+        } else if (name === 'proposeExecution') {
+          // Never executes — only produces a card the user must explicitly
+          // approve. The actual run still passes through /api/execute's
+          // own server-side allowlist regardless of what's proposed here.
+          toolResult = { proposed: true, workspaceName: args.workspaceName, command: args.command };
+          uiComponent = {
+            type: 'ProposedAction',
+            data: { workspaceName: args.workspaceName, command: args.command, reason: args.reason || '' }
+          };
         } else {
           throw new Error(`Unknown function: ${name}`);
         }
@@ -648,9 +681,12 @@ async function askOpenAI(query: string, history: any[] = []): Promise<{ reply: s
   const messagesPayload: any[] = [
     {
       role: 'system',
-      content: 'You are the assistant for MyAI Portal, a secure, local, read-only developer dashboard.\n' +
+      content: 'You are the assistant for MyAI Portal, a secure, governed dashboard for non-technical stakeholders.\n' +
                'You help users explore their workspaces, inspect files, check folder contents, and search code/docs.\n' +
                'You must use the provided tools to fetch actual workspace data. Do not make up file paths or contents.\n' +
+               'If the user asks to build, test, lint, or check status/diff for a workspace, call proposeExecution — ' +
+               'never claim to have run or changed anything yourself. Execution only happens after the user explicitly ' +
+               'approves the proposal card, and only for the fixed set of safe commands proposeExecution allows.\n' +
                'Always answer in natural language, be friendly and helpful, and do NOT use emojis in your response.'
     }
   ];
@@ -721,6 +757,26 @@ async function askOpenAI(query: string, history: any[] = []): Promise<{ reply: s
           required: ['workspaceName', 'keyword']
         }
       }
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'proposeExecution',
+        description: 'Propose running a safe, allowlisted command in a workspace. This never executes anything directly — it only creates a card the user must explicitly approve before anything runs. Use this whenever the user asks to build, test, lint, or check status/diff for a workspace.',
+        parameters: {
+          type: 'object',
+          properties: {
+            workspaceName: { type: 'string', description: 'The name of the workspace to run the command in.' },
+            command: {
+              type: 'string',
+              enum: ['npm run test', 'npm test', 'npm run build', 'npm run lint', 'cargo check', 'cargo test', 'git diff', 'git status'],
+              description: 'The exact allowlisted command to propose.'
+            },
+            reason: { type: 'string', description: 'A short, plain-language reason this command answers the request.' }
+          },
+          required: ['workspaceName', 'command']
+        }
+      }
     }
   ];
 
@@ -778,6 +834,15 @@ async function askOpenAI(query: string, history: any[] = []): Promise<{ reply: s
           const results = await searchFilesInWorkspace(args.workspaceName, args.keyword);
           toolResult = { results };
           uiComponent = { type: 'SearchResults', data: { workspace: args.workspaceName, keyword: args.keyword, results } };
+        } else if (name === 'proposeExecution') {
+          // Never executes — only produces a card the user must explicitly
+          // approve. The actual run still passes through /api/execute's
+          // own server-side allowlist regardless of what's proposed here.
+          toolResult = { proposed: true, workspaceName: args.workspaceName, command: args.command };
+          uiComponent = {
+            type: 'ProposedAction',
+            data: { workspaceName: args.workspaceName, command: args.command, reason: args.reason || '' }
+          };
         } else {
           throw new Error(`Unknown function: ${name}`);
         }
@@ -812,8 +877,10 @@ async function askOllama(query: string): Promise<{ reply: string; uiComponent?: 
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: 'llama3',
-      prompt: `You are the assistant for MyAI Portal, a secure, local, read-only developer dashboard.\n` +
+      prompt: `You are the assistant for MyAI Portal, a secure, governed dashboard for non-technical stakeholders.\n` +
               `Help the user explore workspaces. Query: ${query}\n` +
+              `You cannot execute anything from this offline path — if asked to build, test, or lint, tell the user ` +
+              `to try again once the portal's main connection is available so the request can go through approval.\n` +
               `Answer in natural language, be concise, helpful, and do NOT use emojis in your response.`,
       stream: false
     })
@@ -899,6 +966,30 @@ async function resolveQueryLocally(query: string): Promise<{ reply: string; uiCo
   if (webSearchMatch) {
     return {
       reply: `[LOCAL FALLBACK ENGINE] Web search isn't connected in this build. Ask about a registered workspace, a file, or a keyword inside one instead.`
+    };
+  }
+
+  // 4.55. Build/test/lint intent — propose it, never auto-run it. This is
+  // the local (no-LLM-key) path to the same approval-gated control-plane
+  // pattern proposeExecution gives the LLM tool-calling paths.
+  const proposeVerbRegex = /\b(build|lint|tests?)\b/i;
+  const proposeWorkspaceMatch = query.match(/(?:for|in)\s+([\w-]+)/i);
+  const proposeVerbMatch = query.match(proposeVerbRegex);
+  if (proposeVerbMatch && proposeWorkspaceMatch) {
+    const workspace = proposeWorkspaceMatch[1];
+    const verb = proposeVerbMatch[1].toLowerCase();
+    const isRust = workspace.toLowerCase() === 'rook';
+    const command = verb.startsWith('lint')
+      ? 'npm run lint'
+      : verb.startsWith('test')
+        ? (isRust ? 'cargo test' : 'npm test')
+        : (isRust ? 'cargo check' : 'npm run build');
+    return {
+      reply: `[LOCAL FALLBACK ENGINE] I can run "${command}" in workspace "${workspace}". Nothing runs until you approve it below.`,
+      uiComponent: {
+        type: 'ProposedAction',
+        data: { workspaceName: workspace, command, reason: `Requested via: "${query}"` }
+      }
     };
   }
 

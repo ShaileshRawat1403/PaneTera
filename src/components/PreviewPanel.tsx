@@ -21,6 +21,7 @@ interface PreviewProps {
   onAction: (query: string) => void;
   onRemoveItem: (id: string) => void;
   onClearFeed: () => void;
+  onApproveAction: (id: string, workspaceName: string, command: string) => void;
   token: string;
 }
 
@@ -560,6 +561,49 @@ const WorkflowsFeedCard: React.FC<{ data: any }> = ({ data }) => {
   );
 };
 
+// Sub-component for a proposed command awaiting explicit human approval.
+// Nothing runs until Approve is clicked — this is the control-plane gate:
+// the model or the local resolver can propose, only the operator can run.
+const ProposedActionFeedCard: React.FC<{ data: any; onApprove: () => void; onCancel: () => void }> = ({ data, onApprove, onCancel }) => {
+  return (
+    <Box sx={{ background: 'rgba(245, 158, 11, 0.04)', border: '1px solid rgba(245, 158, 11, 0.25)', borderRadius: '12px', p: 2 }}>
+      <Typography variant="caption" sx={{ color: '#f59e0b', fontWeight: 700, letterSpacing: '0.05em', display: 'block', mb: 1 }}>
+        WAITING FOR YOUR APPROVAL
+      </Typography>
+      <Typography variant="body2" sx={{ color: '#f4f4f5', mb: 0.5 }}>
+        Run{' '}
+        <Box component="span" sx={{ fontFamily: 'monospace', color: '#7f5af0', fontWeight: 700 }}>
+          {data.command}
+        </Box>{' '}
+        in <Box component="span" sx={{ fontWeight: 700 }}>{data.workspaceName}</Box>
+      </Typography>
+      {data.reason && (
+        <Typography variant="caption" sx={{ color: '#a1a1aa', display: 'block', mb: 1 }}>
+          {data.reason}
+        </Typography>
+      )}
+      <Box sx={{ display: 'flex', gap: 1, mt: 1.5 }}>
+        <Button
+          size="small"
+          variant="contained"
+          onClick={onApprove}
+          sx={{ background: '#22c55e', '&:hover': { background: '#16a34a' } }}
+        >
+          Approve &amp; Run
+        </Button>
+        <Button
+          size="small"
+          variant="outlined"
+          onClick={onCancel}
+          sx={{ color: '#ef4444', borderColor: 'rgba(239,68,68,0.4)' }}
+        >
+          Cancel
+        </Button>
+      </Box>
+    </Box>
+  );
+};
+
 // Sub-component for task process execution stdout/stderr streams
 const ExecutionLogsFeedCard: React.FC<{ data: any; procId: string; token: string }> = ({ data, procId, token }) => {
   const [isRunning, setIsRunning] = useState(true);
@@ -737,7 +781,7 @@ const DesktopAppsFeedCard: React.FC<{ token: string }> = ({ token }) => {
   );
 };
 
-export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onAction, onRemoveItem, onClearFeed, token }) => {
+export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onAction, onRemoveItem, onClearFeed, onApproveAction, token }) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const feedEndRef = useRef<HTMLDivElement>(null);
 
@@ -875,6 +919,7 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
                   {item.type === 'CodePreview' && `CODE: ${item.data.workspace}/${item.data.path}`}
                   {item.type === 'SearchResults' && `SEARCH: "${item.data.keyword}"`}
                   {item.type === 'WorkflowsList' && `PIPELINES: ${item.data.workspace}`}
+                  {item.type === 'ProposedAction' && 'AWAITING APPROVAL'}
                   {item.type === 'ExecutionLogs' && `TASK CONSOLE`}
                   {item.type === 'GitHistory' && `GIT STATUS: ${item.data.workspace}`}
                   {item.type === 'DesktopApps' && `SYSTEM APP TELEMETRY`}
@@ -945,6 +990,14 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
 
                 {item.type === 'WorkflowsList' && (
                   <WorkflowsFeedCard data={item.data} />
+                )}
+
+                {item.type === 'ProposedAction' && (
+                  <ProposedActionFeedCard
+                    data={item.data}
+                    onApprove={() => onApproveAction(item.id, item.data.workspaceName, item.data.command)}
+                    onCancel={() => onRemoveItem(item.id)}
+                  />
                 )}
 
                 {item.type === 'ExecutionLogs' && (

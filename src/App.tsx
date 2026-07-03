@@ -171,46 +171,31 @@ const App: React.FC = () => {
   const handleSend = async (text: string) => {
     const normalizedQuery = text.toLowerCase();
     
-    // Command execution interceptor
+    // Command execution interceptor — proposes only. Nothing runs until the
+    // user clicks Approve on the resulting card; see handleApproveAction.
     const execRegex = /(?:run|execute|exec)\s+(npm run \w+|npm test|cargo \w+|git diff|git status)\s+in\s+([\w-]+)/i;
     const execMatch = text.match(execRegex);
     if (execMatch) {
       const command = execMatch[1].trim();
       const workspace = execMatch[2].trim();
       const procId = Math.random().toString(36).substr(2, 9);
-      
+
       addMessage({ role: 'user', content: text });
-      setLoading(true);
-      
+      addMessage({
+        role: 'assistant',
+        content: `I can run "${command}" in ${workspace}. Review it in the panel and approve to continue — nothing runs until you do.`,
+        uiComponent: { type: 'ProposedAction', data: { workspaceName: workspace, command } }
+      });
+
       setPreviewFeed(prev => [
         ...prev,
         {
           id: procId,
-          type: 'ExecutionLogs',
-          data: { command, logs: [`[SYSTEM] Starting task execution: ${command} in ${workspace}...`] },
+          type: 'ProposedAction',
+          data: { workspaceName: workspace, command },
           timestamp: new Date().toLocaleTimeString()
         }
       ]);
-      
-      try {
-        const resp = await fetch('/api/execute', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({ workspaceName: workspace, command, procId })
-        });
-        const resData = await resp.json();
-        if (resp.ok) {
-          addMessage({ role: 'assistant', content: `Started executing task "${command}" inside workspace "${workspace}". View live logs in the console panel on the right.` });
-        } else {
-          addMessage({ role: 'assistant', content: `Failed to start task execution: ${resData.error}` });
-        }
-      } catch (err: any) {
-        addMessage({ role: 'assistant', content: `Error starting task: ${err.message}` });
-      }
-      setLoading(false);
       return;
     }
     if (normalizedQuery.includes('workspace')) {
@@ -336,6 +321,41 @@ const App: React.FC = () => {
     setPreviewFeed(prev => prev.filter(item => item.id !== id));
   };
 
+  // The one place a proposed command actually becomes a running process.
+  // Called only from the ProposedAction card's Approve button — never
+  // automatically. /api/execute still re-validates against its own
+  // allowlist server-side regardless of what was proposed.
+  const handleApproveAction = async (procId: string, workspaceName: string, command: string) => {
+    setPreviewFeed(prev => prev.map(item => item.id === procId ? {
+      ...item,
+      type: 'ExecutionLogs',
+      data: { command, logs: [`[SYSTEM] Approved by operator. Starting: ${command} in ${workspaceName}...`] }
+    } : item));
+
+    try {
+      const resp = await fetch('/api/execute', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ workspaceName, command, procId })
+      });
+      const resData = await resp.json();
+      if (!resp.ok) {
+        setPreviewFeed(prev => prev.map(item => item.id === procId ? {
+          ...item,
+          data: { ...item.data, logs: [...item.data.logs, `[ERROR] ${resData.error || 'Failed to start'}`] }
+        } : item));
+      }
+    } catch (err: any) {
+      setPreviewFeed(prev => prev.map(item => item.id === procId ? {
+        ...item,
+        data: { ...item.data, logs: [...item.data.logs, `[ERROR] ${err.message}`] }
+      } : item));
+    }
+  };
+
   const handleClearFeed = () => {
     setPreviewFeed([]);
   };
@@ -429,7 +449,8 @@ const App: React.FC = () => {
                 { title: 'Connected systems', cmd: 'List workspaces', desc: 'See everything the portal can currently observe' },
                 { title: "What's changed in flowright", cmd: 'git status in flowright', desc: 'Recent activity and working state' },
                 { title: 'Summarize rook', cmd: 'Read README.md in rook', desc: 'Plain-language overview of the project' },
-                { title: 'Summarize flowright', cmd: 'Read README.md in flowright', desc: 'Plain-language overview of the project' }
+                { title: 'Summarize flowright', cmd: 'Read README.md in flowright', desc: 'Plain-language overview of the project' },
+                { title: 'Build flowright', cmd: 'run npm run build in flowright', desc: 'Propose a build — nothing runs until you approve it' }
               ]
                 .filter(item => item.title.toLowerCase().includes(cmdKQuery.toLowerCase()) || item.cmd.toLowerCase().includes(cmdKQuery.toLowerCase()))
                 .map((item, idx) => (
@@ -552,7 +573,7 @@ const App: React.FC = () => {
 
             {/* Access mode */}
             <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
-              <Chip label="READ-ONLY" size="small" sx={{ height: 16, fontSize: '0.55rem', background: 'rgba(34, 197, 94, 0.08)', color: '#22c55e', border: '1px solid rgba(34, 197, 94, 0.15)' }} />
+              <Chip label="GOVERNED" size="small" sx={{ height: 16, fontSize: '0.55rem', background: 'rgba(34, 197, 94, 0.08)', color: '#22c55e', border: '1px solid rgba(34, 197, 94, 0.15)' }} />
             </Box>
 
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -576,7 +597,7 @@ const App: React.FC = () => {
                         AI Systems Observability
                       </Typography>
                       <Typography variant="body2" sx={{ mb: 4, color: '#a1a1aa', textAlign: 'center', maxWidth: 450, mx: 'auto', lineHeight: 1.6 }}>
-                        See what's happening across your AI systems and ask questions in plain English. Nothing here can change or execute anything — it's look-only.
+                        See what's happening across your AI systems and ask questions in plain English. You can also ask it to build, test, or check a workspace — nothing runs until you approve it.
                       </Typography>
 
                       {/* Guided Interactive Journey Tracker */}
@@ -755,6 +776,7 @@ const App: React.FC = () => {
                 }}
                 onRemoveItem={handleRemoveItem}
                 onClearFeed={handleClearFeed}
+                onApproveAction={handleApproveAction}
                 token={token}
               />
             </Grid>
