@@ -1,0 +1,7 @@
+workspaces:
+  - name: rook
+    path: /Users/Shailesh/MYAIAGENTS/rook
+  - name: flowright
+    path: /Users/Shailesh/MYAIAGENTS/active/flowright
+  - name: websiteops-pothos-proof
+    path: /Users/Shailesh/MYAIAGENTS/websiteops-pothos-proof

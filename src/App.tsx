@@ -1,0 +1,782 @@
+// src/App.tsx
+import React, { useState, useEffect, useRef } from 'react';
+import { Box, Container, CssBaseline, ThemeProvider, createTheme, Paper, Typography, TextField, Button, CircularProgress, Grid, Chip } from '@mui/material';
+import ChatMessage from './components/ChatMessage';
+import ChatInput from './components/ChatInput';
+import { PreviewPanel, FeedItem } from './components/PreviewPanel';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
+
+// Premium Apple-like dark theme with refined typography and soft border outlines
+const appleTheme = createTheme({
+  typography: {
+    fontFamily: '"Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    button: {
+      textTransform: 'none',
+      fontWeight: 600,
+    },
+  },
+  palette: {
+    mode: 'dark',
+    background: {
+      default: '#09090b',
+      paper: 'rgba(20, 20, 25, 0.4)',
+    },
+    primary: { main: '#7f5af0' },
+  },
+  components: {
+    MuiPaper: {
+      styleOverrides: {
+        root: {
+          background: 'rgba(20, 20, 25, 0.45)',
+          backdropFilter: 'blur(20px)',
+          borderRadius: '20px',
+          border: '1px solid rgba(255, 255, 255, 0.08)',
+          boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.2)',
+        },
+      },
+    },
+    MuiButton: {
+      styleOverrides: {
+        root: {
+          borderRadius: '999px',
+          padding: '8px 20px',
+        },
+      },
+    },
+  },
+});
+
+interface Message {
+  role: 'user' | 'assistant';
+  content: string;
+  uiComponent?: {
+    type: 'WorkspaceList' | 'FileList' | 'CodePreview' | 'SearchResults';
+    data: any;
+  };
+}
+
+const App: React.FC = () => {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [token, setToken] = useState<string>('');
+  const [showTokenPrompt, setShowTokenPrompt] = useState<boolean>(false);
+  const [tokenInput, setTokenInput] = useState<string>('');
+  const [previewFeed, setPreviewFeed] = useState<FeedItem[]>([]);
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [journeyStep, setJourneyStep] = useState<number>(1);
+  const [thinkingSteps, setThinkingSteps] = useState<string[]>([]);
+  const [isCmdKOpen, setIsCmdKOpen] = useState<boolean>(false);
+  const [cmdKQuery, setCmdKQuery] = useState<string>('');
+  
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Load token from localStorage on mount
+  useEffect(() => {
+    const stored = localStorage.getItem('portalToken') || '';
+    if (stored) {
+      setToken(stored);
+    } else {
+      setShowTokenPrompt(true);
+    }
+  }, []);
+
+  // Real-time EventSource listener for file updates and execution logs
+  useEffect(() => {
+    if (!token) return;
+
+    const eventSource = new EventSource(`/api/events?token=${encodeURIComponent(token)}`);
+
+    eventSource.onmessage = (e) => {
+      try {
+        const eventData = JSON.parse(e.data);
+        if (eventData.type === 'file_change') {
+          const logMsg = `[WATCHER] File ${eventData.event}: ${eventData.workspace}/${eventData.path}`;
+          setPreviewFeed(prev => [
+            ...prev,
+            {
+              id: Math.random().toString(36).substr(2, 9),
+              type: 'TerminalLogs',
+              data: { logs: [logMsg, "Dynamic workspace hot reload active."] },
+              timestamp: eventData.timestamp
+            }
+          ]);
+        } else if (eventData.type === 'proc_log') {
+          setPreviewFeed(prev => prev.map(item => {
+            if (item.id === eventData.procId) {
+              return {
+                ...item,
+                data: {
+                  ...item.data,
+                  logs: [...(item.data.logs || []), eventData.text]
+                }
+              };
+            }
+            return item;
+          }));
+        }
+      } catch (err) {
+        console.error('Error parsing SSE event:', err);
+      }
+    };
+
+    return () => {
+      eventSource.close();
+    };
+  }, [token]);
+
+  // On session start: recall workspace memory from rook MCP and show in feed
+  useEffect(() => {
+    if (!token) return;
+    const now = new Date().toLocaleTimeString();
+    fetch('/api/memory/recall?category=workspace', {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(r => r.json())
+      .then((data: { memories: string[]; bridgeReady: boolean }) => {
+        setPreviewFeed(prev => [
+          {
+            id: 'memory-recall-session',
+            type: 'MemoryRecall',
+            data: { memories: data.memories || [], bridgeReady: data.bridgeReady },
+            timestamp: now
+          },
+          ...prev
+        ]);
+      })
+      .catch(() => { /* bridge unavailable — silently skip */ });
+  }, [token]);
+
+
+  // Cmd+K palette listener
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsCmdKOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Auto-scroll to bottom of chat when new messages arrive
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, loading]);
+
+  const addMessage = (msg: Message) => {
+    setMessages(prev => [...prev, msg]);
+  };
+
+  const handleSend = async (text: string) => {
+    const normalizedQuery = text.toLowerCase();
+    
+    // Command execution interceptor
+    const execRegex = /(?:run|execute|exec)\s+(npm run \w+|npm test|cargo \w+|git diff|git status)\s+in\s+([\w-]+)/i;
+    const execMatch = text.match(execRegex);
+    if (execMatch) {
+      const command = execMatch[1].trim();
+      const workspace = execMatch[2].trim();
+      const procId = Math.random().toString(36).substr(2, 9);
+      
+      addMessage({ role: 'user', content: text });
+      setLoading(true);
+      
+      setPreviewFeed(prev => [
+        ...prev,
+        {
+          id: procId,
+          type: 'ExecutionLogs',
+          data: { command, logs: [`[SYSTEM] Starting task execution: ${command} in ${workspace}...`] },
+          timestamp: new Date().toLocaleTimeString()
+        }
+      ]);
+      
+      try {
+        const resp = await fetch('/api/execute', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ workspaceName: workspace, command, procId })
+        });
+        const resData = await resp.json();
+        if (resp.ok) {
+          addMessage({ role: 'assistant', content: `Started executing task "${command}" inside workspace "${workspace}". View live logs in the console panel on the right.` });
+        } else {
+          addMessage({ role: 'assistant', content: `Failed to start task execution: ${resData.error}` });
+        }
+      } catch (err: any) {
+        addMessage({ role: 'assistant', content: `Error starting task: ${err.message}` });
+      }
+      setLoading(false);
+      return;
+    }
+    if (normalizedQuery.includes('workspace')) {
+      setJourneyStep(prev => Math.max(prev, 2));
+    } else if (normalizedQuery.includes('list files') || normalizedQuery.includes('browse')) {
+      setJourneyStep(prev => Math.max(prev, 3));
+    } else if (normalizedQuery.includes('read file') || normalizedQuery.includes('read ')) {
+      setJourneyStep(prev => Math.max(prev, 4));
+    } else if (normalizedQuery.includes('search')) {
+      setJourneyStep(prev => Math.max(prev, 5));
+    }
+
+    addMessage({ role: 'user', content: text });
+    setLoading(true);
+    
+    // Create the terminal log item card
+    const loadingId = Math.random().toString(36).substr(2, 9);
+    const currentTimestamp = new Date().toLocaleTimeString();
+    setPreviewFeed(prev => [
+      ...prev,
+      {
+        id: loadingId,
+        type: 'TerminalLogs',
+        data: { logs: ["Parsing query parameters...", "Invoking safe path controls..."] },
+        timestamp: currentTimestamp
+      }
+    ]);
+
+    setThinkingSteps(["Parsing query parameters..."]);
+
+    const historyPayload = messages.map(m => ({
+      role: m.role === 'user' ? 'user' : 'model',
+      parts: [{ text: m.content }]
+    }));
+
+    // Trigger api request in the background
+    const apiPromise = fetch('/api/chat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ query: text, history: historyPayload }),
+    }).then(async (resp) => {
+      if (resp.status === 401) {
+        throw new Error('Unauthorized');
+      }
+      return resp.json();
+    });
+
+    // Staged terminal log animation steps
+    const runStagedLogs = async () => {
+      const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+      
+      const updateLogs = (logLine: string) => {
+        setThinkingSteps(prev => [...prev, logLine]);
+        setPreviewFeed(prev => prev.map(item => item.id === loadingId ? {
+          ...item,
+          data: { logs: [...item.data.logs, logLine] }
+        } : item));
+      };
+
+      await sleep(350);
+      updateLogs("Contacting local repository reader...");
+      
+      await sleep(350);
+      updateLogs("Querying safe file boundary controls...");
+      
+      await sleep(350);
+      updateLogs("Resolving active widgets...");
+
+      try {
+        const data = await apiPromise;
+        
+        await sleep(350);
+        updateLogs("Response received. Rendering visual components...");
+        
+        // Final transition wait to look premium
+        await sleep(400);
+
+        addMessage({ 
+          role: 'assistant', 
+          content: data.reply ?? 'No response',
+          uiComponent: data.uiComponent
+        });
+
+        if (data.uiComponent) {
+          setPreviewFeed(prev => prev.map(item => item.id === loadingId ? {
+            id: loadingId,
+            type: data.uiComponent.type,
+            data: data.uiComponent.data,
+            timestamp: currentTimestamp
+          } : item));
+        } else {
+          setPreviewFeed(prev => prev.filter(item => item.id !== loadingId));
+        }
+      } catch (err: any) {
+        if (err.message === 'Unauthorized') {
+          addMessage({ role: 'assistant', content: 'Unauthorized. Please check your token settings.' });
+          setShowTokenPrompt(true);
+        } else {
+          addMessage({ role: 'assistant', content: 'Error contacting backend. Please verify that the server is running.' });
+        }
+        setPreviewFeed(prev => prev.filter(item => item.id !== loadingId));
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    runStagedLogs();
+  };
+
+  const handleTokenSave = () => {
+    const trimmed = tokenInput.trim();
+    if (trimmed) {
+      localStorage.setItem('portalToken', trimmed);
+      setToken(trimmed);
+      setShowTokenPrompt(false);
+    }
+  };
+
+  const handleRemoveItem = (id: string) => {
+    setPreviewFeed(prev => prev.filter(item => item.id !== id));
+  };
+
+  const handleClearFeed = () => {
+    setPreviewFeed([]);
+  };
+
+  const hasPreview = previewFeed.length > 0 || loading;
+
+  const getStepIcon = (step: number) => {
+    if (journeyStep >= step + 1) {
+      return <CheckCircleOutlineIcon sx={{ fontSize: 16 }} />;
+    }
+    if (journeyStep < step) {
+      return <LockOutlinedIcon sx={{ fontSize: 16 }} />;
+    }
+    return <PlayCircleOutlineIcon sx={{ fontSize: 16 }} />;
+  };
+
+  return (
+    <ThemeProvider theme={appleTheme}>
+      <CssBaseline />
+      
+      {/* Cmd+K spotlight search overlay */}
+      {isCmdKOpen && (
+        <Box
+          onClick={() => setIsCmdKOpen(false)}
+          sx={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(9, 9, 11, 0.82)',
+            backdropFilter: 'blur(12px)',
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'center',
+            pt: '15vh'
+          }}
+        >
+          <Paper
+            onClick={(e) => e.stopPropagation()}
+            elevation={24}
+            sx={{
+              width: '100%',
+              maxWidth: '600px',
+              mx: 2,
+              background: 'rgba(20, 20, 25, 0.8)',
+              border: '1px solid rgba(127, 85, 240, 0.3)',
+              borderRadius: '20px',
+              overflow: 'hidden',
+              boxShadow: '0 20px 50px rgba(0, 0, 0, 0.65), 0 0 40px rgba(127, 85, 240, 0.12)',
+              animation: 'appleSpringIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards'
+            }}
+          >
+            {/* Spotlight input */}
+            <Box sx={{ p: 2.5, borderBottom: '1px solid rgba(255, 255, 255, 0.08)' }}>
+              <TextField
+                fullWidth
+                autoFocus
+                variant="standard"
+                placeholder="Type a command or query..."
+                value={cmdKQuery}
+                onChange={(e) => setCmdKQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && cmdKQuery.trim()) {
+                    handleSend(cmdKQuery);
+                    setIsCmdKOpen(false);
+                    setCmdKQuery('');
+                  } else if (e.key === 'Escape') {
+                    setIsCmdKOpen(false);
+                  }
+                }}
+                InputProps={{
+                  disableUnderline: true,
+                  sx: {
+                    fontSize: '1.05rem',
+                    color: '#f4f4f5',
+                    fontFamily: '"Plus Jakarta Sans", sans-serif'
+                  }
+                }}
+              />
+            </Box>
+
+            {/* command list */}
+            <Box sx={{ p: 1.5, maxHeight: '320px', overflowY: 'auto' }}>
+              <Typography variant="caption" sx={{ px: 2, py: 1, display: 'block', color: '#71717a', fontWeight: 700, letterSpacing: '0.05em' }}>
+                SUGGESTED COMMANDS
+              </Typography>
+              
+              {[
+                { title: 'List Workspaces', cmd: 'List workspaces', desc: 'Scan active registered directories' },
+                { title: 'List Files in Rook', cmd: 'List files in rook', desc: 'Show indexed file tree for rook' },
+                { title: 'Read README in Flowright', cmd: 'Read README.md in flowright', desc: 'Inspect state flow specification' },
+                { title: 'Search Config in Flowright', cmd: 'Search for config in flowright', desc: 'Scan variables match' },
+                { title: 'Search Web for API Authentication', cmd: 'search web for API authentication', desc: 'Query documentation with live asset viewport screenshots' }
+              ]
+                .filter(item => item.title.toLowerCase().includes(cmdKQuery.toLowerCase()) || item.cmd.toLowerCase().includes(cmdKQuery.toLowerCase()))
+                .map((item, idx) => (
+                  <Box
+                    key={idx}
+                    onClick={() => {
+                      handleSend(item.cmd);
+                      setIsCmdKOpen(false);
+                      setCmdKQuery('');
+                    }}
+                    sx={{
+                      p: 1.5,
+                      px: 2.5,
+                      borderRadius: '12px',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      '&:hover': {
+                        background: 'rgba(127, 85, 240, 0.08)',
+                        '& .cmd-title': { color: '#b794f4' }
+                      }
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Typography className="cmd-title" variant="body2" sx={{ fontWeight: 600, color: '#f4f4f5', transition: 'color 0.2s' }}>
+                        {item.title}
+                      </Typography>
+                      <Typography variant="caption" sx={{ fontFamily: 'monospace', color: '#7f5af0', fontSize: '0.7rem', background: 'rgba(127, 85, 240, 0.1)', px: 1, py: 0.25, borderRadius: '4px' }}>
+                        Enter
+                      </Typography>
+                    </Box>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+                      {item.desc}
+                    </Typography>
+                  </Box>
+                ))}
+            </Box>
+            
+            <Box sx={{ px: 3, py: 1.5, background: 'rgba(0,0,0,0.2)', borderTop: '1px solid rgba(255, 255, 255, 0.04)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Typography variant="caption" color="text.secondary">
+                Select command or press ESC to dismiss
+              </Typography>
+              <Chip label="ESC" size="small" sx={{ height: 16, fontSize: '0.6rem', color: '#71717a', background: 'rgba(255,255,255,0.05)' }} />
+            </Box>
+          </Paper>
+        </Box>
+      )}
+
+      <Container 
+        maxWidth={hasPreview ? (isFullscreen ? false : "lg") : "md"} 
+        sx={{ 
+          height: '100vh', 
+          display: 'flex', 
+          flexDirection: 'column', 
+          py: 3,
+          position: 'relative',
+          zIndex: 10,
+          transition: 'max-width 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
+        }}
+      >
+        {showTokenPrompt && (
+          <Paper elevation={0} sx={{ p: 3, mb: 3, border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+            <Typography variant="h6" gutterBottom sx={{ fontWeight: 700, color: '#f4f4f5' }}>Access Authentication</Typography>
+            <Typography variant="body2" sx={{ mb: 2, color: '#a1a1aa' }}>
+              To sync securely with your local Express server, enter the token configured in your .env file.
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <TextField
+                fullWidth
+                variant="filled"
+                placeholder="Secure access token"
+                value={tokenInput}
+                onChange={e => setTokenInput(e.target.value)}
+                sx={{ background: 'rgba(255,255,255,0.04)', borderRadius: '12px', '& .MuiFilledInput-root': { borderRadius: '12px' } }}
+              />
+              <Button variant="contained" onClick={handleTokenSave} sx={{ px: 4 }}>Save</Button>
+            </Box>
+          </Paper>
+        )}
+
+        {/* Minimalist Apple Header with High-Fidelity Telemetry Stats */}
+        <Box 
+          sx={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center', 
+            mb: 2.5,
+            px: 1,
+            py: 1
+          }}
+        >
+          <Box>
+            <Typography variant="subtitle1" sx={{ fontWeight: 800, letterSpacing: '-0.02em', color: '#f4f4f5' }}>
+              MyAI Portal
+            </Typography>
+            <Typography variant="caption" sx={{ color: '#a1a1aa', fontWeight: 500 }}>
+              Local Workspace Intelligence
+            </Typography>
+          </Box>
+
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2.5 }}>
+            {/* Command Palette trigger chip */}
+            <Chip 
+              label="Cmd+K for commands" 
+              onClick={() => setIsCmdKOpen(true)}
+              size="small" 
+              sx={{ 
+                height: 20, 
+                fontSize: '0.65rem', 
+                background: 'rgba(127, 85, 240, 0.06)', 
+                color: '#b794f4',
+                border: '1px solid rgba(127, 85, 240, 0.18)',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                '&:hover': {
+                  background: 'rgba(127, 85, 240, 0.12)',
+                  borderColor: 'rgba(127, 85, 240, 0.3)'
+                }
+              }} 
+            />
+
+            {/* Performance metrics */}
+            <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
+              <Chip label="SANDBOXED" size="small" sx={{ height: 16, fontSize: '0.55rem', background: 'rgba(34, 197, 94, 0.08)', color: '#22c55e', border: '1px solid rgba(34, 197, 94, 0.15)' }} />
+              <Typography variant="caption" sx={{ fontFamily: 'monospace', color: '#71717a', fontSize: '0.65rem' }}>
+                LATENCY: 2ms
+              </Typography>
+              <Typography variant="caption" sx={{ fontFamily: 'monospace', color: '#71717a', fontSize: '0.65rem' }}>
+                CACHE: 14.8MB
+              </Typography>
+            </Box>
+
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box sx={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#22c55e' }} />
+              <Typography variant="caption" sx={{ color: '#cbd5e1', fontWeight: 600, fontSize: '0.7rem' }}>
+                Connected
+              </Typography>
+            </Box>
+          </Box>
+        </Box>
+
+        <Grid container spacing={3} sx={{ flexGrow: 1, height: 'calc(100% - 70px)', overflow: 'hidden' }}>
+          {/* Left Chat Pane */}
+          <Grid item xs={12} md={hasPreview ? (isFullscreen ? 4 : 5) : 12} sx={{ display: 'flex', flexDirection: 'column', height: '100%', transition: 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }}>
+            <Box className="scroll-container" sx={{ flexGrow: 1, overflowY: 'auto', mb: 2, pr: 1 }}>
+              <Paper elevation={0} sx={{ p: 3.5, minHeight: '100%', display: 'flex', flexDirection: 'column', background: 'rgba(255, 255, 255, 0.015)' }}>
+                <Box sx={{ flexGrow: 1 }}>
+                  {messages.length === 0 && (
+                    <Box sx={{ p: 1, mt: 1 }}>
+                      <Typography variant="h5" gutterBottom sx={{ color: '#f4f4f5', fontWeight: 800, mb: 1, letterSpacing: '-0.03em', textAlign: 'center' }}>
+                        Workspace Exploration
+                      </Typography>
+                      <Typography variant="body2" sx={{ mb: 4, color: '#a1a1aa', textAlign: 'center', maxWidth: 450, mx: 'auto', lineHeight: 1.6 }}>
+                        Explore system workspaces, files, and codebase indexes securely using natural query controls.
+                      </Typography>
+                      
+                      {/* Guided Interactive Journey Tracker */}
+                      <Paper variant="outlined" sx={{ p: 3, mb: 2, background: 'rgba(255, 255, 255, 0.01)', borderColor: 'rgba(255, 255, 255, 0.06)' }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2.5 }}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#f4f4f5' }}>
+                            Exploration Journey
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: '#a1a1aa', fontWeight: 600 }}>
+                            {Math.min(100, Math.floor(((journeyStep - 1) / 4) * 100))}% completed
+                          </Typography>
+                        </Box>
+                        
+                        <Grid container spacing={2}>
+                          {/* Step 1 */}
+                          <Grid item xs={12}>
+                            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
+                              <Box sx={{ color: journeyStep >= 2 ? '#22c55e' : '#7f5af0', pt: 0.5 }}>
+                                {getStepIcon(1)}
+                              </Box>
+                              <Box sx={{ flexGrow: 1 }}>
+                                <Typography variant="body2" sx={{ fontWeight: 600, color: '#f4f4f5', fontSize: '0.85rem' }}>
+                                  1. Discover Registered Workspaces
+                                </Typography>
+                                {journeyStep === 1 && (
+                                  <Button size="small" variant="contained" onClick={() => handleSend('List workspaces')} sx={{ mt: 1, fontSize: '0.75rem' }}>
+                                    Start Journey
+                                  </Button>
+                                )}
+                              </Box>
+                            </Box>
+                          </Grid>
+
+                          {/* Step 2 */}
+                          <Grid item xs={12}>
+                            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2, opacity: journeyStep < 2 ? 0.4 : 1 }}>
+                              <Box sx={{ color: journeyStep >= 3 ? '#22c55e' : (journeyStep === 2 ? '#7f5af0' : '#71717a'), pt: 0.5 }}>
+                                {getStepIcon(2)}
+                              </Box>
+                              <Box sx={{ flexGrow: 1 }}>
+                                <Typography variant="body2" sx={{ fontWeight: 600, color: '#f4f4f5', fontSize: '0.85rem' }}>
+                                  2. Index Directory Tree Structures
+                                </Typography>
+                                {journeyStep === 2 && (
+                                  <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
+                                    <Button size="small" variant="contained" onClick={() => handleSend('List files in rook')} sx={{ fontSize: '0.75rem' }}>
+                                      Scan rook files
+                                    </Button>
+                                    <Button size="small" variant="outlined" onClick={() => handleSend('List files in flowright')} sx={{ fontSize: '0.75rem' }}>
+                                      Scan flowright files
+                                    </Button>
+                                  </Box>
+                                )}
+                              </Box>
+                            </Box>
+                          </Grid>
+
+                          {/* Step 3 */}
+                          <Grid item xs={12}>
+                            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2, opacity: journeyStep < 3 ? 0.4 : 1 }}>
+                              <Box sx={{ color: journeyStep >= 4 ? '#22c55e' : (journeyStep === 3 ? '#7f5af0' : '#71717a'), pt: 0.5 }}>
+                                {getStepIcon(3)}
+                              </Box>
+                              <Box sx={{ flexGrow: 1 }}>
+                                <Typography variant="body2" sx={{ fontWeight: 600, color: '#f4f4f5', fontSize: '0.85rem' }}>
+                                  3. Inspect Target Code Contents
+                                </Typography>
+                                {journeyStep === 3 && (
+                                  <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
+                                    <Button size="small" variant="contained" onClick={() => handleSend('Read README.md in flowright')} sx={{ fontSize: '0.75rem' }}>
+                                      Read flowright README
+                                    </Button>
+                                    <Button size="small" variant="outlined" onClick={() => handleSend('Read package.json in rook')} sx={{ fontSize: '0.75rem' }}>
+                                      Read rook package
+                                    </Button>
+                                  </Box>
+                                )}
+                              </Box>
+                            </Box>
+                          </Grid>
+
+                          {/* Step 4 */}
+                          <Grid item xs={12}>
+                            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2, opacity: journeyStep < 4 ? 0.4 : 1 }}>
+                              <Box sx={{ color: journeyStep >= 5 ? '#22c55e' : (journeyStep === 4 ? '#7f5af0' : '#71717a'), pt: 0.5 }}>
+                                {getStepIcon(4)}
+                              </Box>
+                              <Box sx={{ flexGrow: 1 }}>
+                                <Typography variant="body2" sx={{ fontWeight: 600, color: '#f4f4f5', fontSize: '0.85rem' }}>
+                                  4. Scan Codebases for matches
+                                </Typography>
+                                {journeyStep === 4 && (
+                                  <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
+                                    <Button size="small" variant="contained" onClick={() => handleSend('Search for config in flowright')} sx={{ fontSize: '0.75rem' }}>
+                                      Find 'config'
+                                    </Button>
+                                    <Button size="small" variant="outlined" onClick={() => handleSend('Search for index in rook')} sx={{ fontSize: '0.75rem' }}>
+                                      Find 'index'
+                                    </Button>
+                                  </Box>
+                                )}
+                              </Box>
+                            </Box>
+                          </Grid>
+                        </Grid>
+                      </Paper>
+                    </Box>
+                  )}
+                  {messages.map((msg, idx) => (
+                    <ChatMessage 
+                      key={idx} 
+                      role={msg.role} 
+                      content={msg.content} 
+                      uiComponent={msg.uiComponent}
+                      onAction={(query) => {
+                        handleSend(query);
+                      }}
+                    />
+                  ))}
+                  {loading && (
+                    <Box sx={{ display: 'flex', justifyContent: 'flex-start', mb: 2, width: '100%' }}>
+                      <Paper
+                        elevation={0}
+                        sx={{
+                          p: 2.5,
+                          maxWidth: '90%',
+                          minWidth: '60%',
+                          background: 'rgba(255, 255, 255, 0.015)',
+                          borderRadius: '16px',
+                          border: '1px solid rgba(255, 255, 255, 0.06)',
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          gap: 2
+                        }}
+                      >
+                        <CircularProgress size={14} sx={{ color: '#7f5af0', mt: 0.5 }} />
+                        <Box sx={{ width: '100%' }}>
+                           <Typography variant="body2" sx={{ fontWeight: 700, mb: 1, fontSize: '0.8rem', color: '#cbd5e1' }}>
+                            Index Pipeline Scanning
+                          </Typography>
+                          {thinkingSteps.map((step, sIdx) => (
+                            <Typography 
+                              key={sIdx} 
+                              variant="caption" 
+                              component="div" 
+                              sx={{ 
+                                fontFamily: 'SFMono-Regular, Consolas, monospace', 
+                                color: sIdx === thinkingSteps.length - 1 ? '#cbd5e1' : '#71717a',
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                gap: 1,
+                                mb: 0.5,
+                                fontSize: '0.75rem'
+                              }}
+                            >
+                              <span style={{ color: sIdx === thinkingSteps.length - 1 ? '#7f5af0' : '#22c55e' }}>
+                                {sIdx === thinkingSteps.length - 1 ? '❯' : '✔'}
+                              </span>
+                              {step}
+                            </Typography>
+                          ))}
+                        </Box>
+                      </Paper>
+                    </Box>
+                  )}
+                  <div ref={messagesEndRef} />
+                </Box>
+              </Paper>
+            </Box>
+            <ChatInput onSend={handleSend} />
+          </Grid>
+
+          {/* Right Live Preview Pane (Live Feed timeline) */}
+          {hasPreview && (
+            <Grid item xs={12} md={isFullscreen ? 8 : 7} sx={{ height: '100%', transition: 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }}>
+              <PreviewPanel
+                previewFeed={previewFeed}
+                onClose={() => handleClearFeed()}
+                onAction={(query) => {
+                  handleSend(query);
+                }}
+                onRemoveItem={handleRemoveItem}
+                onClearFeed={handleClearFeed}
+                token={token}
+              />
+            </Grid>
+          )}
+        </Grid>
+      </Container>
+    </ThemeProvider>
+  );
+};
+
+export default App;
