@@ -215,11 +215,11 @@ const App: React.FC = () => {
     }
     if (normalizedQuery.includes('workspace')) {
       setJourneyStep(prev => Math.max(prev, 2));
-    } else if (normalizedQuery.includes('list files') || normalizedQuery.includes('browse')) {
+    } else if (normalizedQuery.includes('git status') || normalizedQuery.includes('activity')) {
       setJourneyStep(prev => Math.max(prev, 3));
-    } else if (normalizedQuery.includes('read file') || normalizedQuery.includes('read ')) {
+    } else if (normalizedQuery.includes('read')) {
       setJourneyStep(prev => Math.max(prev, 4));
-    } else if (normalizedQuery.includes('search')) {
+    } else if (journeyStep >= 4) {
       setJourneyStep(prev => Math.max(prev, 5));
     }
 
@@ -426,11 +426,10 @@ const App: React.FC = () => {
               </Typography>
               
               {[
-                { title: 'List Workspaces', cmd: 'List workspaces', desc: 'Scan active registered directories' },
-                { title: 'List Files in Rook', cmd: 'List files in rook', desc: 'Show indexed file tree for rook' },
-                { title: 'Read README in Flowright', cmd: 'Read README.md in flowright', desc: 'Inspect state flow specification' },
-                { title: 'Search Config in Flowright', cmd: 'Search for config in flowright', desc: 'Scan variables match' },
-                { title: 'Search Web for API Authentication', cmd: 'search web for API authentication', desc: 'Query documentation with live asset viewport screenshots' }
+                { title: 'Connected systems', cmd: 'List workspaces', desc: 'See everything the portal can currently observe' },
+                { title: "What's changed in flowright", cmd: 'git status in flowright', desc: 'Recent activity and working state' },
+                { title: 'Summarize rook', cmd: 'Read README.md in rook', desc: 'Plain-language overview of the project' },
+                { title: 'Summarize flowright', cmd: 'Read README.md in flowright', desc: 'Plain-language overview of the project' }
               ]
                 .filter(item => item.title.toLowerCase().includes(cmdKQuery.toLowerCase()) || item.cmd.toLowerCase().includes(cmdKQuery.toLowerCase()))
                 .map((item, idx) => (
@@ -526,7 +525,7 @@ const App: React.FC = () => {
               MyAI Portal
             </Typography>
             <Typography variant="caption" sx={{ color: '#a1a1aa', fontWeight: 500 }}>
-              Local Workspace Intelligence
+              AI Systems Observability
             </Typography>
           </Box>
 
@@ -551,15 +550,9 @@ const App: React.FC = () => {
               }} 
             />
 
-            {/* Performance metrics */}
+            {/* Access mode */}
             <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
-              <Chip label="SANDBOXED" size="small" sx={{ height: 16, fontSize: '0.55rem', background: 'rgba(34, 197, 94, 0.08)', color: '#22c55e', border: '1px solid rgba(34, 197, 94, 0.15)' }} />
-              <Typography variant="caption" sx={{ fontFamily: 'monospace', color: '#71717a', fontSize: '0.65rem' }}>
-                LATENCY: 2ms
-              </Typography>
-              <Typography variant="caption" sx={{ fontFamily: 'monospace', color: '#71717a', fontSize: '0.65rem' }}>
-                CACHE: 14.8MB
-              </Typography>
+              <Chip label="READ-ONLY" size="small" sx={{ height: 16, fontSize: '0.55rem', background: 'rgba(34, 197, 94, 0.08)', color: '#22c55e', border: '1px solid rgba(34, 197, 94, 0.15)' }} />
             </Box>
 
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -580,23 +573,23 @@ const App: React.FC = () => {
                   {messages.length === 0 && (
                     <Box sx={{ p: 1, mt: 1 }}>
                       <Typography variant="h5" gutterBottom sx={{ color: '#f4f4f5', fontWeight: 800, mb: 1, letterSpacing: '-0.03em', textAlign: 'center' }}>
-                        Workspace Exploration
+                        AI Systems Observability
                       </Typography>
                       <Typography variant="body2" sx={{ mb: 4, color: '#a1a1aa', textAlign: 'center', maxWidth: 450, mx: 'auto', lineHeight: 1.6 }}>
-                        Explore system workspaces, files, and codebase indexes securely using natural query controls.
+                        See what's happening across your AI systems and ask questions in plain English. Nothing here can change or execute anything — it's look-only.
                       </Typography>
-                      
+
                       {/* Guided Interactive Journey Tracker */}
                       <Paper variant="outlined" sx={{ p: 3, mb: 2, background: 'rgba(255, 255, 255, 0.01)', borderColor: 'rgba(255, 255, 255, 0.06)' }}>
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2.5 }}>
                           <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#f4f4f5' }}>
-                            Exploration Journey
+                            Getting Oriented
                           </Typography>
                           <Typography variant="caption" sx={{ color: '#a1a1aa', fontWeight: 600 }}>
                             {Math.min(100, Math.floor(((journeyStep - 1) / 4) * 100))}% completed
                           </Typography>
                         </Box>
-                        
+
                         <Grid container spacing={2}>
                           {/* Step 1 */}
                           <Grid item xs={12}>
@@ -606,11 +599,11 @@ const App: React.FC = () => {
                               </Box>
                               <Box sx={{ flexGrow: 1 }}>
                                 <Typography variant="body2" sx={{ fontWeight: 600, color: '#f4f4f5', fontSize: '0.85rem' }}>
-                                  1. Discover Registered Workspaces
+                                  1. See what's connected
                                 </Typography>
                                 {journeyStep === 1 && (
                                   <Button size="small" variant="contained" onClick={() => handleSend('List workspaces')} sx={{ mt: 1, fontSize: '0.75rem' }}>
-                                    Start Journey
+                                    Show connected systems
                                   </Button>
                                 )}
                               </Box>
@@ -625,15 +618,15 @@ const App: React.FC = () => {
                               </Box>
                               <Box sx={{ flexGrow: 1 }}>
                                 <Typography variant="body2" sx={{ fontWeight: 600, color: '#f4f4f5', fontSize: '0.85rem' }}>
-                                  2. Index Directory Tree Structures
+                                  2. Check recent activity
                                 </Typography>
                                 {journeyStep === 2 && (
                                   <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
-                                    <Button size="small" variant="contained" onClick={() => handleSend('List files in rook')} sx={{ fontSize: '0.75rem' }}>
-                                      Scan rook files
+                                    <Button size="small" variant="contained" onClick={() => handleSend('git status in rook')} sx={{ fontSize: '0.75rem' }}>
+                                      Check rook
                                     </Button>
-                                    <Button size="small" variant="outlined" onClick={() => handleSend('List files in flowright')} sx={{ fontSize: '0.75rem' }}>
-                                      Scan flowright files
+                                    <Button size="small" variant="outlined" onClick={() => handleSend('git status in flowright')} sx={{ fontSize: '0.75rem' }}>
+                                      Check flowright
                                     </Button>
                                   </Box>
                                 )}
@@ -649,15 +642,15 @@ const App: React.FC = () => {
                               </Box>
                               <Box sx={{ flexGrow: 1 }}>
                                 <Typography variant="body2" sx={{ fontWeight: 600, color: '#f4f4f5', fontSize: '0.85rem' }}>
-                                  3. Inspect Target Code Contents
+                                  3. Open a plain-language summary
                                 </Typography>
                                 {journeyStep === 3 && (
                                   <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
                                     <Button size="small" variant="contained" onClick={() => handleSend('Read README.md in flowright')} sx={{ fontSize: '0.75rem' }}>
-                                      Read flowright README
+                                      Summarize flowright
                                     </Button>
-                                    <Button size="small" variant="outlined" onClick={() => handleSend('Read package.json in rook')} sx={{ fontSize: '0.75rem' }}>
-                                      Read rook package
+                                    <Button size="small" variant="outlined" onClick={() => handleSend('Read README.md in rook')} sx={{ fontSize: '0.75rem' }}>
+                                      Summarize rook
                                     </Button>
                                   </Box>
                                 )}
@@ -673,17 +666,12 @@ const App: React.FC = () => {
                               </Box>
                               <Box sx={{ flexGrow: 1 }}>
                                 <Typography variant="body2" sx={{ fontWeight: 600, color: '#f4f4f5', fontSize: '0.85rem' }}>
-                                  4. Scan Codebases for matches
+                                  4. Ask anything, in your own words
                                 </Typography>
                                 {journeyStep === 4 && (
-                                  <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
-                                    <Button size="small" variant="contained" onClick={() => handleSend('Search for config in flowright')} sx={{ fontSize: '0.75rem' }}>
-                                      Find 'config'
-                                    </Button>
-                                    <Button size="small" variant="outlined" onClick={() => handleSend('Search for index in rook')} sx={{ fontSize: '0.75rem' }}>
-                                      Find 'index'
-                                    </Button>
-                                  </Box>
+                                  <Typography variant="caption" sx={{ display: 'block', mt: 1, color: '#a1a1aa' }}>
+                                    Type a question below — no special syntax needed.
+                                  </Typography>
                                 )}
                               </Box>
                             </Box>

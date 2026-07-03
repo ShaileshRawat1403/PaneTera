@@ -130,126 +130,128 @@ const LaptopBrowserFrame: React.FC<{ url: string; children: React.ReactNode }> =
   );
 };
 
-// Architecture node connection flow diagram
-const WorkspaceArchitectureMap: React.FC<{ onAction: (q: string) => void }> = ({ onAction }) => {
+// Live ecosystem status board. Replaces the old static architecture
+// diagram with real data: registered workspaces (portal.yaml) and their
+// actual git state, polled on an interval. Anything not wired to a real
+// signal yet (dax) is shown honestly as not-connected rather than faked —
+// a decision-maker-facing board earns trust by never bluffing.
+interface WorkspaceStatus {
+  name: string;
+  path: string;
+  status: 'clean' | 'changes' | 'unknown';
+  latestCommit: string;
+  loading: boolean;
+}
+
+const EcosystemStatusBoard: React.FC<{ token: string; onAction: (q: string) => void }> = ({ token, onAction }) => {
+  const [workspaces, setWorkspaces] = useState<WorkspaceStatus[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const refresh = async () => {
+    try {
+      const wsResp = await fetch('/api/workspaces', { headers: { Authorization: `Bearer ${token}` } });
+      const wsList: { name: string; path: string }[] = await wsResp.json();
+
+      const results = await Promise.all(
+        wsList.map(async (ws) => {
+          try {
+            const gResp = await fetch(`/api/git/history?workspace=${encodeURIComponent(ws.name)}`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            const g = await gResp.json();
+            const statusText: string = g.status || '';
+            const logText: string = g.log || '';
+            const latestCommit = logText.split('\n').find((l: string) => l.trim().length > 0) || 'No commits found';
+            let status: WorkspaceStatus['status'] = 'unknown';
+            if (/no git active/i.test(statusText)) status = 'unknown';
+            else if (/clean working tree/i.test(statusText) || statusText.trim() === '') status = 'clean';
+            else status = 'changes';
+            return { name: ws.name, path: ws.path, status, latestCommit, loading: false };
+          } catch {
+            return { name: ws.name, path: ws.path, status: 'unknown' as const, latestCommit: 'Unable to read', loading: false };
+          }
+        })
+      );
+      setWorkspaces(results);
+    } catch {
+      // /api/workspaces unreachable — leave prior state, try again next tick
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    refresh();
+    const interval = setInterval(refresh, 15000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
+  const statusColor = (s: WorkspaceStatus['status']) =>
+    s === 'clean' ? '#22c55e' : s === 'changes' ? '#f59e0b' : '#71717a';
+  const statusLabel = (s: WorkspaceStatus['status']) =>
+    s === 'clean' ? 'Up to date' : s === 'changes' ? 'Uncommitted changes' : 'No signal';
+
   return (
     <Box sx={{ mb: 2.5, p: 2, background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.04)', borderRadius: '16px' }}>
-      <Typography variant="caption" sx={{ color: '#b794f4', fontWeight: 700, mb: 2, display: 'block', letterSpacing: '0.05em' }}>
-        WORKSPACE INTERCONNECTION DIAGRAM
-      </Typography>
-
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative', px: 1, py: 1 }}>
-        {/* Node: Rook */}
-        <Box 
-          onClick={() => onAction('List files in rook')}
-          sx={{ 
-            display: 'flex', 
-            flexDirection: 'column', 
-            alignItems: 'center', 
-            cursor: 'pointer',
-            zIndex: 10,
-            '&:hover .node-circle': {
-              borderColor: '#7f5af0',
-              boxShadow: '0 0 16px rgba(127, 85, 240, 0.45)',
-              transform: 'scale(1.05)'
-            }
-          }}
-        >
-          <Box 
-            className="node-circle"
-            sx={{ 
-              width: 48, 
-              height: 48, 
-              borderRadius: '50%', 
-              background: '#09090b', 
-              border: '2px solid rgba(127, 85, 240, 0.3)', 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center',
-              transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
-            }}
-          >
-            <FolderIcon sx={{ color: '#7f5af0', fontSize: 18 }} />
-          </Box>
-          <Typography variant="caption" sx={{ mt: 1, fontWeight: 700, color: '#cbd5e1', fontSize: '0.7rem' }}>rook</Typography>
-        </Box>
-
-        {/* Connector line 1 */}
-        <Box sx={{ height: '2px', flexGrow: 1, background: 'linear-gradient(90deg, #7f5af0 0%, #38bdf8 100%)', opacity: 0.25, mx: 1 }} />
-
-        {/* Node: Flowright */}
-        <Box 
-          onClick={() => onAction('List files in flowright')}
-          sx={{ 
-            display: 'flex', 
-            flexDirection: 'column', 
-            alignItems: 'center', 
-            cursor: 'pointer',
-            zIndex: 10,
-            '&:hover .node-circle': {
-              borderColor: '#38bdf8',
-              boxShadow: '0 0 16px rgba(56, 189, 248, 0.45)',
-              transform: 'scale(1.05)'
-            }
-          }}
-        >
-          <Box 
-            className="node-circle"
-            sx={{ 
-              width: 48, 
-              height: 48, 
-              borderRadius: '50%', 
-              background: '#09090b', 
-              border: '2px solid rgba(56, 189, 248, 0.3)', 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center',
-              transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
-            }}
-          >
-            <FolderIcon sx={{ color: '#38bdf8', fontSize: 18 }} />
-          </Box>
-          <Typography variant="caption" sx={{ mt: 1, fontWeight: 700, color: '#cbd5e1', fontSize: '0.7rem' }}>flowright</Typography>
-        </Box>
-
-        {/* Connector line 2 */}
-        <Box sx={{ height: '2px', flexGrow: 1, background: 'linear-gradient(90deg, #38bdf8 0%, #22c55e 100%)', opacity: 0.25, mx: 1 }} />
-
-        {/* Node: Dax */}
-        <Box 
-          onClick={() => onAction('List workspaces')}
-          sx={{ 
-            display: 'flex', 
-            flexDirection: 'column', 
-            alignItems: 'center', 
-            cursor: 'pointer',
-            zIndex: 10,
-            '&:hover .node-circle': {
-              borderColor: '#22c55e',
-              boxShadow: '0 0 16px rgba(34, 197, 94, 0.45)',
-              transform: 'scale(1.05)'
-            }
-          }}
-        >
-          <Box 
-            className="node-circle"
-            sx={{ 
-              width: 48, 
-              height: 48, 
-              borderRadius: '50%', 
-              background: '#09090b', 
-              border: '2px solid rgba(34, 197, 94, 0.3)', 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center',
-              transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
-            }}
-          >
-            <FolderIcon sx={{ color: '#22c55e', fontSize: 18 }} />
-          </Box>
-          <Typography variant="caption" sx={{ mt: 1, fontWeight: 700, color: '#cbd5e1', fontSize: '0.7rem' }}>dax</Typography>
-        </Box>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Typography variant="caption" sx={{ color: '#b794f4', fontWeight: 700, letterSpacing: '0.05em' }}>
+          ECOSYSTEM STATUS
+        </Typography>
+        <Typography variant="caption" sx={{ color: '#71717a', fontSize: '0.65rem' }}>
+          Refreshes every 15s
+        </Typography>
       </Box>
+
+      {loading ? (
+        <LinearProgress sx={{ my: 1 }} />
+      ) : (
+        <Grid container spacing={1.5}>
+          {workspaces.map((ws) => (
+            <Grid item xs={12} sm={6} key={ws.name}>
+              <Card
+                onClick={() => onAction(`git status in ${ws.name}`)}
+                sx={{ background: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '12px' }}
+              >
+                <CardActionArea>
+                  <CardContent sx={{ p: 1.75 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Box sx={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: statusColor(ws.status), boxShadow: `0 0 6px ${statusColor(ws.status)}` }} />
+                        <Typography variant="body2" sx={{ fontWeight: 700, color: '#f4f4f5' }}>{ws.name}</Typography>
+                      </Box>
+                      <Typography variant="caption" sx={{ color: statusColor(ws.status), fontSize: '0.65rem', fontWeight: 600 }}>
+                        {statusLabel(ws.status)}
+                      </Typography>
+                    </Box>
+                    <Typography variant="caption" sx={{ color: '#94a3b8', fontSize: '0.72rem', display: 'block', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {ws.latestCommit}
+                    </Typography>
+                  </CardContent>
+                </CardActionArea>
+              </Card>
+            </Grid>
+          ))}
+
+          {/* Honest placeholder — dax has no live signal wired up yet */}
+          <Grid item xs={12} sm={6}>
+            <Card
+              variant="outlined"
+              sx={{ background: 'transparent', border: '1px dashed rgba(255,255,255,0.12)', borderRadius: '12px', boxShadow: 'none' }}
+            >
+              <CardContent sx={{ p: 1.75 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                  <Box sx={{ width: 8, height: 8, borderRadius: '50%', border: '1px solid #71717a' }} />
+                  <Typography variant="body2" sx={{ fontWeight: 700, color: '#a1a1aa' }}>dax</Typography>
+                </Box>
+                <Typography variant="caption" sx={{ color: '#71717a', fontSize: '0.72rem' }}>
+                  Not connected yet — governance events land here in a later phase.
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+      )}
     </Box>
   );
 };
@@ -479,312 +481,6 @@ const SearchResultsFeedCard: React.FC<{ data: any; onAction: (q: string) => void
         </Paper>
       ))}
     </Box>
-  );
-};
-
-// Sub-component for sequential Web search simulation card
-const WebSearchFeedCard: React.FC<{ data: any; token: string }> = ({ data, token }) => {
-  const [activeUrl, setActiveUrl] = useState(data.url);
-  const [isViewingAsset, setIsViewingAsset] = useState(false);
-  const [visibleCount, setVisibleCount] = useState(0);
-  const [ripples, setRipples] = useState<{ x: number; y: number; id: number }[]>([]);
-  const [showApiManager, setShowApiManager] = useState(false);
-  const [copiedNotification, setCopiedNotification] = useState(false);
-  const [newKeyName, setNewKeyName] = useState('');
-  const [mockApiKeys, setMockApiKeys] = useState<{ id: string; name: string; key: string }[]>([
-    { id: '1', name: 'Production-Key', key: 'sk-proj-vertex-a29d...' }
-  ]);
-
-  useEffect(() => {
-    setVisibleCount(0);
-    let index = 0;
-    const interval = setInterval(() => {
-      if (index < data.results.length) {
-        setVisibleCount(prev => prev + 1);
-        index++;
-      } else {
-        clearInterval(interval);
-      }
-    }, 120);
-
-    return () => clearInterval(interval);
-  }, [data.results]);
-
-  const handleLinkClick = (e: React.MouseEvent, title: string, link: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setActiveUrl(link);
-    setIsViewingAsset(true);
-  };
-
-  const handleImageClick = (e: React.MouseEvent<HTMLImageElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    const clickY = e.clientY - rect.top;
-    const pctX = (clickX / rect.width) * 100;
-    const pctY = (clickY / rect.height) * 100;
-    
-    // Add ripple animation data
-    const newId = Date.now();
-    setRipples(prev => [...prev, { x: Math.round(clickX), y: Math.round(clickY), id: newId }]);
-    setTimeout(() => {
-      setRipples(prev => prev.filter(r => r.id !== newId));
-    }, 800);
-
-    // Hotspot 1: "Manage API Keys" blue button (around horizontal 60-70%, vertical 76-86%)
-    if (pctX >= 58 && pctX <= 72 && pctY >= 76 && pctY <= 86) {
-      setShowApiManager(true);
-      return;
-    }
-
-    // Hotspot 2: Code block copy button area (around horizontal 74-84%, vertical 53-63%)
-    if (pctX >= 74 && pctX <= 84 && pctY >= 53 && pctY <= 63) {
-      // Demo placeholder only — never copy realistic-looking secrets.
-      navigator.clipboard.writeText("demo-placeholder-not-a-real-key");
-      setCopiedNotification(true);
-      setTimeout(() => setCopiedNotification(false), 2000);
-      return;
-    }
-
-    // Clicks in the simulated viewport stay client-side (ripple only).
-    // The old /api/web/click bridge pretended clicks reached a live
-    // screen; removed with its backend endpoint.
-  };
-
-  return (
-    <LaptopBrowserFrame url={activeUrl}>
-      {!isViewingAsset ? (
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {data.results.slice(0, visibleCount).map((res: any, idx: number) => (
-            <Box key={idx} sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, animation: 'cardFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards' }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
-                <Typography
-                  variant="body2"
-                  component="a"
-                  href={res.link}
-                  onClick={(e) => handleLinkClick(e, res.title, res.link)}
-                  sx={{
-                    fontWeight: 600,
-                    color: '#38bdf8',
-                    textDecoration: 'none',
-                    fontSize: '0.85rem',
-                    cursor: 'pointer',
-                    '&:hover': { textDecoration: 'underline' }
-                  }}
-                >
-                  {res.title}
-                </Typography>
-                <Chip label="SECURE PASS" size="small" sx={{ height: 16, fontSize: '0.55rem', background: 'rgba(34, 197, 94, 0.08)', color: '#22c55e', border: '1px solid rgba(34, 197, 94, 0.15)' }} />
-              </Box>
-              <Typography variant="caption" sx={{ color: '#a1a1aa', fontSize: '0.75rem', lineHeight: 1.4 }}>
-                {res.snippet}
-              </Typography>
-              <Typography variant="caption" sx={{ color: '#71717a', fontSize: '0.65rem', fontFamily: 'monospace' }}>
-                {res.link}
-              </Typography>
-              {idx < data.results.length - 1 && <Divider sx={{ mt: 1, borderColor: 'rgba(255,255,255,0.03)' }} />}
-            </Box>
-          ))}
-        </Box>
-      ) : (
-        <Box sx={{ animation: 'cardFadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards' }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Typography variant="caption" sx={{ color: '#b794f4', fontWeight: 700, letterSpacing: '0.05em' }}>
-                LIVE VIEWPORT PREVIEW (CLICK TO INTERACT)
-              </Typography>
-              <Chip label="INDEX MATCH: 94%" size="small" sx={{ height: 16, fontSize: '0.55rem', background: 'rgba(127, 85, 240, 0.08)', color: '#b794f4', border: '1px solid rgba(127, 85, 240, 0.15)' }} />
-            </Box>
-            <Button
-              size="small"
-              onClick={() => {
-                setActiveUrl(data.url);
-                setIsViewingAsset(false);
-              }}
-              sx={{
-                fontSize: '0.65rem',
-                py: 0.25,
-                px: 1.5,
-                background: 'rgba(255, 255, 255, 0.05)',
-                color: '#cbd5e1',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
-                borderRadius: '4px'
-              }}
-            >
-              Back to Search
-            </Button>
-          </Box>
-          <Paper
-            variant="outlined"
-            sx={{
-              borderRadius: '8px',
-              overflow: 'hidden',
-              borderColor: 'rgba(255, 255, 255, 0.06)',
-              background: '#09090b',
-              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.5)',
-              cursor: 'crosshair',
-              position: 'relative'
-            }}
-          >
-            <img
-              src="/web_search_asset_screenshot.jpg"
-              alt="Live Screen Mockup Viewport"
-              onClick={handleImageClick}
-              style={{ width: '100%', height: 'auto', display: 'block' }}
-            />
-            {ripples.map(r => (
-              <Box
-                key={r.id}
-                sx={{
-                  position: 'absolute',
-                  left: r.x,
-                  top: r.y,
-                  width: 20,
-                  height: 20,
-                  borderRadius: '50%',
-                  border: '2px solid #7f5af0',
-                  backgroundColor: 'rgba(127, 85, 240, 0.25)',
-                  pointerEvents: 'none',
-                  animation: 'rippleEffect 0.8s cubic-bezier(0.1, 0.8, 0.3, 1) forwards'
-                }}
-              />
-            ))}
-
-            {/* Live API key manager overlay */}
-            {showApiManager && (
-              <Box
-                sx={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: '100%',
-                  background: 'rgba(9, 9, 11, 0.95)',
-                  backdropFilter: 'blur(8px)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  p: 3,
-                  animation: 'fadeIn 0.2s ease-out',
-                  zIndex: 20
-                }}
-              >
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#f4f4f5', fontFamily: 'Plus Jakarta Sans' }}>
-                    API Keys Manager
-                  </Typography>
-                  <IconButton size="small" onClick={() => setShowApiManager(false)} sx={{ color: '#a0aec0' }}>
-                    <CloseIcon fontSize="small" />
-                  </IconButton>
-                </Box>
-
-                <Box sx={{ display: 'flex', gap: 1, mb: 3 }}>
-                  <input
-                    type="text"
-                    placeholder="Key name (e.g. Staging-Secret)"
-                    value={newKeyName}
-                    onChange={(e) => setNewKeyName(e.target.value)}
-                    style={{
-                      flexGrow: 1,
-                      background: 'rgba(255,255,255,0.03)',
-                      border: '1px solid rgba(255,255,255,0.08)',
-                      borderRadius: '6px',
-                      padding: '6px 12px',
-                      color: '#cbd5e1',
-                      fontSize: '0.8rem',
-                      outline: 'none'
-                    }}
-                  />
-                  <Button
-                    onClick={() => {
-                      if (!newKeyName.trim()) return;
-                      const randKey = 'sk-proj-vertex-' + Math.random().toString(36).substr(2, 6) + '...';
-                      setMockApiKeys(prev => [...prev, { id: Date.now().toString(), name: newKeyName, key: randKey }]);
-                      setNewKeyName('');
-                    }}
-                    sx={{
-                      background: '#7f5af0',
-                      color: '#fff',
-                      fontSize: '0.7rem',
-                      py: 0.5,
-                      px: 2,
-                      fontFamily: 'Plus Jakarta Sans',
-                      fontWeight: 700,
-                      borderRadius: '6px',
-                      textTransform: 'none',
-                      '&:hover': { background: '#6c4ad0' }
-                    }}
-                  >
-                    Create Key
-                  </Button>
-                </Box>
-
-                <Typography variant="caption" sx={{ color: '#8e8e93', mb: 1, display: 'block', fontWeight: 600 }}>
-                  ACTIVE SYSTEM KEYS
-                </Typography>
-                <Box sx={{ flexGrow: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 1 }} className="scroll-container">
-                  {mockApiKeys.map(k => (
-                    <Box
-                      key={k.id}
-                      sx={{
-                        p: 1.5,
-                        background: 'rgba(255,255,255,0.02)',
-                        border: '1px solid rgba(255,255,255,0.04)',
-                        borderRadius: '8px',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center'
-                      }}
-                    >
-                      <Box>
-                        <Typography variant="body2" sx={{ fontWeight: 600, color: '#f4f4f5', fontSize: '0.75rem' }}>
-                          {k.name}
-                        </Typography>
-                        <Typography variant="caption" sx={{ fontFamily: 'monospace', color: '#71717a', fontSize: '0.65rem' }}>
-                          {k.key}
-                        </Typography>
-                      </Box>
-                      <Button
-                        size="small"
-                        onClick={() => {
-                          setMockApiKeys(prev => prev.filter(x => x.id !== k.id));
-                        }}
-                        sx={{ color: '#ef4444', fontSize: '0.6rem', minWidth: 0, p: 0.5 }}
-                      >
-                        REVOKE
-                      </Button>
-                    </Box>
-                  ))}
-                </Box>
-              </Box>
-            )}
-
-            {/* Clipboard Copy Notification */}
-            {copiedNotification && (
-              <Box
-                sx={{
-                  position: 'absolute',
-                  bottom: 16,
-                  left: '50%',
-                  transform: 'translateX(-50%)',
-                  background: '#22c55e',
-                  color: '#fff',
-                  px: 2,
-                  py: 0.75,
-                  borderRadius: '99px',
-                  boxShadow: '0 4px 12px rgba(34, 197, 94, 0.4)',
-                  fontSize: '0.7rem',
-                  fontWeight: 700,
-                  animation: 'fadeIn 0.2s ease-out',
-                  zIndex: 25
-                }}
-              >
-                Mock API Key copied to clipboard!
-              </Box>
-            )}
-          </Paper>
-        </Box>
-      )}
-    </LaptopBrowserFrame>
   );
 };
 
@@ -1178,7 +874,6 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
                   {item.type === 'FileList' && `FILE INDEX: ${item.data.workspace}`}
                   {item.type === 'CodePreview' && `CODE: ${item.data.workspace}/${item.data.path}`}
                   {item.type === 'SearchResults' && `SEARCH: "${item.data.keyword}"`}
-                  {item.type === 'WebSearch' && `WEB SEARCH: "${item.data.keyword}"`}
                   {item.type === 'WorkflowsList' && `PIPELINES: ${item.data.workspace}`}
                   {item.type === 'ExecutionLogs' && `TASK CONSOLE`}
                   {item.type === 'GitHistory' && `GIT STATUS: ${item.data.workspace}`}
@@ -1207,8 +902,8 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
               <Box sx={{ p: 2 }}>
                 {item.type === 'WorkspaceList' && (
                   <Box>
-                    {/* Architecture diagram */}
-                    <WorkspaceArchitectureMap onAction={onAction} />
+                    {/* Live ecosystem status board */}
+                    <EcosystemStatusBoard token={token} onAction={onAction} />
                     
                     <Grid container spacing={1.5}>
                       {item.data.map((ws: any, idx: number) => (
@@ -1246,10 +941,6 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
                   <LaptopBrowserFrame url={`https://portal.local/search?q=${encodeURIComponent(item.data.keyword)}`}>
                     <SearchResultsFeedCard data={item.data} onAction={onAction} />
                   </LaptopBrowserFrame>
-                )}
-
-                {item.type === 'WebSearch' && (
-                  <WebSearchFeedCard data={item.data} token={token} />
                 )}
 
                 {item.type === 'WorkflowsList' && (

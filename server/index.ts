@@ -533,17 +533,6 @@ async function askGemini(query: string, history: any[] = []): Promise<{ reply: s
                 },
                 required: ['workspaceName', 'keyword']
               }
-            },
-            {
-              name: 'webSearch',
-              description: 'Searches the web for general development queries, GitHub issues, and documentation.',
-              parameters: {
-                type: 'OBJECT',
-                properties: {
-                  keyword: { type: 'STRING', description: 'The keyword or string to search for on the web.' }
-                },
-                required: ['keyword']
-              }
             }
           ]
         }
@@ -599,20 +588,6 @@ async function askGemini(query: string, history: any[] = []): Promise<{ reply: s
           const results = await searchFilesInWorkspace(args.workspaceName, args.keyword);
           toolResult = { results };
           uiComponent = { type: 'SearchResults', data: { workspace: args.workspaceName, keyword: args.keyword, results } };
-        } else if (name === 'webSearch') {
-          const results = [
-            { title: `${args.keyword} GitHub Issues`, snippet: `Discussion on optimizing and compiling pipelines matching ${args.keyword}.`, link: `https://github.com/issues?q=${args.keyword}` },
-            { title: `${args.keyword} API Documentation`, snippet: `Official setup tutorials and configuration specifications for ${args.keyword}.`, link: `https://docs.local/${args.keyword}` }
-          ];
-          toolResult = { results };
-          uiComponent = {
-            type: 'WebSearch',
-            data: {
-              keyword: args.keyword,
-              url: `https://google.com/search?q=${encodeURIComponent(args.keyword)}`,
-              results
-            }
-          };
         } else {
           throw new Error(`Unknown function: ${name}`);
         }
@@ -746,20 +721,6 @@ async function askOpenAI(query: string, history: any[] = []): Promise<{ reply: s
           required: ['workspaceName', 'keyword']
         }
       }
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'webSearch',
-        description: 'Searches the web for general development queries, GitHub issues, and documentation.',
-        parameters: {
-          type: 'object',
-          properties: {
-            keyword: { type: 'string', description: 'The keyword or string to search for on the web.' }
-          },
-          required: ['keyword']
-        }
-      }
     }
   ];
 
@@ -817,20 +778,6 @@ async function askOpenAI(query: string, history: any[] = []): Promise<{ reply: s
           const results = await searchFilesInWorkspace(args.workspaceName, args.keyword);
           toolResult = { results };
           uiComponent = { type: 'SearchResults', data: { workspace: args.workspaceName, keyword: args.keyword, results } };
-        } else if (name === 'webSearch') {
-          const results = [
-            { title: `${args.keyword} GitHub Issues`, snippet: `Discussion on optimizing and compiling pipelines matching ${args.keyword}.`, link: `https://github.com/issues?q=${args.keyword}` },
-            { title: `${args.keyword} API Documentation`, snippet: `Official setup tutorials and configuration specifications for ${args.keyword}.`, link: `https://docs.local/${args.keyword}` }
-          ];
-          toolResult = { results };
-          uiComponent = {
-            type: 'WebSearch',
-            data: {
-              keyword: args.keyword,
-              url: `https://google.com/search?q=${encodeURIComponent(args.keyword)}`,
-              results
-            }
-          };
         } else {
           throw new Error(`Unknown function: ${name}`);
         }
@@ -945,25 +892,13 @@ async function resolveQueryLocally(query: string): Promise<{ reply: string; uiCo
     }
   }
 
-  // 4.5. Web search fallback
+  // 4.5. Web search intent — no live web search is wired up. Say so
+  // plainly instead of returning results that look real but aren't.
   const webSearchRegex = /(?:search web for|web search for|search web|search the web for)\s+(.+)/i;
   const webSearchMatch = query.match(webSearchRegex);
   if (webSearchMatch) {
-    const keyword = webSearchMatch[1].replace(/['"]/g, '').trim();
-    const results = [
-      { title: `${keyword} GitHub Issues`, snippet: `Discussion on optimizing and compiling pipelines matching ${keyword}.`, link: `https://github.com/issues?q=${keyword}` },
-      { title: `${keyword} API Documentation`, snippet: `Official setup tutorials and configuration specifications for ${keyword}.`, link: `https://docs.local/${keyword}` }
-    ];
     return {
-      reply: `[LOCAL FALLBACK ENGINE] Web search query completed for "${keyword}". Opening local viewport simulation.`,
-      uiComponent: {
-        type: 'WebSearch',
-        data: {
-          keyword,
-          url: `https://google.com/search?q=${encodeURIComponent(keyword)}`,
-          results
-        }
-      }
+      reply: `[LOCAL FALLBACK ENGINE] Web search isn't connected in this build. Ask about a registered workspace, a file, or a keyword inside one instead.`
     };
   }
 
