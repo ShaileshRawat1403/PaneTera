@@ -98,3 +98,18 @@ body::before {
     opacity: 0;
   }
 }
+
+/* A quiet pulse for things genuinely waiting on the person, not a loud
+   attention-grab — used on the approval card border only. */
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.18);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(245, 158, 11, 0);
+  }
+}
+
+.pulse-glow {
+  animation: pulseGlow 2.4s ease-in-out infinite;
+}

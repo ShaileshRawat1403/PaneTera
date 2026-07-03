@@ -11,9 +11,11 @@ import DnsIcon from '@mui/icons-material/Dns';
 import InfoIcon from '@mui/icons-material/Info';
 import ClearAllIcon from '@mui/icons-material/ClearAll';
 import ViewStreamIcon from '@mui/icons-material/ViewStream';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 
 export type { FeedItem } from '../../shared/uiComponent';
 import type { FeedItem } from '../../shared/uiComponent';
+import { ProposedActionCard } from './ProposedActionCard';
 
 interface PreviewProps {
   previewFeed: FeedItem[];
@@ -212,7 +214,17 @@ const EcosystemStatusBoard: React.FC<{ token: string; onAction: (q: string) => v
             <Grid item xs={12} sm={6} key={ws.name}>
               <Card
                 onClick={() => onAction(`git status in ${ws.name}`)}
-                sx={{ background: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '12px' }}
+                sx={{
+                  background: 'rgba(255,255,255,0.01)',
+                  border: '1px solid rgba(255,255,255,0.06)',
+                  borderRadius: '12px',
+                  transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+                  '&:hover': {
+                    borderColor: 'rgba(127, 85, 240, 0.35)',
+                    boxShadow: '0 4px 20px rgba(127, 85, 240, 0.1)',
+                    transform: 'translateY(-1px)'
+                  }
+                }}
               >
                 <CardActionArea>
                   <CardContent sx={{ p: 1.75 }}>
@@ -561,94 +573,6 @@ const WorkflowsFeedCard: React.FC<{ data: any }> = ({ data }) => {
   );
 };
 
-// Sub-component for a proposed command awaiting explicit human approval.
-// Nothing runs until Approve is clicked — this is the control-plane gate:
-// the model or the local resolver can propose, only the operator can run.
-const ProposedActionFeedCard: React.FC<{ data: any; onApprove: () => void; onCancel: () => void }> = ({ data, onApprove, onCancel }) => {
-  // A brief, undoable window between the click and the real POST firing —
-  // for someone clicking a real execute button for possibly the first
-  // time, a little deliberate friction is worth more than the half-second
-  // it costs.
-  const [countdown, setCountdown] = useState<number | null>(null);
-
-  useEffect(() => {
-    if (countdown === null) return;
-    if (countdown <= 0) {
-      onApprove();
-      return;
-    }
-    const t = setTimeout(() => setCountdown(c => (c ?? 1) - 1), 1000);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [countdown]);
-
-  if (countdown !== null) {
-    return (
-      <Box
-        sx={{
-          background: 'rgba(34, 197, 94, 0.05)',
-          border: '1px solid rgba(34, 197, 94, 0.3)',
-          borderRadius: '12px',
-          p: 2,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between'
-        }}
-      >
-        <Typography variant="body2" sx={{ color: '#22c55e', fontWeight: 600 }}>
-          Starting in {countdown}...
-        </Typography>
-        <Button
-          size="small"
-          variant="outlined"
-          onClick={() => setCountdown(null)}
-          sx={{ color: '#a1a1aa', borderColor: 'rgba(255,255,255,0.2)' }}
-        >
-          Undo
-        </Button>
-      </Box>
-    );
-  }
-
-  return (
-    <Box sx={{ background: 'rgba(245, 158, 11, 0.04)', border: '1px solid rgba(245, 158, 11, 0.25)', borderRadius: '12px', p: 2 }}>
-      <Typography variant="caption" sx={{ color: '#f59e0b', fontWeight: 700, letterSpacing: '0.05em', display: 'block', mb: 1 }}>
-        WAITING FOR YOUR APPROVAL
-      </Typography>
-      <Typography variant="body2" sx={{ color: '#f4f4f5', mb: 0.5 }}>
-        Run{' '}
-        <Box component="span" sx={{ fontFamily: 'monospace', color: '#7f5af0', fontWeight: 700 }}>
-          {data.command}
-        </Box>{' '}
-        in <Box component="span" sx={{ fontWeight: 700 }}>{data.workspaceName}</Box>
-      </Typography>
-      {data.reason && (
-        <Typography variant="caption" sx={{ color: '#a1a1aa', display: 'block', mb: 1 }}>
-          {data.reason}
-        </Typography>
-      )}
-      <Box sx={{ display: 'flex', gap: 1, mt: 1.5 }}>
-        <Button
-          size="small"
-          variant="contained"
-          onClick={() => setCountdown(2)}
-          sx={{ background: '#22c55e', '&:hover': { background: '#16a34a' } }}
-        >
-          Approve &amp; Run
-        </Button>
-        <Button
-          size="small"
-          variant="outlined"
-          onClick={onCancel}
-          sx={{ color: '#ef4444', borderColor: 'rgba(239,68,68,0.4)' }}
-        >
-          Cancel
-        </Button>
-      </Box>
-    </Box>
-  );
-};
-
 // Sub-component for task process execution stdout/stderr streams
 const ExecutionLogsFeedCard: React.FC<{ data: any; procId: string; token: string }> = ({ data, procId, token }) => {
   const [isRunning, setIsRunning] = useState(true);
@@ -815,6 +739,15 @@ const ExecutionLogsFeedCard: React.FC<{ data: any; procId: string; token: string
       <Button
         size="small"
         onClick={() => setShowRawOutput(v => !v)}
+        endIcon={
+          <ExpandMoreIcon
+            sx={{
+              fontSize: '0.9rem !important',
+              transition: 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+              transform: showRawOutput ? 'rotate(180deg)' : 'rotate(0deg)'
+            }}
+          />
+        }
         sx={{
           mt: 1.25,
           fontSize: '0.65rem',
@@ -822,6 +755,7 @@ const ExecutionLogsFeedCard: React.FC<{ data: any; procId: string; token: string
           textTransform: 'none',
           px: 0,
           minWidth: 0,
+          transition: 'color 0.2s ease',
           '&:hover': { background: 'transparent', color: '#a1a1aa' }
         }}
       >
@@ -1161,8 +1095,10 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
                 )}
 
                 {item.type === 'ProposedAction' && (
-                  <ProposedActionFeedCard
-                    data={item.data}
+                  <ProposedActionCard
+                    workspaceName={item.data.workspaceName}
+                    command={item.data.command}
+                    reason={item.data.reason}
                     onApprove={() => onApproveAction(item.id, item.data.workspaceName, item.data.command)}
                     onCancel={() => onRemoveItem(item.id)}
                   />

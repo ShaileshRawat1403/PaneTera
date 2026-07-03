@@ -1,6 +1,6 @@
 // src/App.tsx
 import React, { useState, useEffect, useRef } from 'react';
-import { Box, Container, CssBaseline, ThemeProvider, createTheme, Paper, Typography, TextField, Button, CircularProgress, Grid, Chip } from '@mui/material';
+import { Box, Container, CssBaseline, ThemeProvider, createTheme, Paper, Typography, TextField, Button, CircularProgress, Grid, Chip, IconButton } from '@mui/material';
 import ChatMessage from './components/ChatMessage';
 import ChatInput from './components/ChatInput';
 import { PreviewPanel, FeedItem } from './components/PreviewPanel';
@@ -8,6 +8,8 @@ import type { UiComponent } from '../shared/uiComponent';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
+import CloseIcon from '@mui/icons-material/Close';
 
 // Premium Apple-like dark theme with refined typography and soft border outlines
 const appleTheme = createTheme({
@@ -67,6 +69,7 @@ const App: React.FC = () => {
   const [thinkingSteps, setThinkingSteps] = useState<string[]>([]);
   const [isCmdKOpen, setIsCmdKOpen] = useState<boolean>(false);
   const [cmdKQuery, setCmdKQuery] = useState<string>('');
+  const [isHelpOpen, setIsHelpOpen] = useState<boolean>(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -581,8 +584,30 @@ const App: React.FC = () => {
                   background: 'rgba(127, 85, 240, 0.12)',
                   borderColor: 'rgba(127, 85, 240, 0.3)'
                 }
-              }} 
+              }}
             />
+
+            {/* Reopen the "what can I ask" guide anytime — the inline
+                journey tracker below only shows before the first message */}
+            <IconButton
+              size="small"
+              onClick={() => setIsHelpOpen(true)}
+              aria-label="What can I ask?"
+              sx={{
+                width: 26,
+                height: 26,
+                color: '#a1a1aa',
+                border: '1px solid rgba(255,255,255,0.08)',
+                transition: 'all 0.2s ease',
+                '&:hover': {
+                  color: '#b794f4',
+                  borderColor: 'rgba(127, 85, 240, 0.3)',
+                  background: 'rgba(127, 85, 240, 0.08)'
+                }
+              }}
+            >
+              <HelpOutlineIcon sx={{ fontSize: '1rem' }} />
+            </IconButton>
 
             {/* Access mode */}
             <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
@@ -597,6 +622,83 @@ const App: React.FC = () => {
             </Box>
           </Box>
         </Box>
+
+        {/* "What can I ask?" quick reference — reachable anytime via the
+            help icon, since the full guided journey below only shows once,
+            before the first message is sent. */}
+        {isHelpOpen && (
+          <Box
+            onClick={() => setIsHelpOpen(false)}
+            sx={{
+              position: 'fixed',
+              top: 0, left: 0, right: 0, bottom: 0,
+              backgroundColor: 'rgba(9, 9, 11, 0.75)',
+              backdropFilter: 'blur(8px)',
+              zIndex: 1300,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              p: 2
+            }}
+          >
+            <Paper
+              onClick={(e) => e.stopPropagation()}
+              elevation={0}
+              sx={{
+                width: '100%',
+                maxWidth: 460,
+                p: 3.5,
+                background: 'rgba(20, 20, 25, 0.9)',
+                border: '1px solid rgba(127, 85, 240, 0.22)',
+                boxShadow: '0 24px 60px rgba(0,0,0,0.6), 0 0 40px rgba(127, 85, 240, 0.1)',
+                animation: 'appleSpringIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards'
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#f4f4f5', letterSpacing: '-0.01em' }}>
+                  What can I ask?
+                </Typography>
+                <IconButton size="small" onClick={() => setIsHelpOpen(false)} sx={{ color: '#a1a1aa' }}>
+                  <CloseIcon fontSize="small" />
+                </IconButton>
+              </Box>
+              <Typography variant="body2" sx={{ color: '#a1a1aa', mb: 2.5, lineHeight: 1.6 }}>
+                Everything here is read-only until you approve something. A few places to start:
+              </Typography>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                {[
+                  { label: "See what's connected", cmd: 'List workspaces' },
+                  { label: 'Check recent activity', cmd: 'git status in flowright' },
+                  { label: 'Open a plain-language summary', cmd: 'Read README.md in flowright' },
+                  { label: 'Propose a build — nothing runs until you approve', cmd: 'run npm run build in flowright' }
+                ].map((item, idx) => (
+                  <Box
+                    key={idx}
+                    onClick={() => { setIsHelpOpen(false); handleSend(item.cmd); }}
+                    sx={{
+                      p: 1.5,
+                      px: 2,
+                      borderRadius: '12px',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+                      '&:hover': { background: 'rgba(127, 85, 240, 0.08)' }
+                    }}
+                  >
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: '#f4f4f5' }}>
+                      {item.label}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: '#71717a', fontFamily: 'monospace' }}>
+                      {item.cmd}
+                    </Typography>
+                  </Box>
+                ))}
+              </Box>
+              <Typography variant="caption" sx={{ display: 'block', mt: 2.5, color: '#71717a', textAlign: 'center' }}>
+                Or press Cmd+K anytime, or just type a question below.
+              </Typography>
+            </Paper>
+          </Box>
+        )}
 
         <Grid container spacing={3} sx={{ flexGrow: 1, height: 'calc(100% - 70px)', overflow: 'hidden' }}>
           {/* Left Chat Pane */}
