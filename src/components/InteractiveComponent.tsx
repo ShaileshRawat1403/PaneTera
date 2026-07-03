@@ -1,6 +1,6 @@
 // src/components/InteractiveComponent.tsx
-import React from 'react';
-import { Box, Typography, Card, CardContent, CardActionArea, Grid, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Paper, Divider } from '@mui/material';
+import React, { useState } from 'react';
+import { Box, Typography, Card, CardContent, CardActionArea, Grid, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Paper, Divider, Button } from '@mui/material';
 import type { UiComponent } from '../../shared/uiComponent';
 import FolderIcon from '@mui/icons-material/Folder';
 import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
@@ -10,10 +10,85 @@ import CodeIcon from '@mui/icons-material/Code';
 interface ComponentProps {
   uiComponent: UiComponent;
   onAction: (query: string) => void;
+  onApproveAction?: (id: string, workspaceName: string, command: string) => void;
+  onCancelAction?: (id: string) => void;
 }
 
-export const InteractiveComponent: React.FC<ComponentProps> = ({ uiComponent, onAction }) => {
+export const InteractiveComponent: React.FC<ComponentProps> = ({ uiComponent, onAction, onApproveAction, onCancelAction }) => {
   const { type, data } = uiComponent;
+  // Local only — the message log itself stays append-only/immutable, so
+  // "did I already act on this" lives here rather than mutating history.
+  const [resolution, setResolution] = useState<'pending' | 'approved' | 'cancelled'>('pending');
+
+  if (type === 'ProposedAction' && data) {
+    const { workspaceName, command, procId, reason } = data;
+
+    if (resolution === 'approved') {
+      return (
+        <Box sx={{ mt: 2, mb: 1, p: 1.5, borderRadius: 2, background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.25)' }}>
+          <Typography variant="body2" sx={{ color: '#22c55e', fontWeight: 600 }}>
+            ✓ Approved — running now. Watch the panel on the right for live output and the evidence line when it finishes.
+          </Typography>
+        </Box>
+      );
+    }
+    if (resolution === 'cancelled') {
+      return (
+        <Box sx={{ mt: 2, mb: 1, p: 1.5, borderRadius: 2, background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.2)' }}>
+          <Typography variant="body2" sx={{ color: '#ef4444', fontWeight: 600 }}>
+            Cancelled — nothing ran.
+          </Typography>
+        </Box>
+      );
+    }
+    return (
+      <Box sx={{ mt: 2, mb: 1, p: 2, borderRadius: 2, background: 'rgba(245,158,11,0.05)', border: '1px solid rgba(245,158,11,0.3)' }}>
+        <Typography variant="caption" sx={{ color: '#f59e0b', fontWeight: 700, letterSpacing: '0.05em', display: 'block', mb: 1 }}>
+          WAITING FOR YOUR APPROVAL
+        </Typography>
+        <Typography variant="body2" sx={{ color: '#e2e8f0', mb: reason ? 0.5 : 1.5 }}>
+          Run{' '}
+          <Box component="span" sx={{ fontFamily: 'monospace', fontWeight: 700 }}>{command}</Box>{' '}
+          in <Box component="span" sx={{ fontWeight: 700 }}>{workspaceName}</Box>
+        </Typography>
+        {reason && (
+          <Typography variant="caption" sx={{ color: '#94a3b8', display: 'block', mb: 1.5 }}>
+            {reason}
+          </Typography>
+        )}
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <Button
+            size="small"
+            variant="contained"
+            color="success"
+            disabled={!procId || !onApproveAction}
+            onClick={() => {
+              if (procId && onApproveAction) {
+                onApproveAction(procId, workspaceName, command);
+                setResolution('approved');
+              }
+            }}
+          >
+            Approve &amp; Run
+          </Button>
+          <Button
+            size="small"
+            variant="outlined"
+            color="error"
+            disabled={!procId || !onCancelAction}
+            onClick={() => {
+              if (procId && onCancelAction) {
+                onCancelAction(procId);
+                setResolution('cancelled');
+              }
+            }}
+          >
+            Cancel
+          </Button>
+        </Box>
+      </Box>
+    );
+  }
 
   if (type === 'WorkspaceList' && Array.isArray(data)) {
     return (

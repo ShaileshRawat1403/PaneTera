@@ -183,8 +183,8 @@ const App: React.FC = () => {
       addMessage({ role: 'user', content: text });
       addMessage({
         role: 'assistant',
-        content: `I can run "${command}" in ${workspace}. Review it in the panel and approve to continue — nothing runs until you do.`,
-        uiComponent: { type: 'ProposedAction', data: { workspaceName: workspace, command } }
+        content: `I can run "${command}" in ${workspace}. Nothing runs until you approve it.`,
+        uiComponent: { type: 'ProposedAction', data: { workspaceName: workspace, command, procId } }
       });
 
       setPreviewFeed(prev => [
@@ -276,17 +276,30 @@ const App: React.FC = () => {
         // Final transition wait to look premium
         await sleep(400);
 
-        addMessage({ 
-          role: 'assistant', 
+        // ProposedAction cards need to reference the same procId the feed
+        // item uses, so the chat bubble's own Approve button can trigger
+        // the exact same run — the backend has no notion of loadingId, so
+        // it's stitched in here rather than trusted from the response.
+        const uiComponentWithId = data.uiComponent
+          ? {
+              ...data.uiComponent,
+              data: data.uiComponent.type === 'ProposedAction'
+                ? { ...data.uiComponent.data, procId: loadingId }
+                : data.uiComponent.data
+            }
+          : undefined;
+
+        addMessage({
+          role: 'assistant',
           content: data.reply ?? 'No response',
-          uiComponent: data.uiComponent
+          uiComponent: uiComponentWithId
         });
 
-        if (data.uiComponent) {
+        if (uiComponentWithId) {
           setPreviewFeed(prev => prev.map(item => item.id === loadingId ? {
             id: loadingId,
-            type: data.uiComponent.type,
-            data: data.uiComponent.data,
+            type: uiComponentWithId.type,
+            data: uiComponentWithId.data,
             timestamp: currentTimestamp
           } : item));
         } else {
@@ -702,14 +715,16 @@ const App: React.FC = () => {
                     </Box>
                   )}
                   {messages.map((msg, idx) => (
-                    <ChatMessage 
-                      key={idx} 
-                      role={msg.role} 
-                      content={msg.content} 
+                    <ChatMessage
+                      key={idx}
+                      role={msg.role}
+                      content={msg.content}
                       uiComponent={msg.uiComponent}
                       onAction={(query) => {
                         handleSend(query);
                       }}
+                      onApproveAction={handleApproveAction}
+                      onCancelAction={handleRemoveItem}
                     />
                   ))}
                   {loading && (

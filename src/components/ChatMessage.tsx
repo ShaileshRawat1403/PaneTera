@@ -9,10 +9,12 @@ interface Props {
   content: string;
   uiComponent?: UiComponent;
   onAction?: (query: string) => void;
+  onApproveAction?: (id: string, workspaceName: string, command: string) => void;
+  onCancelAction?: (id: string) => void;
   shouldStream?: boolean;
 }
 
-const ChatMessage: React.FC<Props> = ({ role, content, uiComponent, onAction, shouldStream = false }) => {
+const ChatMessage: React.FC<Props> = ({ role, content, uiComponent, onAction, onApproveAction, onCancelAction, shouldStream = false }) => {
   const isUser = role === 'user';
   const [displayedText, setDisplayedText] = useState(shouldStream ? '' : content);
   const [streamComplete, setStreamComplete] = useState(!shouldStream);
@@ -62,7 +64,12 @@ const ChatMessage: React.FC<Props> = ({ role, content, uiComponent, onAction, sh
           {!isUser && !streamComplete && <span className="terminal-cursor" style={{ width: 4, height: 10, verticalAlign: 'middle', marginLeft: 4 }} />}
         </Typography>
         {uiComponent && onAction && streamComplete && (
-          <InteractiveComponent uiComponent={uiComponent} onAction={onAction} />
+          <InteractiveComponent
+            uiComponent={uiComponent}
+            onAction={onAction}
+            onApproveAction={onApproveAction}
+            onCancelAction={onCancelAction}
+          />
         )}
       </Paper>
     </Box>
