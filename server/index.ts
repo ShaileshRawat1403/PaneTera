@@ -634,7 +634,7 @@ async function askGemini(query: string, history: any[] = []): Promise<{ reply: s
 
       const nextResp = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
         body: JSON.stringify({ contents })
       });
 
