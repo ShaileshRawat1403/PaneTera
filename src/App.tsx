@@ -329,7 +329,7 @@ const App: React.FC = () => {
     setPreviewFeed(prev => prev.map(item => item.id === procId ? {
       ...item,
       type: 'ExecutionLogs',
-      data: { command, logs: [`[SYSTEM] Approved by operator. Starting: ${command} in ${workspaceName}...`] }
+      data: { command, workspaceName, logs: [`[SYSTEM] Approved by operator. Starting: ${command} in ${workspaceName}...`] }
     } : item));
 
     try {

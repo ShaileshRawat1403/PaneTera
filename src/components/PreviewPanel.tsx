@@ -607,6 +607,8 @@ const ProposedActionFeedCard: React.FC<{ data: any; onApprove: () => void; onCan
 // Sub-component for task process execution stdout/stderr streams
 const ExecutionLogsFeedCard: React.FC<{ data: any; procId: string; token: string }> = ({ data, procId, token }) => {
   const [isRunning, setIsRunning] = useState(true);
+  const [completedAt, setCompletedAt] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const handleStop = async () => {
     try {
@@ -631,8 +633,31 @@ const ExecutionLogsFeedCard: React.FC<{ data: any; procId: string; token: string
     const lastLog = data.logs[data.logs.length - 1] || '';
     if (lastLog.includes('Process completed')) {
       setIsRunning(false);
+      // Captured once, at actual completion — not recomputed on every
+      // render, so the evidence line reflects when the run really finished.
+      setCompletedAt(prev => prev || new Date().toLocaleString());
     }
   }, [data.logs]);
+
+  // Only ever derived from the real "Process completed with exit code: N"
+  // line the backend broadcasts. Deliberately not parsing tool-specific
+  // output (test counts, coverage, etc.) — every runner formats that
+  // differently, and a best-effort guess dressed up as a number is exactly
+  // the kind of "looks real but might not be" this build keeps removing.
+  const exitCodeMatch = data.logs.join('\n').match(/Process completed with exit code:\s*(-?\d+)/);
+  const exitCode = exitCodeMatch ? parseInt(exitCodeMatch[1], 10) : null;
+  const passed = exitCode === 0;
+  const hasEvidence = exitCode !== null && completedAt !== null;
+
+  const evidenceText = hasEvidence
+    ? `${passed ? 'PASSED' : 'FAILED'} — ${data.workspaceName || 'workspace'}: "${data.command}" (exit code ${exitCode}) — confirmed ${completedAt}`
+    : '';
+
+  const handleCopyEvidence = () => {
+    navigator.clipboard.writeText(evidenceText);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   return (
     <Box
@@ -688,6 +713,52 @@ const ExecutionLogsFeedCard: React.FC<{ data: any; procId: string; token: string
           </Box>
         )}
       </Typography>
+
+      {hasEvidence && (
+        <Box
+          sx={{
+            mt: 1.5,
+            pt: 1.5,
+            borderTop: '1px solid rgba(255,255,255,0.06)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 1.5,
+            flexWrap: 'wrap'
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Box
+              sx={{
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                backgroundColor: passed ? '#22c55e' : '#ef4444',
+                boxShadow: passed ? '0 0 6px #22c55e' : '0 0 6px #ef4444',
+                flexShrink: 0
+              }}
+            />
+            <Typography variant="caption" sx={{ color: passed ? '#22c55e' : '#ef4444', fontWeight: 700, fontSize: '0.72rem' }}>
+              {passed ? 'Confirmed — safe to report' : 'Confirmed failure — worth flagging before repeating any other claim'}
+            </Typography>
+          </Box>
+          <Button
+            size="small"
+            onClick={handleCopyEvidence}
+            sx={{
+              fontSize: '0.65rem',
+              py: 0.25,
+              px: 1.5,
+              background: 'rgba(127, 85, 240, 0.1)',
+              color: '#b794f4',
+              border: '1px solid rgba(127, 85, 240, 0.2)',
+              borderRadius: '4px'
+            }}
+          >
+            {copied ? 'Copied!' : 'Copy evidence'}
+          </Button>
+        </Box>
+      )}
     </Box>
   );
 };
