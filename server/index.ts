@@ -1087,11 +1087,15 @@ async function resolveQueryLocally(query: string): Promise<{ reply: string; uiCo
     };
   }
 
-  // 5. General Q&A Fallback
+  // 5. General Q&A Fallback — this fires whenever no live model answered
+  // (no key configured, a real API failure, rate limiting, network issues,
+  // whatever). Say that honestly instead of naming a specific cause we
+  // haven't actually confirmed — a guessed diagnosis stated as fact is
+  // exactly the kind of thing this build has been removing all session.
   return {
     reply: `SYSTEM CONFIG // LOCAL CORE CONTROLS
 --------------------------------------------------
-Status: Gemini API connection quota exhausted (429)
+Status: Live AI assistance unavailable right now
 Mode: Local deterministic parsing system active
 
 Please run standard workspace queries directly:
@@ -1099,6 +1103,8 @@ Please run standard workspace queries directly:
 - "List files in rook" -> Index files in workspace
 - "Read README.md in flowright" -> Browse file code
 - "Search for config in flowright" -> Scan codebase
+- "git status in <workspace>" -> Check recent activity
+- "build/test/lint <workspace>" -> Propose a run for your approval
 --------------------------------------------------
 Local terminal is operational. Ready for queries.`
   };
