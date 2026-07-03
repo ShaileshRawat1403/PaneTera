@@ -88,17 +88,6 @@ body::before {
   overscroll-behavior-y: contain;
 }
 
-@keyframes rippleEffect {
-  0% {
-    transform: translate(-50%, -50%) scale(0);
-    opacity: 0.8;
-  }
-  100% {
-    transform: translate(-50%, -50%) scale(4);
-    opacity: 0;
-  }
-}
-
 /* A quiet pulse for things genuinely waiting on the person, not a loud
    attention-grab — used on the approval card border only. */
 @keyframes pulseGlow {
