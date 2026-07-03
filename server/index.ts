@@ -66,6 +66,16 @@ class RookMemoryBridge {
       stdio: ['pipe', 'pipe', 'inherit']
     });
 
+    // Spawn failure (binary missing, rook not built yet, wrong path) must
+    // not crash the portal. Without this handler, Node treats an unhandled
+    // 'error' event on a ChildProcess as a fatal exception — the memory
+    // bridge is an optional enhancement, not something the rest of the app
+    // depends on, so it should degrade to not-ready, not take the server down.
+    this.proc.on('error', (err: Error) => {
+      this.ready = false;
+      console.warn('[MemoryBridge] Could not start rook memory server (build rook first):', err.message);
+    });
+
     this.rl = readline.createInterface({ input: this.proc.stdout! });
     this.rl.on('line', (line: string) => {
       try {
@@ -80,22 +90,38 @@ class RookMemoryBridge {
       console.warn('[MemoryBridge] rook mcp memory process exited');
     });
 
-    // MCP initialize handshake
-    await this.call('initialize', {
-      protocolVersion: '2024-11-05',
-      capabilities: {},
-      clientInfo: { name: 'myai-portal', version: '1.0.0' }
-    });
+    // MCP initialize handshake — bounded, so a missing/hung binary can't
+    // stall portal startup indefinitely.
+    const initTimeout = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('memory bridge init timed out')), 3000)
+    );
+    await Promise.race([
+      this.call('initialize', {
+        protocolVersion: '2024-11-05',
+        capabilities: {},
+        clientInfo: { name: 'myai-portal', version: '1.0.0' }
+      }),
+      initTimeout
+    ]);
     this.ready = true;
     console.log('[MemoryBridge] rook memory server ready');
   }
 
   private call(method: string, params: Record<string, unknown>): Promise<McpRpcResp> {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
+      if (!this.proc || !this.proc.stdin || this.proc.stdin.destroyed) {
+        reject(new Error('memory bridge process not available'));
+        return;
+      }
       const id = this.idCounter++;
       const req: McpRpcReq = { jsonrpc: '2.0', id, method, params };
       this.pending.set(id, resolve);
-      this.proc!.stdin!.write(JSON.stringify(req) + '\n');
+      try {
+        this.proc.stdin.write(JSON.stringify(req) + '\n');
+      } catch (err) {
+        this.pending.delete(id);
+        reject(err as Error);
+      }
     });
   }
 
