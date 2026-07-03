@@ -4,6 +4,7 @@ import { Box, Container, CssBaseline, ThemeProvider, createTheme, Paper, Typogra
 import ChatMessage from './components/ChatMessage';
 import ChatInput from './components/ChatInput';
 import { PreviewPanel, FeedItem } from './components/PreviewPanel';
+import type { UiComponent } from '../shared/uiComponent';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
@@ -51,10 +52,7 @@ const appleTheme = createTheme({
 interface Message {
   role: 'user' | 'assistant';
   content: string;
-  uiComponent?: {
-    type: 'WorkspaceList' | 'FileList' | 'CodePreview' | 'SearchResults';
-    data: any;
-  };
+  uiComponent?: UiComponent;
 }
 
 const App: React.FC = () => {

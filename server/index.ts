@@ -198,12 +198,20 @@ app.get('/api/events', (req: Request, res: Response) => {
   });
 });
 
-// Health check – reports read‑only mode and workspace count
-app.get('/api/health', (req, res) => {
+// Health check – reports read‑only mode and the real workspace count.
+// A status endpoint that reports env-var guesses instead of truth is a
+// tiny lie in exactly the place lies matter most.
+app.get('/api/health', async (req, res) => {
+  let workspaceCount = 0;
+  try {
+    workspaceCount = (await listWorkspaces()).length;
+  } catch {
+    // portal.yaml unreadable — report zero rather than a guess
+  }
   res.json({
     status: 'ok',
     mode: 'read-only',
-    workspaceCount: (process.env.WORKSPACE_ROOT ? 1 : 0),
+    workspaceCount,
     memoryBridgeReady: memoryBridge.ready
   });
 });
@@ -440,24 +448,11 @@ app.get('/api/desktop/apps', (req, res) => {
   });
 });
 
-// Mock web viewport click endpoint
-app.post('/api/web/click', (req, res) => {
-  const { x, y } = req.body as { x: number; y: number };
-  console.log(`[CLICK BRIDGE] Coordinates registered - X: ${x}, Y: ${y}`);
-  
-  // Broadcast coordinates event update to logs panel
-  sseClients.forEach(client => {
-    client.write(`data: ${JSON.stringify({
-      type: 'proc_log',
-      procId: 'live-viewport',
-      logType: 'stdout',
-      text: `[PORTAL VIEWPORT BRIDGE] Interactive Click Registered at coordinates X: ${x}, Y: ${y} on live screen.`,
-      timestamp: new Date().toLocaleTimeString()
-    })}\n\n`);
-  });
-
-  res.json({ success: true, message: `Clicked at X: ${x}, Y: ${y}` });
-});
+// NOTE: the former /api/web/click mock endpoint was removed on purpose.
+// It logged coordinates as if clicks landed on a live screen — simulation
+// presented as capability. If the portal ever needs real screen/browser
+// actuation, that is a deliberate new surface with its own threat model,
+// not a stub to grow into.
 
 // Gemini Q&A execution handler
 async function askGemini(query: string, history: any[] = []): Promise<{ reply: string; uiComponent?: any }> {
@@ -466,7 +461,10 @@ async function askGemini(query: string, history: any[] = []): Promise<{ reply: s
     throw new Error('GEMINI_API_KEY environment variable is missing.');
   }
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+  // Key travels in a header, never in the URL — URLs leak into logs,
+  // error traces, and proxies.
+  const url =
+    'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
 
   const contentsPayload: any[] = [];
   for (const h of history) {
@@ -483,7 +481,7 @@ async function askGemini(query: string, history: any[] = []): Promise<{ reply: s
 
   const response = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
     body: JSON.stringify({
       contents: contentsPayload,
       systemInstruction: {

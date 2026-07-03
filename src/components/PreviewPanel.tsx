@@ -12,12 +12,8 @@ import InfoIcon from '@mui/icons-material/Info';
 import ClearAllIcon from '@mui/icons-material/ClearAll';
 import ViewStreamIcon from '@mui/icons-material/ViewStream';
 
-export interface FeedItem {
-  id: string;
-  type: 'WorkspaceList' | 'FileList' | 'CodePreview' | 'SearchResults' | 'WebSearch' | 'TerminalLogs' | 'WorkflowsList' | 'ExecutionLogs' | 'GitHistory' | 'DesktopApps';
-  data: any;
-  timestamp: string;
-}
+export type { FeedItem } from '../../shared/uiComponent';
+import type { FeedItem } from '../../shared/uiComponent';
 
 interface PreviewProps {
   previewFeed: FeedItem[];
@@ -543,21 +539,16 @@ const WebSearchFeedCard: React.FC<{ data: any; token: string }> = ({ data, token
 
     // Hotspot 2: Code block copy button area (around horizontal 74-84%, vertical 53-63%)
     if (pctX >= 74 && pctX <= 84 && pctY >= 53 && pctY <= 63) {
-      navigator.clipboard.writeText("sk-proj-vertex-99218-vertex-docs-auth");
+      // Demo placeholder only — never copy realistic-looking secrets.
+      navigator.clipboard.writeText("demo-placeholder-not-a-real-key");
       setCopiedNotification(true);
       setTimeout(() => setCopiedNotification(false), 2000);
       return;
     }
 
-    // Dispatch click coordinates securely to the backend
-    fetch('/api/web/click', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({ x: Math.round(clickX), y: Math.round(clickY) })
-    });
+    // Clicks in the simulated viewport stay client-side (ripple only).
+    // The old /api/web/click bridge pretended clicks reached a live
+    // screen; removed with its backend endpoint.
   };
 
   return (

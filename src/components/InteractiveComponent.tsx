@@ -1,16 +1,14 @@
 // src/components/InteractiveComponent.tsx
 import React from 'react';
 import { Box, Typography, Card, CardContent, CardActionArea, Grid, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Paper, Divider } from '@mui/material';
+import type { UiComponent } from '../../shared/uiComponent';
 import FolderIcon from '@mui/icons-material/Folder';
 import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
 import SearchIcon from '@mui/icons-material/Search';
 import CodeIcon from '@mui/icons-material/Code';
 
 interface ComponentProps {
-  uiComponent: {
-    type: 'WorkspaceList' | 'FileList' | 'CodePreview' | 'SearchResults';
-    data: any;
-  };
+  uiComponent: UiComponent;
   onAction: (query: string) => void;
 }
 

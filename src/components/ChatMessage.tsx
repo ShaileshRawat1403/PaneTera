@@ -1,15 +1,13 @@
 // src/components/ChatMessage.tsx
 import React, { useState, useEffect } from 'react';
 import { Box, Typography, Paper } from '@mui/material';
+import type { UiComponent } from '../../shared/uiComponent';
 import { InteractiveComponent } from './InteractiveComponent';
 
 interface Props {
   role: 'user' | 'assistant';
   content: string;
-  uiComponent?: {
-    type: 'WorkspaceList' | 'FileList' | 'CodePreview' | 'SearchResults';
-    data: any;
-  };
+  uiComponent?: UiComponent;
   onAction?: (query: string) => void;
   shouldStream?: boolean;
 }

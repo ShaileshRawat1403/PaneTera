@@ -19,7 +19,9 @@ export async function listWorkspaces(): Promise<Array<{name:string; path:string}
     const workspaces = doc.workspaces.map((ws:any) => {
       if (!ws.name || !ws.path) throw new Error('Workspace entry missing name or path');
       const absPath = path.resolve(ws.path);
-      if (!absPath.startsWith(ROOT)) {
+      // Boundary check must be segment-aware: plain startsWith(ROOT) would
+      // accept sibling dirs like `${ROOT}-evil`.
+      if (absPath !== ROOT && !absPath.startsWith(ROOT + path.sep)) {
         throw new Error(`Workspace ${ws.name} is outside allowed root`);
       }
       return { name: ws.name, path: absPath };
@@ -41,8 +43,11 @@ export async function readFileSafe(workspaceName:string, relPath:string): Promis
   const ws = workspaces.find(w=>w.name===workspaceName);
   if (!ws) throw new Error(`Workspace ${workspaceName} not allowed`);
   const absPath = path.resolve(ws.path, relPath);
-  // Ensure the final resolved path is still inside the workspace root
-  if (!absPath.startsWith(ws.path)) throw new Error('Path traversal detected');
+  // Ensure the final resolved path is still inside the workspace root.
+  // Segment-aware: startsWith(ws.path) alone would accept `${ws.path}-evil`.
+  if (absPath !== ws.path && !absPath.startsWith(ws.path + path.sep)) {
+    throw new Error('Path traversal detected');
+  }
   // Block disallowed folders
   const segments = absPath.split(path.sep);
   if (segments.some(seg=>BLOCKED_FOLDERS.includes(seg))) {
