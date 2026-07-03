@@ -25,6 +25,10 @@ interface PreviewProps {
   onClearFeed: () => void;
   onApproveAction: (id: string, workspaceName: string, command: string) => void;
   token: string;
+  /** True while a request is in flight and hasn't produced a real feed item
+      yet. Used only to swap the empty-state copy/icon for an honest
+      "waiting" one — never to fabricate a fake progress narrative. */
+  loading?: boolean;
 }
 
 // 3D MacBook Screen Simulator with beveled aluminum hinge base
@@ -883,7 +887,7 @@ const DesktopAppsFeedCard: React.FC<{ token: string }> = ({ token }) => {
   );
 };
 
-export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onAction, onRemoveItem, onClearFeed, onApproveAction, token }) => {
+export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onAction, onRemoveItem, onClearFeed, onApproveAction, token, loading }) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const feedEndRef = useRef<HTMLDivElement>(null);
 
@@ -945,6 +949,16 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
         </Box>
       </Box>
 
+      {loading && (
+        <LinearProgress
+          sx={{
+            height: 2,
+            background: 'transparent',
+            '& .MuiLinearProgress-bar': { background: '#7f5af0' }
+          }}
+        />
+      )}
+
       {/* Preview Feed Body */}
       <Box className="scroll-container" sx={{ flexGrow: 1, overflowY: 'auto', p: 3, display: 'flex', flexDirection: 'column', gap: 3 }}>
         {previewFeed.length === 0 ? (
@@ -977,13 +991,19 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
                 boxShadow: '0 0 20px rgba(127, 85, 240, 0.05)'
               }}
             >
-              <TerminalIcon sx={{ fontSize: 32, color: '#7f5af0' }} />
+              {loading ? (
+                <CircularProgress size={26} sx={{ color: '#7f5af0' }} />
+              ) : (
+                <TerminalIcon sx={{ fontSize: 32, color: '#7f5af0' }} />
+              )}
             </Box>
             <Typography variant="body1" sx={{ color: '#f4f4f5', fontWeight: 600, mb: 1 }}>
-              Intelligence Feed
+              {loading ? 'Waiting for response' : 'Intelligence Feed'}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 280, fontSize: '0.85rem', lineHeight: 1.6 }}>
-              Interactive files, telemetry statistics, and search components will stream here as you explore.
+              {loading
+                ? "Nothing to show yet — real components land here once the backend actually returns something."
+                : 'Interactive files, telemetry statistics, and search components will stream here as you explore.'}
             </Typography>
           </Box>
         ) : (
@@ -1136,11 +1156,6 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
                           <Box sx={{ flexGrow: 1, whiteSpace: 'pre-wrap' }}>{log}</Box>
                         </Box>
                       ))}
-                      <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
-                        <Box sx={{ color: '#22c55e', mr: 1, userSelect: 'none' }}>❯</Box>
-                        <Box sx={{ color: '#a0aec0' }}>running active query scan</Box>
-                        <span className="terminal-cursor" style={{ width: 6, height: 12 }} />
-                      </Box>
                     </Typography>
                   </Box>
                 )}

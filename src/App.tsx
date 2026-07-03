@@ -66,7 +66,6 @@ const App: React.FC = () => {
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
   const [journeyStep, setJourneyStep] = useState<number>(1);
-  const [thinkingSteps, setThinkingSteps] = useState<string[]>([]);
   const [isCmdKOpen, setIsCmdKOpen] = useState<boolean>(false);
   const [cmdKQuery, setCmdKQuery] = useState<string>('');
   const [isHelpOpen, setIsHelpOpen] = useState<boolean>(false);
@@ -213,21 +212,12 @@ const App: React.FC = () => {
 
     addMessage({ role: 'user', content: text });
     setLoading(true);
-    
-    // Create the terminal log item card
+
+    // Real id for stitching the eventual real feed item (if any) back to
+    // this request — nothing fake gets pushed to previewFeed until there's
+    // an actual response to show.
     const loadingId = Math.random().toString(36).substr(2, 9);
     const currentTimestamp = new Date().toLocaleTimeString();
-    setPreviewFeed(prev => [
-      ...prev,
-      {
-        id: loadingId,
-        type: 'TerminalLogs',
-        data: { logs: ["Parsing query parameters...", "Invoking safe path controls..."] },
-        timestamp: currentTimestamp
-      }
-    ]);
-
-    setThinkingSteps(["Parsing query parameters..."]);
 
     const historyPayload = messages.map(m => ({
       role: m.role === 'user' ? 'user' : 'model',
@@ -249,40 +239,17 @@ const App: React.FC = () => {
       return resp.json();
     });
 
-    // Staged terminal log animation steps
-    const runStagedLogs = async () => {
-      const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
-      
-      const updateLogs = (logLine: string) => {
-        setThinkingSteps(prev => [...prev, logLine]);
-        setPreviewFeed(prev => prev.map(item => item.id === loadingId ? {
-          ...item,
-          data: { logs: [...item.data.logs, logLine] }
-        } : item));
-      };
-
-      await sleep(350);
-      updateLogs("Contacting local repository reader...");
-      
-      await sleep(350);
-      updateLogs("Querying safe file boundary controls...");
-      
-      await sleep(350);
-      updateLogs("Resolving active widgets...");
-
+    // Wait for the real response — no fabricated step narration. The chat
+    // pane shows one honest "Thinking..." indicator (via `loading`); the
+    // right panel stays as-is until there's an actual uiComponent to show.
+    const awaitResponse = async () => {
       try {
         const data = await apiPromise;
-        
-        await sleep(350);
-        updateLogs("Response received. Rendering visual components...");
-        
-        // Final transition wait to look premium
-        await sleep(400);
 
-        // ProposedAction cards need to reference the same procId the feed
-        // item uses, so the chat bubble's own Approve button can trigger
-        // the exact same run — the backend has no notion of loadingId, so
-        // it's stitched in here rather than trusted from the response.
+        // ProposedAction cards need to reference an id the chat bubble's
+        // own Approve button can use, so the chat and (if a feed item gets
+        // created) the panel act on the exact same run — the backend has
+        // no notion of this id, so it's stitched in here.
         const uiComponentWithId = data.uiComponent
           ? {
               ...data.uiComponent,
@@ -298,15 +265,18 @@ const App: React.FC = () => {
           uiComponent: uiComponentWithId
         });
 
+        // Only real, structured results get a feed card — no placeholder
+        // ever occupied this slot, so this is a straight append.
         if (uiComponentWithId) {
-          setPreviewFeed(prev => prev.map(item => item.id === loadingId ? {
-            id: loadingId,
-            type: uiComponentWithId.type,
-            data: uiComponentWithId.data,
-            timestamp: currentTimestamp
-          } : item));
-        } else {
-          setPreviewFeed(prev => prev.filter(item => item.id !== loadingId));
+          setPreviewFeed(prev => [
+            ...prev,
+            {
+              id: loadingId,
+              type: uiComponentWithId.type,
+              data: uiComponentWithId.data,
+              timestamp: currentTimestamp
+            }
+          ]);
         }
       } catch (err: any) {
         if (err.message === 'Unauthorized') {
@@ -315,13 +285,12 @@ const App: React.FC = () => {
         } else {
           addMessage({ role: 'assistant', content: 'Error contacting backend. Please verify that the server is running.' });
         }
-        setPreviewFeed(prev => prev.filter(item => item.id !== loadingId));
       } finally {
         setLoading(false);
       }
     };
 
-    runStagedLogs();
+    awaitResponse();
   };
 
   const handleTokenSave = () => {
@@ -832,47 +801,28 @@ const App: React.FC = () => {
                   ))}
                   {loading && (
                     <Box sx={{ display: 'flex', justifyContent: 'flex-start', mb: 2, width: '100%' }}>
+                      {/* Honest, minimal "working on it" state — no
+                          fabricated step narration. Real progress (when
+                          there is any to show) lives in the feed panel as
+                          actual structured results, not scripted text. */}
                       <Paper
                         elevation={0}
+                        className="feed-card-animation"
                         sx={{
-                          p: 2.5,
-                          maxWidth: '90%',
-                          minWidth: '60%',
+                          py: 1.5,
+                          px: 2.5,
                           background: 'rgba(255, 255, 255, 0.015)',
                           borderRadius: '16px',
                           border: '1px solid rgba(255, 255, 255, 0.06)',
                           display: 'flex',
-                          alignItems: 'flex-start',
-                          gap: 2
+                          alignItems: 'center',
+                          gap: 1.5
                         }}
                       >
-                        <CircularProgress size={14} sx={{ color: '#7f5af0', mt: 0.5 }} />
-                        <Box sx={{ width: '100%' }}>
-                           <Typography variant="body2" sx={{ fontWeight: 700, mb: 1, fontSize: '0.8rem', color: '#cbd5e1' }}>
-                            Index Pipeline Scanning
-                          </Typography>
-                          {thinkingSteps.map((step, sIdx) => (
-                            <Typography 
-                              key={sIdx} 
-                              variant="caption" 
-                              component="div" 
-                              sx={{ 
-                                fontFamily: 'SFMono-Regular, Consolas, monospace', 
-                                color: sIdx === thinkingSteps.length - 1 ? '#cbd5e1' : '#71717a',
-                                display: 'flex', 
-                                alignItems: 'center', 
-                                gap: 1,
-                                mb: 0.5,
-                                fontSize: '0.75rem'
-                              }}
-                            >
-                              <span style={{ color: sIdx === thinkingSteps.length - 1 ? '#7f5af0' : '#22c55e' }}>
-                                {sIdx === thinkingSteps.length - 1 ? '❯' : '✔'}
-                              </span>
-                              {step}
-                            </Typography>
-                          ))}
-                        </Box>
+                        <CircularProgress size={14} sx={{ color: '#7f5af0' }} />
+                        <Typography variant="body2" sx={{ color: '#a1a1aa', fontWeight: 500 }}>
+                          Thinking...
+                        </Typography>
                       </Paper>
                     </Box>
                   )}
@@ -896,6 +846,7 @@ const App: React.FC = () => {
                 onClearFeed={handleClearFeed}
                 onApproveAction={handleApproveAction}
                 token={token}
+                loading={loading}
               />
             </Grid>
           )}
