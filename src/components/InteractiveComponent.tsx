@@ -1,5 +1,5 @@
 // src/components/InteractiveComponent.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Box, Typography, Card, CardContent, CardActionArea, Grid, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Paper, Divider, Button } from '@mui/material';
 import type { UiComponent } from '../../shared/uiComponent';
 import FolderIcon from '@mui/icons-material/Folder';
@@ -19,9 +19,40 @@ export const InteractiveComponent: React.FC<ComponentProps> = ({ uiComponent, on
   // Local only — the message log itself stays append-only/immutable, so
   // "did I already act on this" lives here rather than mutating history.
   const [resolution, setResolution] = useState<'pending' | 'approved' | 'cancelled'>('pending');
+  // Same brief undoable window as the panel card — a deliberate beat
+  // before a real command actually fires, not an instant irreversible click.
+  const [countdown, setCountdown] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (countdown === null) return;
+    if (countdown <= 0) {
+      const { workspaceName, command, procId } = data || {};
+      if (procId && onApproveAction) {
+        onApproveAction(procId, workspaceName, command);
+      }
+      setResolution('approved');
+      return;
+    }
+    const t = setTimeout(() => setCountdown(c => (c ?? 1) - 1), 1000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [countdown]);
 
   if (type === 'ProposedAction' && data) {
     const { workspaceName, command, procId, reason } = data;
+
+    if (countdown !== null) {
+      return (
+        <Box sx={{ mt: 2, mb: 1, p: 1.5, borderRadius: 2, background: 'rgba(34,197,94,0.05)', border: '1px solid rgba(34,197,94,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Typography variant="body2" sx={{ color: '#22c55e', fontWeight: 600 }}>
+            Starting in {countdown}...
+          </Typography>
+          <Button size="small" variant="outlined" onClick={() => setCountdown(null)} sx={{ color: '#94a3b8' }}>
+            Undo
+          </Button>
+        </Box>
+      );
+    }
 
     if (resolution === 'approved') {
       return (
@@ -62,12 +93,7 @@ export const InteractiveComponent: React.FC<ComponentProps> = ({ uiComponent, on
             variant="contained"
             color="success"
             disabled={!procId || !onApproveAction}
-            onClick={() => {
-              if (procId && onApproveAction) {
-                onApproveAction(procId, workspaceName, command);
-                setResolution('approved');
-              }
-            }}
+            onClick={() => setCountdown(2)}
           >
             Approve &amp; Run
           </Button>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Box, Typography, Paper, Divider, IconButton, Button, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Grid, Card, CardContent, CardActionArea, Tooltip, LinearProgress, Tabs, Tab, Chip, Stack } from '@mui/material';
+import { Box, Typography, Paper, Divider, IconButton, Button, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Grid, Card, CardContent, CardActionArea, Tooltip, LinearProgress, CircularProgress, Tabs, Tab, Chip, Stack } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import FolderIcon from '@mui/icons-material/Folder';
@@ -565,6 +565,51 @@ const WorkflowsFeedCard: React.FC<{ data: any }> = ({ data }) => {
 // Nothing runs until Approve is clicked — this is the control-plane gate:
 // the model or the local resolver can propose, only the operator can run.
 const ProposedActionFeedCard: React.FC<{ data: any; onApprove: () => void; onCancel: () => void }> = ({ data, onApprove, onCancel }) => {
+  // A brief, undoable window between the click and the real POST firing —
+  // for someone clicking a real execute button for possibly the first
+  // time, a little deliberate friction is worth more than the half-second
+  // it costs.
+  const [countdown, setCountdown] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (countdown === null) return;
+    if (countdown <= 0) {
+      onApprove();
+      return;
+    }
+    const t = setTimeout(() => setCountdown(c => (c ?? 1) - 1), 1000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [countdown]);
+
+  if (countdown !== null) {
+    return (
+      <Box
+        sx={{
+          background: 'rgba(34, 197, 94, 0.05)',
+          border: '1px solid rgba(34, 197, 94, 0.3)',
+          borderRadius: '12px',
+          p: 2,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between'
+        }}
+      >
+        <Typography variant="body2" sx={{ color: '#22c55e', fontWeight: 600 }}>
+          Starting in {countdown}...
+        </Typography>
+        <Button
+          size="small"
+          variant="outlined"
+          onClick={() => setCountdown(null)}
+          sx={{ color: '#a1a1aa', borderColor: 'rgba(255,255,255,0.2)' }}
+        >
+          Undo
+        </Button>
+      </Box>
+    );
+  }
+
   return (
     <Box sx={{ background: 'rgba(245, 158, 11, 0.04)', border: '1px solid rgba(245, 158, 11, 0.25)', borderRadius: '12px', p: 2 }}>
       <Typography variant="caption" sx={{ color: '#f59e0b', fontWeight: 700, letterSpacing: '0.05em', display: 'block', mb: 1 }}>
@@ -586,7 +631,7 @@ const ProposedActionFeedCard: React.FC<{ data: any; onApprove: () => void; onCan
         <Button
           size="small"
           variant="contained"
-          onClick={onApprove}
+          onClick={() => setCountdown(2)}
           sx={{ background: '#22c55e', '&:hover': { background: '#16a34a' } }}
         >
           Approve &amp; Run
@@ -609,6 +654,12 @@ const ExecutionLogsFeedCard: React.FC<{ data: any; procId: string; token: string
   const [isRunning, setIsRunning] = useState(true);
   const [completedAt, setCompletedAt] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [failedToStart, setFailedToStart] = useState(false);
+  // Raw stdout/stderr is real and available, but it's not what a non-dev
+  // user needs first — status is. Collapsed by default, auto-opened once
+  // if something actually needs looking at.
+  const [showRawOutput, setShowRawOutput] = useState(false);
+  const [autoExpandedOnce, setAutoExpandedOnce] = useState(false);
 
   const handleStop = async () => {
     try {
@@ -640,6 +691,7 @@ const ExecutionLogsFeedCard: React.FC<{ data: any; procId: string; token: string
       // It never actually ran, so there's no real pass/fail to confirm —
       // stop the spinner but do not show an evidence card.
       setIsRunning(false);
+      setFailedToStart(true);
     }
   }, [data.logs]);
 
@@ -663,6 +715,15 @@ const ExecutionLogsFeedCard: React.FC<{ data: any; procId: string; token: string
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // Auto-open the technical output once, only when there's actually
+  // something worth looking at — a clean pass never needs it.
+  useEffect(() => {
+    if (!autoExpandedOnce && (failedToStart || (hasEvidence && !passed))) {
+      setShowRawOutput(true);
+      setAutoExpandedOnce(true);
+    }
+  }, [failedToStart, hasEvidence, passed, autoExpandedOnce]);
+
   return (
     <Box
       sx={{
@@ -672,11 +733,17 @@ const ExecutionLogsFeedCard: React.FC<{ data: any; procId: string; token: string
         border: '1px solid rgba(127, 85, 240, 0.12)'
       }}
     >
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
-        <Typography variant="caption" sx={{ fontFamily: 'monospace', color: isRunning ? '#7f5af0' : '#71717a', fontWeight: 700 }}>
-          EXECUTING: {data.command}
-        </Typography>
-        {isRunning && (
+      {/* Status-first: this is the thing a non-dev user actually came for */}
+      {isRunning && (
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
+            <CircularProgress size={14} sx={{ color: '#7f5af0' }} />
+            <Typography variant="body2" sx={{ color: '#f4f4f5' }}>
+              Running{' '}
+              <Box component="span" sx={{ fontFamily: 'monospace', color: '#7f5af0', fontWeight: 700 }}>{data.command}</Box>{' '}
+              in <Box component="span" sx={{ fontWeight: 700 }}>{data.workspaceName || 'workspace'}</Box>
+            </Typography>
+          </Box>
           <Button
             size="small"
             onClick={handleStop}
@@ -690,61 +757,41 @@ const ExecutionLogsFeedCard: React.FC<{ data: any; procId: string; token: string
               borderRadius: '4px'
             }}
           >
-            TERMINATE TASK
+            TERMINATE
           </Button>
-        )}
-      </Box>
-      <Typography
-        component="div"
-        sx={{
-          fontFamily: 'monospace',
-          fontSize: '0.75rem',
-          color: '#cbd5e1',
-          lineHeight: 1.5,
-          maxHeight: 220,
-          overflowY: 'auto',
-          whiteSpace: 'pre-wrap'
-        }}
-      >
-        {data.logs.map((log: string, lIdx: number) => (
-          <Box key={lIdx} sx={{ mb: 0.5 }}>
-            {log}
-          </Box>
-        ))}
-        {isRunning && (
-          <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
-            <span className="terminal-cursor" style={{ width: 6, height: 12 }} />
-          </Box>
-        )}
-      </Typography>
+        </Box>
+      )}
+
+      {!isRunning && failedToStart && (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box sx={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#ef4444', boxShadow: '0 0 6px #ef4444' }} />
+          <Typography variant="body2" sx={{ color: '#ef4444', fontWeight: 700 }}>
+            Couldn't start — see technical output below for why.
+          </Typography>
+        </Box>
+      )}
 
       {hasEvidence && (
-        <Box
-          sx={{
-            mt: 1.5,
-            pt: 1.5,
-            borderTop: '1px solid rgba(255,255,255,0.06)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 1.5,
-            flexWrap: 'wrap'
-          }}
-        >
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1.5, flexWrap: 'wrap' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Box
               sx={{
-                width: 8,
-                height: 8,
+                width: 10,
+                height: 10,
                 borderRadius: '50%',
                 backgroundColor: passed ? '#22c55e' : '#ef4444',
                 boxShadow: passed ? '0 0 6px #22c55e' : '0 0 6px #ef4444',
                 flexShrink: 0
               }}
             />
-            <Typography variant="caption" sx={{ color: passed ? '#22c55e' : '#ef4444', fontWeight: 700, fontSize: '0.72rem' }}>
-              {passed ? 'Confirmed — safe to report' : 'Confirmed failure — worth flagging before repeating any other claim'}
-            </Typography>
+            <Box>
+              <Typography variant="body2" sx={{ color: passed ? '#22c55e' : '#ef4444', fontWeight: 700 }}>
+                {passed ? 'Passed' : 'Failed'} — {data.workspaceName || 'workspace'}: "{data.command}"
+              </Typography>
+              <Typography variant="caption" sx={{ color: '#71717a', fontSize: '0.68rem' }}>
+                exit code {exitCode} — confirmed {completedAt}
+              </Typography>
+            </Box>
           </Box>
           <Button
             size="small"
@@ -756,12 +803,58 @@ const ExecutionLogsFeedCard: React.FC<{ data: any; procId: string; token: string
               background: 'rgba(127, 85, 240, 0.1)',
               color: '#b794f4',
               border: '1px solid rgba(127, 85, 240, 0.2)',
-              borderRadius: '4px'
+              borderRadius: '4px',
+              flexShrink: 0
             }}
           >
             {copied ? 'Copied!' : 'Copy evidence'}
           </Button>
         </Box>
+      )}
+
+      <Button
+        size="small"
+        onClick={() => setShowRawOutput(v => !v)}
+        sx={{
+          mt: 1.25,
+          fontSize: '0.65rem',
+          color: '#71717a',
+          textTransform: 'none',
+          px: 0,
+          minWidth: 0,
+          '&:hover': { background: 'transparent', color: '#a1a1aa' }
+        }}
+      >
+        {showRawOutput ? 'Hide technical output' : 'View technical output'}
+      </Button>
+
+      {showRawOutput && (
+        <Typography
+          component="div"
+          sx={{
+            mt: 1,
+            pt: 1,
+            borderTop: '1px solid rgba(255,255,255,0.06)',
+            fontFamily: 'monospace',
+            fontSize: '0.75rem',
+            color: '#cbd5e1',
+            lineHeight: 1.5,
+            maxHeight: 220,
+            overflowY: 'auto',
+            whiteSpace: 'pre-wrap'
+          }}
+        >
+          {data.logs.map((log: string, lIdx: number) => (
+            <Box key={lIdx} sx={{ mb: 0.5 }}>
+              {log}
+            </Box>
+          ))}
+          {isRunning && (
+            <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
+              <span className="terminal-cursor" style={{ width: 6, height: 12 }} />
+            </Box>
+          )}
+        </Typography>
       )}
     </Box>
   );
