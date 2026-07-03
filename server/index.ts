@@ -391,6 +391,7 @@ app.post('/api/execute', async (req, res) => {
       { match: /^npm\s+test$/, cmd: 'npm', args: ['test'] },
       { match: /^npm\s+run\s+build$/, cmd: 'npm', args: ['run', 'build'] },
       { match: /^npm\s+run\s+lint$/, cmd: 'npm', args: ['run', 'lint'] },
+      { match: /^npm\s+run\s+verify$/, cmd: 'npm', args: ['run', 'verify'] },
       { match: /^cargo\s+check$/, cmd: 'cargo', args: ['check'] },
       { match: /^cargo\s+test$/, cmd: 'cargo', args: ['test'] },
       { match: /^git\s+diff$/, cmd: 'git', args: ['diff'] },
@@ -587,8 +588,8 @@ async function askGemini(query: string, history: any[] = []): Promise<{ reply: s
                   workspaceName: { type: 'STRING', description: 'The name of the workspace to run the command in.' },
                   command: {
                     type: 'STRING',
-                    enum: ['npm run test', 'npm test', 'npm run build', 'npm run lint', 'cargo check', 'cargo test', 'git diff', 'git status'],
-                    description: 'The exact allowlisted command to propose.'
+                    enum: ['npm run test', 'npm test', 'npm run build', 'npm run lint', 'npm run verify', 'cargo check', 'cargo test', 'git diff', 'git status'],
+                    description: 'The exact allowlisted command to propose. Prefer "npm run verify" over "npm run test" for workspaces (like flowright) that only define a verify script and no test script.'
                   },
                   reason: { type: 'STRING', description: 'A short, plain-language reason this command answers the request.' }
                 },
@@ -806,8 +807,8 @@ async function askOpenAI(query: string, history: any[] = []): Promise<{ reply: s
             workspaceName: { type: 'string', description: 'The name of the workspace to run the command in.' },
             command: {
               type: 'string',
-              enum: ['npm run test', 'npm test', 'npm run build', 'npm run lint', 'cargo check', 'cargo test', 'git diff', 'git status'],
-              description: 'The exact allowlisted command to propose.'
+              enum: ['npm run test', 'npm test', 'npm run build', 'npm run lint', 'npm run verify', 'cargo check', 'cargo test', 'git diff', 'git status'],
+              description: 'The exact allowlisted command to propose. Prefer "npm run verify" over "npm run test" for workspaces (like flowright) that only define a verify script and no test script.'
             },
             reason: { type: 'string', description: 'A short, plain-language reason this command answers the request.' }
           },
@@ -1009,18 +1010,24 @@ async function resolveQueryLocally(query: string): Promise<{ reply: string; uiCo
   // 4.55. Build/test/lint intent — propose it, never auto-run it. This is
   // the local (no-LLM-key) path to the same approval-gated control-plane
   // pattern proposeExecution gives the LLM tool-calling paths.
-  const proposeVerbRegex = /\b(build|lint|tests?)\b/i;
+  const proposeVerbRegex = /\b(build|lint|verify|tests?)\b/i;
   const proposeWorkspaceMatch = query.match(/(?:for|in)\s+([\w-]+)/i);
   const proposeVerbMatch = query.match(proposeVerbRegex);
   if (proposeVerbMatch && proposeWorkspaceMatch) {
     const workspace = proposeWorkspaceMatch[1];
     const verb = proposeVerbMatch[1].toLowerCase();
     const isRust = workspace.toLowerCase() === 'rook';
-    const command = verb.startsWith('lint')
-      ? 'npm run lint'
-      : verb.startsWith('test')
-        ? (isRust ? 'cargo test' : 'npm test')
-        : (isRust ? 'cargo check' : 'npm run build');
+    // flowright has no npm test script, only build/verify/verify:full/verify:staging —
+    // route "test" there to the command that actually exists instead of one
+    // that would fail with a misleading "missing script" error.
+    const usesVerifyInsteadOfTest = workspace.toLowerCase() === 'flowright';
+    const command = verb.startsWith('verify')
+      ? 'npm run verify'
+      : verb.startsWith('lint')
+        ? 'npm run lint'
+        : verb.startsWith('test')
+          ? (isRust ? 'cargo test' : (usesVerifyInsteadOfTest ? 'npm run verify' : 'npm test'))
+          : (isRust ? 'cargo check' : 'npm run build');
     return {
       reply: `[LOCAL FALLBACK ENGINE] I can run "${command}" in workspace "${workspace}". Nothing runs until you approve it below.`,
       uiComponent: {

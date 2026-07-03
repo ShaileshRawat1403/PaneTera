@@ -466,7 +466,8 @@ const App: React.FC = () => {
                 { title: "What's changed in flowright", cmd: 'git status in flowright', desc: 'Recent activity and working state' },
                 { title: 'Summarize rook', cmd: 'Read README.md in rook', desc: 'Plain-language overview of the project' },
                 { title: 'Summarize flowright', cmd: 'Read README.md in flowright', desc: 'Plain-language overview of the project' },
-                { title: 'Build flowright', cmd: 'run npm run build in flowright', desc: 'Propose a build — nothing runs until you approve it' }
+                { title: 'Build flowright', cmd: 'run npm run build in flowright', desc: 'Propose a build — nothing runs until you approve it' },
+                { title: 'Verify flowright', cmd: 'run npm run verify in flowright', desc: 'Propose flowright’s own verify check — nothing runs until you approve it' }
               ]
                 .filter(item => item.title.toLowerCase().includes(cmdKQuery.toLowerCase()) || item.cmd.toLowerCase().includes(cmdKQuery.toLowerCase()))
                 .map((item, idx) => (
@@ -670,7 +671,7 @@ const App: React.FC = () => {
                   { label: "See what's connected", cmd: 'List workspaces' },
                   { label: 'Check recent activity', cmd: 'git status in flowright' },
                   { label: 'Open a plain-language summary', cmd: 'Read README.md in flowright' },
-                  { label: 'Propose a build — nothing runs until you approve', cmd: 'run npm run build in flowright' }
+                  { label: 'Propose a check — nothing runs until you approve', cmd: 'run npm run verify in flowright' }
                 ].map((item, idx) => (
                   <Box
                     key={idx}
