@@ -636,6 +636,10 @@ const ExecutionLogsFeedCard: React.FC<{ data: any; procId: string; token: string
       // Captured once, at actual completion — not recomputed on every
       // render, so the evidence line reflects when the run really finished.
       setCompletedAt(prev => prev || new Date().toLocaleString());
+    } else if (lastLog.includes('Process failed to start')) {
+      // It never actually ran, so there's no real pass/fail to confirm —
+      // stop the spinner but do not show an evidence card.
+      setIsRunning(false);
     }
   }, [data.logs]);
 

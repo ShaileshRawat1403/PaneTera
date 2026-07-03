@@ -417,6 +417,17 @@ app.post('/api/execute', async (req, res) => {
       });
     };
 
+    // A spawn failure (bad cwd, missing binary, missing shell, permissions)
+    // must not crash the server for every connected user over one failed
+    // command. Surface it as a visible, honest failure in the stream —
+    // found this the hard way running a real smoke test against a real
+    // workspace, where an environment-specific cwd issue took the whole
+    // process down before this handler existed.
+    child.on('error', (err: Error) => {
+      broadcastLog('status', `Process failed to start: ${err.message}`);
+      delete activeProcesses[procId];
+    });
+
     child.stdout?.on('data', (data) => {
       broadcastLog('stdout', data.toString());
     });
