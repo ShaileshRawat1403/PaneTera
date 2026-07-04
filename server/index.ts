@@ -465,6 +465,151 @@ app.post('/api/execute/kill', (req, res) => {
   }
 });
 
+// ── Flowright governed workflow bridge ──────────────────────────────────────
+// A second, structurally different execution primitive from /api/execute's
+// shell allowlist above. That allowlist runs literal commands (npm/cargo/git)
+// and streams raw output. This bridges to flowright's own governed workflow
+// runtime — draft -> verify -> human_review -> export — for work that isn't
+// a shell command at all (e.g. a content update), where flowright already
+// owns the review gate and evidence ledger. The portal does not reimplement
+// governance here; it shells out to flowright's real CLI and reflects back
+// exactly what it reports.
+//
+// FLOWRIGHT_DB is intentionally left unset unless the operator sets it —
+// flowright then falls back to its own persistent flowwright_db.json in the
+// repo root, the same store used for prior real runs. That is deliberate:
+// runs created here are real flowright history, not a throwaway sandbox.
+
+const FLOWRIGHT_REPO = process.env.FLOWRIGHT_REPO_PATH
+  || '/Users/Shailesh/MYAIAGENTS/active/flowright';
+const FLOWRIGHT_CLI = path.join(FLOWRIGHT_REPO, 'packages', 'cli', 'bin', 'flowright.js');
+const FLOWRIGHT_TEMPLATES_DIR = path.join(FLOWRIGHT_REPO, 'templates');
+
+// Uses spawn + shell:true, matching /api/execute's proven-working pattern
+// above (including its `.on('error', ...)` lesson) rather than execFile —
+// execFile's own node-binary resolution (process.execPath and a bare 'node'
+// both) turned out unreliable in one sandboxed test environment, while this
+// exact spawn/shell pattern already runs real commands successfully here.
+async function runFlowright(args: string[]): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const child = spawn('node', [FLOWRIGHT_CLI, ...args, '--json'], {
+      cwd: FLOWRIGHT_REPO,
+      shell: true
+    });
+
+    let stdout = '';
+    let stderr = '';
+
+    child.on('error', (err: Error) => {
+      reject(err);
+    });
+
+    child.stdout?.on('data', (data) => { stdout += data.toString(); });
+    child.stderr?.on('data', (data) => { stderr += data.toString(); });
+
+    child.on('close', (code) => {
+      if (code !== 0) {
+        reject(new Error(stderr.trim() || stdout.trim() || `flowright exited with code ${code}`));
+        return;
+      }
+      try {
+        resolve(JSON.parse(stdout));
+      } catch (e) {
+        reject(new Error(`flowright returned non-JSON output: ${stdout.slice(0, 500)}`));
+      }
+    });
+  });
+}
+
+// Only allow template paths that actually live inside this flowright repo's
+// own templates directory — the workflowId itself is passed straight through
+// as an argv element (execFile, not a shell string), so there is no shell
+// injection surface, but a stray path outside the repo shouldn't be readable
+// through this endpoint regardless.
+function resolveSafeTemplatePath(templatePath: string): string {
+  const resolved = path.resolve(FLOWRIGHT_REPO, templatePath);
+  if (!resolved.startsWith(FLOWRIGHT_TEMPLATES_DIR + path.sep)) {
+    throw new Error('templatePath must resolve inside the flowright templates directory');
+  }
+  return resolved;
+}
+
+app.post('/api/flowright/runs', async (req, res) => {
+  const { workflowId, templatePath, inputs } = req.body as {
+    workflowId: string;
+    templatePath?: string;
+    inputs: Record<string, string>;
+  };
+  if (!workflowId || !inputs || typeof inputs !== 'object') {
+    return res.status(400).json({ error: 'workflowId and inputs are required' });
+  }
+  try {
+    if (templatePath) {
+      // Idempotent — safe to (re)load every time so "not loaded" never
+      // blocks a run create, without needing separate state to track it.
+      await runFlowright(['templates', 'load', resolveSafeTemplatePath(templatePath)]);
+    }
+    const inputArgs = Object.entries(inputs).flatMap(([key, value]) => ['--input', `${key}=${value}`]);
+    const created = await runFlowright(['runs', 'create', workflowId, ...inputArgs]);
+    res.json(created);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/flowright/runs/:id/drive', async (req, res) => {
+  const rawMaxSteps = Number(req.body?.maxSteps);
+  const maxSteps = Number.isInteger(rawMaxSteps) && rawMaxSteps > 0 ? rawMaxSteps : 10;
+  try {
+    const result = await runFlowright(['runs', 'drive', req.params.id, '--max-steps', String(maxSteps)]);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/flowright/runs/:id', async (req, res) => {
+  try {
+    const show = await runFlowright(['runs', 'show', req.params.id]);
+    res.json(show);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// The one place a flowright run's human_review gate actually gets resolved —
+// only ever called from an explicit Approve/Reject/Request-revision click in
+// the UI, mirroring what handleApproveAction is for the shell allowlist above.
+// Flowright itself, not the portal, is what actually enforces the gate.
+app.post('/api/flowright/runs/:id/review', async (req, res) => {
+  const { action, reviewer, notes } = req.body as {
+    action: 'approve' | 'reject' | 'request_revision';
+    reviewer?: string;
+    notes?: string;
+  };
+  if (!['approve', 'reject', 'request_revision'].includes(action)) {
+    return res.status(400).json({ error: 'action must be approve, reject, or request_revision' });
+  }
+  try {
+    const args = ['reviews', 'submit', req.params.id, action, '--reviewer', reviewer || 'portal-operator'];
+    if (notes) args.push('--notes', notes);
+    const result = await runFlowright(args);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/flowright/runs/:id/evidence', async (req, res) => {
+  try {
+    const evidence = await runFlowright(['evidence', 'show', req.params.id]);
+    res.json(evidence);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Desktop apps status checker endpoint
 app.get('/api/desktop/apps', (req, res) => {
   const checkApps = [
