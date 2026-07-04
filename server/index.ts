@@ -487,7 +487,7 @@ app.post('/api/execute/kill', (req, res) => {
 // runs created here are real flowright history, not a throwaway sandbox.
 
 const FLOWRIGHT_REPO = process.env.FLOWRIGHT_REPO_PATH
-  || '/Users/Shailesh/MYAIAGENTS/active/flowright';
+  || '/Users/Shared/MYAIAGENTS/active/flowright';
 const FLOWRIGHT_TEMPLATES_DIR = path.join(FLOWRIGHT_REPO, 'templates');
 // Distinct from flowright's own documented default (3001) so this doesn't
 // collide with a copy the operator might already be running standalone.

@@ -364,6 +364,26 @@ const App: React.FC = () => {
   // and drives it to its first stop — normally awaiting_review. This never
   // approves anything itself; it only gets the run to the point where a
   // human decision is possible.
+  // Reads the real draft text back out of flowright's own artifact store, so
+  // a reviewer can see what they're approving instead of trusting a status
+  // label. Returns undefined (not a fabricated placeholder) if flowright
+  // hasn't produced a draft_post artifact yet.
+  const fetchDraftContent = async (runId: string): Promise<string | undefined> => {
+    try {
+      const resp = await fetch(`/api/flowright/runs/${runId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await resp.json();
+      if (!resp.ok || !Array.isArray(data.artifacts)) return undefined;
+      const drafts = data.artifacts.filter((a: any) => a.type === 'draft_post');
+      if (drafts.length === 0) return undefined;
+      const latest = drafts.reduce((a: any, b: any) => (b.version ?? 0) >= (a.version ?? 0) ? b : a);
+      return typeof latest.content === 'string' ? latest.content : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+
   const handleStartContentWorkflow = async (form: typeof contentForm) => {
     const itemId = Math.random().toString(36).substr(2, 9);
     const timestamp = new Date().toLocaleTimeString();
@@ -415,6 +435,8 @@ const App: React.FC = () => {
       const driven = await driveResp.json();
       if (!driveResp.ok) throw new Error(driven.error || 'Failed to drive run');
 
+      const draftContent = await fetchDraftContent(driven.run.runId);
+
       setPreviewFeed(prev => prev.map(item => item.id === itemId ? {
         ...item,
         data: {
@@ -424,7 +446,8 @@ const App: React.FC = () => {
             status: driven.run.status,
             currentStepId: driven.run.currentStepId,
             siteGoal: form.siteGoal,
-            targetPages: form.targetPages
+            targetPages: form.targetPages,
+            draftContent
           },
           busy: false
         }
@@ -475,11 +498,18 @@ const App: React.FC = () => {
         finalRun = driven.run;
       }
 
+      const draftContent = await fetchDraftContent(runId);
+
       setPreviewFeed(prev => prev.map(item => item.id === itemId ? {
         ...item,
         data: {
           ...item.data,
-          run: { ...item.data.run, status: finalRun.status, currentStepId: finalRun.currentStepId },
+          run: {
+            ...item.data.run,
+            status: finalRun.status,
+            currentStepId: finalRun.currentStepId,
+            draftContent: draftContent ?? item.data.run.draftContent
+          },
           busy: false
         }
       } : item));

@@ -8,7 +8,7 @@
 // doesn't exist in the underlying system. Flowright's own design stops at
 // export — going live is a separate, manual, human action outside this loop.
 import React, { useState } from 'react';
-import { Box, Typography, Button, TextField, CircularProgress, Divider } from '@mui/material';
+import { Box, Typography, Button, TextField, CircularProgress, Divider, Collapse } from '@mui/material';
 
 export interface ContentWorkflowRun {
   runId: string;
@@ -17,6 +17,10 @@ export interface ContentWorkflowRun {
   currentStepId?: string;
   siteGoal?: string;
   targetPages?: string;
+  // The actual draft_post artifact content, read back from flowright's own
+  // artifact store. Undefined means flowright hasn't produced one yet —
+  // never fabricate placeholder text here.
+  draftContent?: string;
 }
 
 interface Props {
@@ -28,6 +32,7 @@ interface Props {
 
 export const ContentWorkflowCard: React.FC<Props> = ({ run, evidence, onReview, busy }) => {
   const [notes, setNotes] = useState('');
+  const [showDraft, setShowDraft] = useState(false);
 
   const statusColor =
     run.status === 'completed' ? '#22c55e'
@@ -67,6 +72,50 @@ export const ContentWorkflowCard: React.FC<Props> = ({ run, evidence, onReview, 
       <Typography variant="caption" sx={{ color: '#71717a', fontFamily: 'monospace', display: 'block', mb: 1.5 }}>
         flowright run {run.runId.slice(0, 8)} · {run.workflowId}
       </Typography>
+
+      {run.draftContent && (
+        <Box sx={{ mb: 1.5 }}>
+          <Button
+            size="small"
+            onClick={() => setShowDraft(v => !v)}
+            sx={{ textTransform: 'none', color: '#a78bfa', fontSize: '0.75rem', p: 0, minWidth: 0, '&:hover': { background: 'transparent', textDecoration: 'underline' } }}
+          >
+            {showDraft ? 'Hide draft ▲' : 'View draft ▼'}
+          </Button>
+          <Collapse in={showDraft}>
+            <Box
+              sx={{
+                mt: 1,
+                p: 1.5,
+                background: 'rgba(0,0,0,0.25)',
+                borderRadius: '8px',
+                maxHeight: 320,
+                overflowY: 'auto'
+              }}
+            >
+              <Typography
+                variant="caption"
+                component="pre"
+                sx={{
+                  color: '#d4d4d8',
+                  whiteSpace: 'pre-wrap',
+                  fontFamily: 'monospace',
+                  fontSize: '0.72rem',
+                  lineHeight: 1.5,
+                  m: 0
+                }}
+              >
+                {run.draftContent}
+              </Typography>
+            </Box>
+          </Collapse>
+        </Box>
+      )}
+      {!run.draftContent && run.status === 'awaiting_review' && (
+        <Typography variant="caption" sx={{ color: '#71717a', fontStyle: 'italic', display: 'block', mb: 1.5 }}>
+          Draft content isn't available from flowright yet — approving without reading it isn't recommended.
+        </Typography>
+      )}
 
       {run.status === 'awaiting_review' && (
         <Box>
