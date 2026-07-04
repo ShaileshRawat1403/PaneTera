@@ -16,6 +16,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 export type { FeedItem } from '../../shared/uiComponent';
 import type { FeedItem } from '../../shared/uiComponent';
 import { ProposedActionCard } from './ProposedActionCard';
+import { ContentWorkflowCard } from './ContentWorkflowCard';
 
 interface PreviewProps {
   previewFeed: FeedItem[];
@@ -24,6 +25,7 @@ interface PreviewProps {
   onRemoveItem: (id: string) => void;
   onClearFeed: () => void;
   onApproveAction: (id: string, workspaceName: string, command: string) => void;
+  onContentWorkflowReview?: (itemId: string, runId: string, action: 'approve' | 'reject' | 'request_revision', notes: string) => void;
   token: string;
   /** True while a request is in flight and hasn't produced a real feed item
       yet. Used only to swap the empty-state copy/icon for an honest
@@ -887,7 +889,7 @@ const DesktopAppsFeedCard: React.FC<{ token: string }> = ({ token }) => {
   );
 };
 
-export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onAction, onRemoveItem, onClearFeed, onApproveAction, token, loading }) => {
+export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onAction, onRemoveItem, onClearFeed, onApproveAction, onContentWorkflowReview, token, loading }) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const feedEndRef = useRef<HTMLDivElement>(null);
 
@@ -1047,6 +1049,7 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
                   {item.type === 'DesktopApps' && `SYSTEM APP TELEMETRY`}
                   {item.type === 'TerminalLogs' && 'TERMINAL SCAN'}
                   {item.type === 'MemoryRecall' && 'MEMORY RECALL'}
+                  {item.type === 'ContentWorkflow' && 'GOVERNED CONTENT RUN'}
                 </Typography>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem', fontFamily: 'monospace' }}>
@@ -1126,6 +1129,17 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
 
                 {item.type === 'ExecutionLogs' && (
                   <ExecutionLogsFeedCard data={item.data} procId={item.id} token={token} />
+                )}
+
+                {item.type === 'ContentWorkflow' && (
+                  <ContentWorkflowCard
+                    run={item.data.run}
+                    evidence={item.data.evidence}
+                    busy={Boolean(item.data.busy)}
+                    onReview={(action, notes) =>
+                      onContentWorkflowReview?.(item.id, item.data.run.runId, action, notes)
+                    }
+                  />
                 )}
 
                 {item.type === 'GitHistory' && (

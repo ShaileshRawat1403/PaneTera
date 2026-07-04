@@ -17,6 +17,7 @@ export const UI_COMPONENT_TYPES = [
   'TerminalLogs',
   'WorkflowsList',
   'ProposedAction',
+  'ContentWorkflow',
   'ExecutionLogs',
   'GitHistory',
   'DesktopApps',

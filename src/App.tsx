@@ -1,6 +1,6 @@
 // src/App.tsx
 import React, { useState, useEffect, useRef } from 'react';
-import { Box, Container, CssBaseline, ThemeProvider, createTheme, Paper, Typography, TextField, Button, CircularProgress, Grid, Chip, IconButton } from '@mui/material';
+import { Box, Container, CssBaseline, ThemeProvider, createTheme, Paper, Typography, TextField, Button, CircularProgress, Grid, Chip, IconButton, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
 import ChatMessage from './components/ChatMessage';
 import ChatInput from './components/ChatInput';
 import { PreviewPanel, FeedItem } from './components/PreviewPanel';
@@ -10,6 +10,7 @@ import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import CloseIcon from '@mui/icons-material/Close';
+import EditNoteIcon from '@mui/icons-material/EditNote';
 
 // Premium Apple-like dark theme with refined typography and soft border outlines
 const appleTheme = createTheme({
@@ -69,6 +70,20 @@ const App: React.FC = () => {
   const [isCmdKOpen, setIsCmdKOpen] = useState<boolean>(false);
   const [cmdKQuery, setCmdKQuery] = useState<string>('');
   const [isHelpOpen, setIsHelpOpen] = useState<boolean>(false);
+
+  // Governed content workflow (flowright) — a structurally different flow
+  // from the shell-command ProposedAction above. This drives a real
+  // flowright run through create -> drive -> awaiting_review, then the
+  // review click resolves the human_review gate flowright itself enforces.
+  const [isContentDialogOpen, setIsContentDialogOpen] = useState<boolean>(false);
+  const [contentForm, setContentForm] = useState({
+    siteGoal: '',
+    targetPages: '',
+    contentBrief: '',
+    sourceMaterial: '',
+    seoRequirements: '',
+    publishConstraints: 'No autonomous publishing. Operator must approve before CMS or deploy handoff.'
+  });
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -345,6 +360,152 @@ const App: React.FC = () => {
     setPreviewFeed([]);
   };
 
+  // Starts a real flowright governed run (websiteops.website_content_publish.v0)
+  // and drives it to its first stop — normally awaiting_review. This never
+  // approves anything itself; it only gets the run to the point where a
+  // human decision is possible.
+  const handleStartContentWorkflow = async (form: typeof contentForm) => {
+    const itemId = Math.random().toString(36).substr(2, 9);
+    const timestamp = new Date().toLocaleTimeString();
+
+    setPreviewFeed(prev => [
+      ...prev,
+      {
+        id: itemId,
+        type: 'ContentWorkflow',
+        data: {
+          run: {
+            runId: '',
+            workflowId: 'websiteops.website_content_publish.v0',
+            status: 'draft',
+            siteGoal: form.siteGoal,
+            targetPages: form.targetPages
+          },
+          busy: true
+        },
+        timestamp
+      }
+    ]);
+
+    try {
+      const createResp = await fetch('/api/flowright/runs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          workflowId: 'websiteops.website_content_publish.v0',
+          templatePath: 'templates/websiteops/website-content-publish.workflow.yaml',
+          inputs: {
+            site_goal: form.siteGoal,
+            target_pages: form.targetPages,
+            content_brief: form.contentBrief,
+            source_material: form.sourceMaterial,
+            seo_requirements: form.seoRequirements,
+            publish_constraints: form.publishConstraints
+          }
+        })
+      });
+      const created = await createResp.json();
+      if (!createResp.ok) throw new Error(created.error || 'Failed to create run');
+
+      const driveResp = await fetch(`/api/flowright/runs/${created.runId}/drive`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ maxSteps: 10 })
+      });
+      const driven = await driveResp.json();
+      if (!driveResp.ok) throw new Error(driven.error || 'Failed to drive run');
+
+      setPreviewFeed(prev => prev.map(item => item.id === itemId ? {
+        ...item,
+        data: {
+          run: {
+            runId: driven.run.runId,
+            workflowId: driven.run.workflowId,
+            status: driven.run.status,
+            currentStepId: driven.run.currentStepId,
+            siteGoal: form.siteGoal,
+            targetPages: form.targetPages
+          },
+          busy: false
+        }
+      } : item));
+    } catch (err: any) {
+      setPreviewFeed(prev => prev.map(item => item.id === itemId ? {
+        ...item,
+        data: {
+          ...item.data,
+          run: { ...item.data.run, status: 'failed' },
+          busy: false,
+          error: err.message
+        }
+      } : item));
+    }
+  };
+
+  // The one place a flowright human_review gate actually resolves — only
+  // ever called from an explicit Approve/Reject/Request-revision click.
+  const handleContentWorkflowReview = async (
+    itemId: string,
+    runId: string,
+    action: 'approve' | 'reject' | 'request_revision',
+    notes: string
+  ) => {
+    setPreviewFeed(prev => prev.map(item => item.id === itemId ? { ...item, data: { ...item.data, busy: true } } : item));
+
+    try {
+      const reviewResp = await fetch(`/api/flowright/runs/${runId}/review`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ action, reviewer: 'portal-operator', notes })
+      });
+      const reviewed = await reviewResp.json();
+      if (!reviewResp.ok) throw new Error(reviewed.error || 'Review submission failed');
+
+      let finalRun = reviewed;
+      // Approval resumes the run — drive it the rest of the way (export +
+      // feedback-capture steps) so the card lands on a real terminal state.
+      if (action === 'approve') {
+        const driveResp = await fetch(`/api/flowright/runs/${runId}/drive`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ maxSteps: 10 })
+        });
+        const driven = await driveResp.json();
+        if (!driveResp.ok) throw new Error(driven.error || 'Failed to drive run after approval');
+        finalRun = driven.run;
+      }
+
+      setPreviewFeed(prev => prev.map(item => item.id === itemId ? {
+        ...item,
+        data: {
+          ...item.data,
+          run: { ...item.data.run, status: finalRun.status, currentStepId: finalRun.currentStepId },
+          busy: false
+        }
+      } : item));
+
+      // Completed runs get their real evidence bundle fetched once, not
+      // fabricated from the drive response.
+      if (finalRun.status === 'completed') {
+        const evidenceResp = await fetch(`/api/flowright/runs/${runId}/evidence`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const evidence = await evidenceResp.json();
+        if (evidenceResp.ok) {
+          setPreviewFeed(prev => prev.map(item => item.id === itemId ? {
+            ...item,
+            data: { ...item.data, evidence }
+          } : item));
+        }
+      }
+    } catch (err: any) {
+      setPreviewFeed(prev => prev.map(item => item.id === itemId ? {
+        ...item,
+        data: { ...item.data, busy: false, error: err.message }
+      } : item));
+    }
+  };
+
   const hasPreview = previewFeed.length > 0 || loading;
 
   const getStepIcon = (step: number) => {
@@ -579,6 +740,29 @@ const App: React.FC = () => {
               <HelpOutlineIcon sx={{ fontSize: '1rem' }} />
             </IconButton>
 
+            {/* Start a real, governed flowright content run — distinct from
+                the shell-command control plane. Flowright owns the review
+                gate; this only opens the intake form for it. */}
+            <IconButton
+              size="small"
+              onClick={() => setIsContentDialogOpen(true)}
+              aria-label="Draft a content update"
+              sx={{
+                width: 26,
+                height: 26,
+                color: '#a1a1aa',
+                border: '1px solid rgba(255,255,255,0.08)',
+                transition: 'all 0.2s ease',
+                '&:hover': {
+                  color: '#b794f4',
+                  borderColor: 'rgba(127, 85, 240, 0.3)',
+                  background: 'rgba(127, 85, 240, 0.08)'
+                }
+              }}
+            >
+              <EditNoteIcon sx={{ fontSize: '1rem' }} />
+            </IconButton>
+
             {/* Access mode */}
             <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center' }}>
               <Chip label="GOVERNED" size="small" sx={{ height: 16, fontSize: '0.55rem', background: 'rgba(34, 197, 94, 0.08)', color: '#22c55e', border: '1px solid rgba(34, 197, 94, 0.15)' }} />
@@ -669,6 +853,65 @@ const App: React.FC = () => {
             </Paper>
           </Box>
         )}
+
+        <Dialog
+          open={isContentDialogOpen}
+          onClose={() => setIsContentDialogOpen(false)}
+          maxWidth="sm"
+          fullWidth
+          PaperProps={{
+            sx: {
+              background: 'rgba(20, 20, 25, 0.92)',
+              border: '1px solid rgba(127, 85, 240, 0.22)',
+              backdropFilter: 'blur(16px)'
+            }
+          }}
+        >
+          <DialogTitle sx={{ color: '#f4f4f5', fontWeight: 800 }}>
+            Draft a real content update
+          </DialogTitle>
+          <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+            <Typography variant="caption" sx={{ color: '#94a3b8', lineHeight: 1.6 }}>
+              This starts a real, governed flowright run against pruningmypothos.com.
+              It drafts and validates a packet and stops at human review — nothing
+              publishes automatically, and nothing here publishes it either.
+            </Typography>
+            <TextField label="Site goal" required value={contentForm.siteGoal}
+              onChange={(e) => setContentForm(f => ({ ...f, siteGoal: e.target.value }))}
+              size="small" multiline minRows={2} />
+            <TextField label="Target pages" required value={contentForm.targetPages}
+              onChange={(e) => setContentForm(f => ({ ...f, targetPages: e.target.value }))}
+              size="small" placeholder="e.g. Homepage, blog index" />
+            <TextField label="Content brief" required value={contentForm.contentBrief}
+              onChange={(e) => setContentForm(f => ({ ...f, contentBrief: e.target.value }))}
+              size="small" multiline minRows={2} />
+            <TextField label="Source material" value={contentForm.sourceMaterial}
+              onChange={(e) => setContentForm(f => ({ ...f, sourceMaterial: e.target.value }))}
+              size="small" multiline minRows={2} />
+            <TextField label="SEO requirements" value={contentForm.seoRequirements}
+              onChange={(e) => setContentForm(f => ({ ...f, seoRequirements: e.target.value }))}
+              size="small" />
+            <TextField label="Publish constraints" value={contentForm.publishConstraints}
+              onChange={(e) => setContentForm(f => ({ ...f, publishConstraints: e.target.value }))}
+              size="small" />
+          </DialogContent>
+          <DialogActions sx={{ p: 2.5, pt: 1 }}>
+            <Button onClick={() => setIsContentDialogOpen(false)} sx={{ color: '#a1a1aa', textTransform: 'none' }}>
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
+              disabled={!contentForm.siteGoal || !contentForm.targetPages || !contentForm.contentBrief}
+              onClick={() => {
+                setIsContentDialogOpen(false);
+                handleStartContentWorkflow(contentForm);
+              }}
+              sx={{ background: '#7f5af0', textTransform: 'none', fontWeight: 700, '&:hover': { background: '#6d47dd' } }}
+            >
+              Start governed run
+            </Button>
+          </DialogActions>
+        </Dialog>
 
         <Grid container spacing={3} sx={{ flexGrow: 1, height: 'calc(100% - 70px)', overflow: 'hidden' }}>
           {/* Left Chat Pane */}
@@ -845,6 +1088,7 @@ const App: React.FC = () => {
                 onRemoveItem={handleRemoveItem}
                 onClearFeed={handleClearFeed}
                 onApproveAction={handleApproveAction}
+                onContentWorkflowReview={handleContentWorkflowReview}
                 token={token}
                 loading={loading}
               />
