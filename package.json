@@ -9,7 +9,7 @@
     "lint": "tsc --noEmit --project tsconfig.json",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "tsx test/validateCommand.test.ts && tsx test/proposalFlow.test.ts && tsx test/repoSetupProposal.test.ts && tsx test/liveAppWorkbench.test.ts"
+    "test": "tsx test/validateCommand.test.ts && tsx test/proposalFlow.test.ts && tsx test/repoSetupProposal.test.ts && tsx test/liveAppWorkbench.test.ts && tsx test/workflowIntent.test.ts"
   },
   "dependencies": {
     "@emotion/react": "^11.11.4",

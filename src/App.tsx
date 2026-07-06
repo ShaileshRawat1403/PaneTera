@@ -1,6 +1,6 @@
 // src/App.tsx
 import React, { useState, useEffect, useRef } from 'react';
-import { Box, CssBaseline, ThemeProvider, createTheme, Paper, Typography, TextField, Button, CircularProgress, Chip, IconButton, Dialog, DialogTitle, DialogContent, DialogActions, Grid, Stack, Divider } from '@mui/material';
+import { Box, CssBaseline, ThemeProvider, createTheme, Paper, Typography, TextField, Button, CircularProgress, Chip, IconButton, Dialog, DialogTitle, DialogContent, DialogActions, Grid, Stack, Divider, Tooltip } from '@mui/material';
 import ChatMessage from './components/ChatMessage';
 import ChatInput from './components/ChatInput';
 import { PreviewPanel, FeedItem } from './components/PreviewPanel';
@@ -18,6 +18,10 @@ import MemoryIcon from '@mui/icons-material/Memory';
 import LaptopMacIcon from '@mui/icons-material/LaptopMac';
 import SearchIcon from '@mui/icons-material/Search';
 import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import ViewSidebarIcon from '@mui/icons-material/ViewSidebar';
+import CodeIcon from '@mui/icons-material/Code';
 
 // Codex developer-cockpit styling presets
 const codexTheme = createTheme({
@@ -83,6 +87,33 @@ const App: React.FC = () => {
   const [workspacesList, setWorkspacesList] = useState<any[]>([]);
   const [soothsayerStatus, setSoothsayerStatus] = useState<'online' | 'offline' | 'checking' | 'unconfigured' | 'degraded'>('checking');
   const [backendHealth, setBackendHealth] = useState<{ status: string; mode: string; workspaceCount: number; memoryBridgeReady: boolean } | null>(null);
+
+  // Collapsible panels state with localStorage persistence
+  const [isLeftRailCollapsed, setIsLeftRailCollapsed] = useState<boolean>(() => {
+    return localStorage.getItem('portal-left-collapsed') === 'true';
+  });
+  const [isRightFeedCollapsed, setIsRightFeedCollapsed] = useState<boolean>(() => {
+    const stored = localStorage.getItem('portal-right-collapsed');
+    if (stored !== null) return stored === 'true';
+    return window.innerWidth < 1280;
+  });
+  const [showAllHistory, setShowAllHistory] = useState<boolean>(false);
+
+  const toggleLeftRail = () => {
+    setIsLeftRailCollapsed(prev => {
+      const next = !prev;
+      localStorage.setItem('portal-left-collapsed', String(next));
+      return next;
+    });
+  };
+
+  const toggleRightFeed = () => {
+    setIsRightFeedCollapsed(prev => {
+      const next = !prev;
+      localStorage.setItem('portal-right-collapsed', String(next));
+      return next;
+    });
+  };
 
   // Governed content workflow (flowright) input state
   const [isContentDialogOpen, setIsContentDialogOpen] = useState<boolean>(false);
@@ -843,110 +874,228 @@ const App: React.FC = () => {
           {/* ZONE 1: Left Context Rail */}
           <Box
             sx={{
-              width: 280,
-              minWidth: 280,
+              width: isLeftRailCollapsed ? 64 : 280,
+              minWidth: isLeftRailCollapsed ? 64 : 280,
               borderRight: '1px solid rgba(255,255,255,0.08)',
               display: { xs: 'none', md: 'flex' },
               flexDirection: 'column',
               background: 'rgba(9, 9, 11, 0.4)',
-              p: 2.5,
-              overflowY: 'auto'
+              p: isLeftRailCollapsed ? 1.5 : 2.5,
+              overflowY: 'auto',
+              transition: 'width 0.2s cubic-bezier(0.16, 1, 0.3, 1), p 0.2s'
             }}
           >
-            {/* Session status info */}
-            <Box sx={{ mb: 3 }}>
-              <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, letterSpacing: '0.05em', display: 'block', mb: 1.5 }}>
-                SESSION STATUS
-              </Typography>
-              <Paper variant="outlined" sx={{ p: 1.5, background: 'rgba(255,255,255,0.01)', borderColor: 'rgba(255,255,255,0.05)' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-                  <Typography variant="caption" sx={{ color: '#a1a1aa', fontWeight: 600 }}>Access Type</Typography>
-                  <Chip label="GOVERNED" size="small" sx={{ height: 16, fontSize: '0.55rem', fontWeight: 800, background: 'rgba(34, 197, 94, 0.08)', color: '#22c55e', border: '1px solid rgba(34, 197, 94, 0.15)' }} />
-                </Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Typography variant="caption" sx={{ color: '#a1a1aa', fontWeight: 600 }}>Express Gateway</Typography>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <Box sx={{ width: 5, height: 5, borderRadius: '50%', backgroundColor: token ? '#22c55e' : '#ef4444' }} />
-                    <Typography variant="caption" sx={{ color: '#f4f4f5', fontWeight: 700, fontSize: '0.65rem' }}>
-                      {token ? 'Connected' : 'Offline'}
-                    </Typography>
+            {isLeftRailCollapsed ? (
+              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3.5, height: '100%' }}>
+                {/* 1. Gateway Indicator */}
+                <Tooltip title={`Express Gateway: ${token ? 'Connected' : 'Offline'}`} placement="right">
+                  <Box sx={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Box
+                      sx={{
+                        width: 10,
+                        height: 10,
+                        borderRadius: '50%',
+                        backgroundColor: token ? '#22c55e' : '#ef4444',
+                        boxShadow: token ? '0 0 8px #22c55e' : '0 0 8px #ef4444'
+                      }}
+                    />
                   </Box>
-                </Box>
-              </Paper>
-            </Box>
+                </Tooltip>
 
-            {/* Connected systems section */}
-            <Box sx={{ mb: 3 }}>
-              <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, letterSpacing: '0.05em', display: 'block', mb: 1.5 }}>
-                CONNECTED SYSTEMS
-              </Typography>
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                {/* Redis */}
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 0.75, borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <DnsIcon sx={{ fontSize: 13, color: '#71717a' }} />
-                    <Typography variant="caption" sx={{ color: '#e2e8f0', fontWeight: 600 }}>Redis DB</Typography>
-                  </Box>
-                  <Chip label="Configured" size="small" sx={{ height: 16, fontSize: '0.55rem', background: 'rgba(255,255,255,0.03)', color: '#a1a1aa' }} />
-                </Box>
-                {/* Postgres */}
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 0.75, borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <DnsIcon sx={{ fontSize: 13, color: '#71717a' }} />
-                    <Typography variant="caption" sx={{ color: '#e2e8f0', fontWeight: 600 }}>Postgres DB</Typography>
-                  </Box>
-                  <Chip label="Configured" size="small" sx={{ height: 16, fontSize: '0.55rem', background: 'rgba(255,255,255,0.03)', color: '#a1a1aa' }} />
-                </Box>
-                {/* DAX */}
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 0.75, borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <DnsIcon sx={{ fontSize: 13, color: '#71717a' }} />
-                    <Typography variant="caption" sx={{ color: '#e2e8f0', fontWeight: 600 }}>DAX Control</Typography>
-                  </Box>
-                  <Chip label="No signal" size="small" sx={{ height: 16, fontSize: '0.55rem', background: 'rgba(255,255,255,0.03)', color: '#a1a1aa' }} />
-                </Box>
-                {/* Local Shell */}
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 0.75, borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <TerminalIcon sx={{ fontSize: 13, color: '#7f5af0' }} />
-                    <Typography variant="caption" sx={{ color: '#e2e8f0', fontWeight: 600 }}>Local Adapter</Typography>
-                  </Box>
-                  <Chip label="Dry Run" size="small" sx={{ height: 16, fontSize: '0.55rem', background: 'rgba(127, 85, 240, 0.1)', color: '#b794f4' }} />
-                </Box>
-                {/* Rook Memory Bridge */}
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 0.75 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <MemoryIcon sx={{ fontSize: 13, color: backendHealth?.memoryBridgeReady ? '#22c55e' : '#71717a' }} />
-                    <Typography variant="caption" sx={{ color: '#e2e8f0', fontWeight: 600 }}>Rook Memory</Typography>
-                  </Box>
-                  <Chip 
-                    label={backendHealth?.memoryBridgeReady ? 'Connected' : 'No signal'} 
-                    size="small" 
-                    sx={{ 
-                      height: 16, 
-                      fontSize: '0.55rem', 
-                      background: backendHealth?.memoryBridgeReady ? 'rgba(34,197,94,0.08)' : 'rgba(255,255,255,0.03)', 
-                      color: backendHealth?.memoryBridgeReady ? '#22c55e' : '#a1a1aa' 
-                    }} 
-                  />
-                </Box>
+                {/* 2. Connected Systems Stack */}
+                <Stack spacing={1.8} alignItems="center">
+                  <Tooltip title="Postgres DB: Configured" placement="right">
+                    <DnsIcon sx={{ fontSize: 16, color: '#71717a' }} />
+                  </Tooltip>
+                  <Tooltip title="Redis DB: Configured" placement="right">
+                    <DnsIcon sx={{ fontSize: 16, color: '#71717a' }} />
+                  </Tooltip>
+                  <Tooltip title="DAX Control: No signal" placement="right">
+                    <DnsIcon sx={{ fontSize: 16, color: '#71717a', opacity: 0.3 }} />
+                  </Tooltip>
+                  <Tooltip title="Local Adapter: Dry Run" placement="right">
+                    <TerminalIcon sx={{ fontSize: 16, color: '#7f5af0' }} />
+                  </Tooltip>
+                  <Tooltip title={`Rook Memory: ${backendHealth?.memoryBridgeReady ? 'Connected' : 'No signal'}`} placement="right">
+                    <MemoryIcon sx={{ fontSize: 16, color: backendHealth?.memoryBridgeReady ? '#22c55e' : '#71717a' }} />
+                  </Tooltip>
+                </Stack>
+
+                <Divider sx={{ width: '60%', borderColor: 'rgba(255,255,255,0.06)' }} />
+
+                {/* 3. Workspaces shortcut */}
+                <Tooltip title={`Workspaces (${workspacesList.length} registered)`} placement="right">
+                  <IconButton onClick={() => handleSend('List workspaces')} size="small" sx={{ color: '#7f5af0', p: 0.5 }}>
+                    <FolderIcon sx={{ fontSize: 18 }} />
+                  </IconButton>
+                </Tooltip>
+
+                {/* 4. Live Deployed Apps */}
+                <Tooltip title={`Soothsayer Live: ${soothsayerStatus.toUpperCase()}`} placement="right">
+                  <IconButton onClick={() => handleSend('inspect soothsayer')} size="small" sx={{ color: soothsayerStatus === 'online' ? '#22c55e' : '#71717a', p: 0.5 }}>
+                    <LaptopMacIcon sx={{ fontSize: 18 }} />
+                  </IconButton>
+                </Tooltip>
+
+                <Divider sx={{ width: '60%', borderColor: 'rgba(255,255,255,0.06)' }} />
+
+                {/* 5. Persona Lenses */}
+                <Stack spacing={1.5} alignItems="center" sx={{ mt: 'auto', pb: 2 }}>
+                  {(['engineer', 'pm', 'ba', 'qa', 'exec'] as const).map(lens => (
+                    <Tooltip key={lens} title={`Lens: ${lens.toUpperCase()}`} placement="right">
+                      <Box
+                        onClick={() => setActiveLens(lens)}
+                        sx={{
+                          width: 24,
+                          height: 24,
+                          borderRadius: '50%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                          background: activeLens === lens ? 'rgba(127, 85, 240, 0.15)' : 'transparent',
+                          border: activeLens === lens ? '1px solid rgba(127, 85, 240, 0.3)' : '1px solid transparent',
+                          color: activeLens === lens ? '#b794f4' : '#71717a',
+                          fontSize: '0.65rem',
+                          fontWeight: 'bold',
+                          transition: 'all 0.2s',
+                          '&:hover': { background: 'rgba(255,255,255,0.02)' }
+                        }}
+                      >
+                        {lens[0].toUpperCase()}
+                      </Box>
+                    </Tooltip>
+                  ))}
+                </Stack>
               </Box>
-            </Box>
+            ) : (
+              <>
+                {/* Session status info */}
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, letterSpacing: '0.05em', display: 'block', mb: 1.5 }}>
+                    SESSION STATUS
+                  </Typography>
+                  <Paper variant="outlined" sx={{ p: 1.5, background: 'rgba(255,255,255,0.01)', borderColor: 'rgba(255,255,255,0.05)' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                      <Typography variant="caption" sx={{ color: '#a1a1aa', fontWeight: 600 }}>Access Type</Typography>
+                      <Chip label="GOVERNED" size="small" sx={{ height: 16, fontSize: '0.55rem', fontWeight: 800, background: 'rgba(34, 197, 94, 0.08)', color: '#22c55e', border: '1px solid rgba(34, 197, 94, 0.15)' }} />
+                    </Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <Typography variant="caption" sx={{ color: '#a1a1aa', fontWeight: 600 }}>Express Gateway</Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <Box sx={{ width: 5, height: 5, borderRadius: '50%', backgroundColor: token ? '#22c55e' : '#ef4444' }} />
+                        <Typography variant="caption" sx={{ color: '#f4f4f5', fontWeight: 700, fontSize: '0.65rem' }}>
+                          {token ? 'Connected' : 'Offline'}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  </Paper>
+                </Box>
 
-            {/* Workspaces list */}
-            <Box sx={{ mb: 3 }}>
-              <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, letterSpacing: '0.05em', display: 'block', mb: 1.5 }}>
-                WORKSPACES / REPOS
-              </Typography>
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                {workspacesList.map(ws => (
+                {/* Connected systems section */}
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, letterSpacing: '0.05em', display: 'block', mb: 1.5 }}>
+                    CONNECTED SYSTEMS
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                    {/* Redis */}
+                    <Box sx={{ display: 'flex', justifycontent: 'space-between', alignItems: 'center', p: 0.75, borderBottom: '1px solid rgba(255,255,255,0.03)', justifyContent: 'space-between' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <DnsIcon sx={{ fontSize: 13, color: '#71717a' }} />
+                        <Typography variant="caption" sx={{ color: '#e2e8f0', fontWeight: 600 }}>Redis DB</Typography>
+                      </Box>
+                      <Chip label="Configured" size="small" sx={{ height: 16, fontSize: '0.55rem', background: 'rgba(255,255,255,0.03)', color: '#a1a1aa' }} />
+                    </Box>
+                    {/* Postgres */}
+                    <Box sx={{ display: 'flex', justifycontent: 'space-between', alignItems: 'center', p: 0.75, borderBottom: '1px solid rgba(255,255,255,0.03)', justifyContent: 'space-between' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <DnsIcon sx={{ fontSize: 13, color: '#71717a' }} />
+                        <Typography variant="caption" sx={{ color: '#e2e8f0', fontWeight: 600 }}>Postgres DB</Typography>
+                      </Box>
+                      <Chip label="Configured" size="small" sx={{ height: 16, fontSize: '0.55rem', background: 'rgba(255,255,255,0.03)', color: '#a1a1aa' }} />
+                    </Box>
+                    {/* DAX */}
+                    <Box sx={{ display: 'flex', justifycontent: 'space-between', alignItems: 'center', p: 0.75, borderBottom: '1px solid rgba(255,255,255,0.03)', justifyContent: 'space-between' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <DnsIcon sx={{ fontSize: 13, color: '#71717a' }} />
+                        <Typography variant="caption" sx={{ color: '#e2e8f0', fontWeight: 600 }}>DAX Control</Typography>
+                      </Box>
+                      <Chip label="No signal" size="small" sx={{ height: 16, fontSize: '0.55rem', background: 'rgba(255,255,255,0.03)', color: '#a1a1aa' }} />
+                    </Box>
+                    {/* Local Shell */}
+                    <Box sx={{ display: 'flex', justifycontent: 'space-between', alignItems: 'center', p: 0.75, borderBottom: '1px solid rgba(255,255,255,0.03)', justifyContent: 'space-between' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <TerminalIcon sx={{ fontSize: 13, color: '#7f5af0' }} />
+                        <Typography variant="caption" sx={{ color: '#e2e8f0', fontWeight: 600 }}>Local Adapter</Typography>
+                      </Box>
+                      <Chip label="Dry Run" size="small" sx={{ height: 16, fontSize: '0.55rem', background: 'rgba(127, 85, 240, 0.1)', color: '#b794f4' }} />
+                    </Box>
+                    {/* Rook Memory Bridge */}
+                    <Box sx={{ display: 'flex', justifycontent: 'space-between', alignItems: 'center', p: 0.75, justifyContent: 'space-between' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <MemoryIcon sx={{ fontSize: 13, color: backendHealth?.memoryBridgeReady ? '#22c55e' : '#71717a' }} />
+                        <Typography variant="caption" sx={{ color: '#e2e8f0', fontWeight: 600 }}>Rook Memory</Typography>
+                      </Box>
+                      <Chip 
+                        label={backendHealth?.memoryBridgeReady ? 'Connected' : 'No signal'} 
+                        size="small" 
+                        sx={{ 
+                          height: 16, 
+                          fontSize: '0.55rem', 
+                          background: backendHealth?.memoryBridgeReady ? 'rgba(34,197,94,0.08)' : 'rgba(255,255,255,0.03)', 
+                          color: backendHealth?.memoryBridgeReady ? '#22c55e' : '#a1a1aa' 
+                        }} 
+                      />
+                    </Box>
+                  </Box>
+                </Box>
+
+                {/* Workspaces list */}
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, letterSpacing: '0.05em', display: 'block', mb: 1.5 }}>
+                    WORKSPACES / REPOS
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                    {workspacesList.map(ws => (
+                      <Box
+                        key={ws.name}
+                        onClick={() => handleSend(`List files in ${ws.name}`)}
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 1,
+                          p: 1,
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          transition: 'background 0.2s',
+                          '&:hover': { background: 'rgba(255,255,255,0.03)' }
+                        }}
+                      >
+                        <FolderIcon sx={{ fontSize: 14, color: '#7f5af0' }} />
+                        <Typography variant="caption" sx={{ color: '#cbd5e1', fontWeight: 600 }}>
+                          {ws.name}
+                        </Typography>
+                      </Box>
+                    ))}
+                    {workspacesList.length === 0 && (
+                      <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic', pl: 1 }}>
+                        No workspaces configured.
+                      </Typography>
+                    )}
+                  </Box>
+                </Box>
+
+                {/* Live Apps status list */}
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, letterSpacing: '0.05em', display: 'block', mb: 1.5 }}>
+                    LIVE DEPLOYED APPS
+                  </Typography>
                   <Box
-                    key={ws.name}
-                    onClick={() => handleSend(`List files in ${ws.name}`)}
+                    onClick={() => handleSend('inspect soothsayer')}
                     sx={{
                       display: 'flex',
                       alignItems: 'center',
-                      gap: 1,
+                      justifyContent: 'space-between',
                       p: 1,
                       borderRadius: '6px',
                       cursor: 'pointer',
@@ -954,90 +1103,60 @@ const App: React.FC = () => {
                       '&:hover': { background: 'rgba(255,255,255,0.03)' }
                     }}
                   >
-                    <FolderIcon sx={{ fontSize: 14, color: '#7f5af0' }} />
-                    <Typography variant="caption" sx={{ color: '#cbd5e1', fontWeight: 600 }}>
-                      {ws.name}
-                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <LaptopMacIcon sx={{ fontSize: 14, color: soothsayerStatus === 'online' ? '#22c55e' : '#71717a' }} />
+                      <Typography variant="caption" sx={{ color: '#cbd5e1', fontWeight: 600 }}>
+                        Soothsayer
+                      </Typography>
+                    </Box>
+                    <Chip 
+                      label={soothsayerStatus.toUpperCase()} 
+                      size="small" 
+                      sx={{ 
+                        height: 16, 
+                        fontSize: '0.55rem', 
+                        fontWeight: 800, 
+                        background: soothsayerStatus === 'online' ? 'rgba(34,197,94,0.08)' : 'rgba(255,255,255,0.03)', 
+                        color: soothsayerStatus === 'online' ? '#22c55e' : '#a1a1aa' 
+                      }} 
+                    />
                   </Box>
-                ))}
-                {workspacesList.length === 0 && (
-                  <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic', pl: 1 }}>
-                    No workspaces configured.
-                  </Typography>
-                )}
-              </Box>
-            </Box>
-
-            {/* Live Apps status list */}
-            <Box sx={{ mb: 3 }}>
-              <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, letterSpacing: '0.05em', display: 'block', mb: 1.5 }}>
-                LIVE DEPLOYED APPS
-              </Typography>
-              <Box
-                onClick={() => handleSend('inspect soothsayer')}
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  p: 1,
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  transition: 'background 0.2s',
-                  '&:hover': { background: 'rgba(255,255,255,0.03)' }
-                }}
-              >
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <LaptopMacIcon sx={{ fontSize: 14, color: soothsayerStatus === 'online' ? '#22c55e' : '#71717a' }} />
-                  <Typography variant="caption" sx={{ color: '#cbd5e1', fontWeight: 600 }}>
-                    Soothsayer
-                  </Typography>
                 </Box>
-                <Chip 
-                  label={soothsayerStatus.toUpperCase()} 
-                  size="small" 
-                  sx={{ 
-                    height: 16, 
-                    fontSize: '0.55rem', 
-                    fontWeight: 800, 
-                    background: soothsayerStatus === 'online' ? 'rgba(34,197,94,0.08)' : 'rgba(255,255,255,0.03)', 
-                    color: soothsayerStatus === 'online' ? '#22c55e' : '#a1a1aa' 
-                  }} 
-                />
-              </Box>
-            </Box>
 
-            {/* Persona lenses selectors */}
-            <Box sx={{ mt: 'auto', pt: 2, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-              <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, letterSpacing: '0.05em', display: 'block', mb: 1.5 }}>
-                PERSONA VIEW LENS
-              </Typography>
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                {(['engineer', 'pm', 'ba', 'qa', 'exec'] as const).map(lens => (
-                  <Box
-                    key={lens}
-                    onClick={() => setActiveLens(lens)}
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 1,
-                      p: 0.75,
-                      px: 1.5,
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                      background: activeLens === lens ? 'rgba(127, 85, 240, 0.08)' : 'transparent',
-                      border: activeLens === lens ? '1px solid rgba(127, 85, 240, 0.2)' : '1px solid transparent',
-                      transition: 'all 0.2s',
-                      '&:hover': { background: activeLens === lens ? 'rgba(127, 85, 240, 0.12)' : 'rgba(255,255,255,0.02)' }
-                    }}
-                  >
-                    <PersonOutlineIcon sx={{ fontSize: 13, color: activeLens === lens ? '#b794f4' : '#71717a' }} />
-                    <Typography variant="caption" sx={{ color: activeLens === lens ? '#b794f4' : '#cbd5e1', fontWeight: activeLens === lens ? 700 : 500 }}>
-                      {lens.toUpperCase()}
-                    </Typography>
+                {/* Persona lenses selectors */}
+                <Box sx={{ mt: 'auto', pt: 2, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                  <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, letterSpacing: '0.05em', display: 'block', mb: 1.5 }}>
+                    PERSONA VIEW LENS
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                    {(['engineer', 'pm', 'ba', 'qa', 'exec'] as const).map(lens => (
+                      <Box
+                        key={lens}
+                        onClick={() => setActiveLens(lens)}
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 1,
+                          p: 0.75,
+                          px: 1.5,
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          background: activeLens === lens ? 'rgba(127, 85, 240, 0.08)' : 'transparent',
+                          border: activeLens === lens ? '1px solid rgba(127, 85, 240, 0.2)' : '1px solid transparent',
+                          transition: 'all 0.2s',
+                          '&:hover': { background: activeLens === lens ? 'rgba(127, 85, 240, 0.12)' : 'rgba(255,255,255,0.02)' }
+                        }}
+                      >
+                        <PersonOutlineIcon sx={{ fontSize: 13, color: activeLens === lens ? '#b794f4' : '#71717a' }} />
+                        <Typography variant="caption" sx={{ color: activeLens === lens ? '#b794f4' : '#cbd5e1', fontWeight: activeLens === lens ? 700 : 500 }}>
+                          {lens.toUpperCase()}
+                        </Typography>
+                      </Box>
+                    ))}
                   </Box>
-                ))}
-              </Box>
-            </Box>
+                </Box>
+              </>
+            )}
           </Box>
 
           {/* ZONE 2 + ZONE 3: Main Dashboard Content Area */}
@@ -1058,6 +1177,9 @@ const App: React.FC = () => {
               }}
             >
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0 }}>
+                <IconButton onClick={toggleLeftRail} size="small" sx={{ color: '#cbd5e1', border: '1px solid rgba(255,255,255,0.06)' }}>
+                  {isLeftRailCollapsed ? <ChevronRightIcon sx={{ fontSize: 16 }} /> : <ChevronLeftIcon sx={{ fontSize: 16 }} />}
+                </IconButton>
                 <Typography variant="body2" sx={{ fontWeight: 800, color: '#f4f4f5', letterSpacing: '-0.01em' }}>
                   MyAI Portal
                 </Typography>
@@ -1088,6 +1210,11 @@ const App: React.FC = () => {
                 {/* Workflow run helper */}
                 <IconButton size="small" onClick={() => setIsContentDialogOpen(true)} aria-label="Draft content run" sx={{ color: '#a1a1aa', border: '1px solid rgba(255,255,255,0.06)' }}>
                   <EditNoteIcon sx={{ fontSize: '0.95rem' }} />
+                </IconButton>
+
+                {/* Right feed toggle */}
+                <IconButton onClick={toggleRightFeed} size="small" sx={{ color: '#cbd5e1', border: '1px solid rgba(255,255,255,0.06)', display: { xs: 'none', lg: 'inline-flex' } }}>
+                  <ViewSidebarIcon sx={{ fontSize: 16 }} />
                 </IconButton>
 
                 {/* Guide helper */}
@@ -1145,6 +1272,7 @@ const App: React.FC = () => {
                         onAction={handleSend}
                         onApproveAction={handleApproveAction}
                         onCancelAction={handleRemoveItem}
+                        onStartContentWorkflow={handleStartContentWorkflow}
                         activeLens={activeLens}
                       />
                       <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
@@ -1323,26 +1451,26 @@ const App: React.FC = () => {
                 >
                   <Stack direction="row" spacing={1} sx={{ mb: 1.5, overflowX: 'auto', pb: 0.5 }}>
                     <Chip 
-                      label="inspect soothsayer" 
-                      onClick={() => handleSend('inspect soothsayer')} 
+                      label="show flowright workflows" 
+                      onClick={() => handleSend('show flowright workflows')} 
                       size="small" 
                       sx={{ height: 22, fontSize: '0.65rem', background: 'rgba(255,255,255,0.03)', color: '#cbd5e1', cursor: 'pointer' }} 
                     />
                     <Chip 
-                      label="show connected systems" 
-                      onClick={() => handleSend('List workspaces')} 
+                      label="show soothsayer workflows" 
+                      onClick={() => handleSend('show soothsayer workflows')} 
                       size="small" 
                       sx={{ height: 22, fontSize: '0.65rem', background: 'rgba(255,255,255,0.03)', color: '#cbd5e1', cursor: 'pointer' }} 
                     />
                     <Chip 
-                      label="track flowright repo" 
+                      label="write a blog post" 
+                      onClick={() => handleSend('write a blog post')} 
+                      size="small" 
+                      sx={{ height: 22, fontSize: '0.65rem', background: 'rgba(255,255,255,0.03)', color: '#cbd5e1', cursor: 'pointer' }} 
+                    />
+                    <Chip 
+                      label="git status in flowright" 
                       onClick={() => handleSend('git status in flowright')} 
-                      size="small" 
-                      sx={{ height: 22, fontSize: '0.65rem', background: 'rgba(255,255,255,0.03)', color: '#cbd5e1', cursor: 'pointer' }} 
-                    />
-                    <Chip 
-                      label="run npm run verify in flowright" 
-                      onClick={() => handleSend('run npm run verify in flowright')} 
                       size="small" 
                       sx={{ height: 22, fontSize: '0.65rem', background: 'rgba(255,255,255,0.03)', color: '#cbd5e1', cursor: 'pointer' }} 
                     />
@@ -1354,27 +1482,69 @@ const App: React.FC = () => {
               {/* ZONE 3: Right Inspector / Intelligence Feed */}
               <Box
                 sx={{
-                  width: 380,
-                  minWidth: 380,
+                  width: isRightFeedCollapsed ? 48 : 380,
+                  minWidth: isRightFeedCollapsed ? 48 : 380,
                   display: { xs: 'none', lg: 'flex' },
                   flexDirection: 'column',
                   height: '100%',
-                  background: 'rgba(9, 9, 11, 0.15)'
+                  background: 'rgba(9, 9, 11, 0.15)',
+                  borderLeft: '1px solid rgba(255, 255, 255, 0.08)',
+                  transition: 'width 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+                  overflow: 'hidden'
                 }}
               >
-                <PreviewPanel
-                  previewFeed={previewFeed}
-                  onClose={() => handleClearFeed()}
-                  onAction={(query) => {
-                    handleSend(query);
-                  }}
-                  onRemoveItem={handleRemoveItem}
-                  onClearFeed={handleClearFeed}
-                  onApproveAction={handleApproveAction}
-                  onContentWorkflowReview={handleContentWorkflowReview}
-                  token={token}
-                  loading={loading}
-                />
+                {isRightFeedCollapsed ? (
+                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', pt: 2, gap: 2, height: '100%' }}>
+                    <Tooltip title="Expand Activity Feed" placement="left">
+                      <IconButton onClick={toggleRightFeed} size="small" sx={{ color: '#cbd5e1', border: '1px solid rgba(255,255,255,0.06)' }}>
+                        <ChevronLeftIcon sx={{ fontSize: 16 }} />
+                      </IconButton>
+                    </Tooltip>
+                    
+                    <Divider sx={{ width: '65%', borderColor: 'rgba(255,255,255,0.06)' }} />
+
+                    <Stack spacing={1.5} alignItems="center" sx={{ overflowY: 'auto', width: '100%', pb: 2 }}>
+                      {previewFeed.map((item) => (
+                        <Tooltip key={item.id} title={`${item.type.replace(/([A-Z])/g, ' $1').trim()} (${item.timestamp})`} placement="left">
+                          <IconButton
+                            onClick={toggleRightFeed}
+                            size="small"
+                            sx={{
+                              color: '#b794f4',
+                              background: 'rgba(127, 85, 240, 0.04)',
+                              '&:hover': { background: 'rgba(127, 85, 240, 0.1)' }
+                            }}
+                          >
+                            {item.type === 'WorkspaceList' && <FolderIcon sx={{ fontSize: 16 }} />}
+                            {item.type === 'FileList' && <FolderIcon sx={{ fontSize: 16 }} />}
+                            {item.type === 'CodePreview' && <CodeIcon sx={{ fontSize: 16 }} />}
+                            {item.type === 'SearchResults' && <SearchIcon sx={{ fontSize: 16 }} />}
+                            {item.type === 'WorkflowsList' && <FolderIcon sx={{ fontSize: 16 }} />}
+                            {item.type === 'ProposedAction' && <CheckCircleOutlineIcon sx={{ fontSize: 16 }} />}
+                            {item.type === 'ExecutionLogs' && <TerminalIcon sx={{ fontSize: 16 }} />}
+                            {item.type === 'TerminalLogs' && <TerminalIcon sx={{ fontSize: 16 }} />}
+                            {item.type === 'MemoryRecall' && <MemoryIcon sx={{ fontSize: 16 }} />}
+                            {item.type === 'ContentWorkflow' && <EditNoteIcon sx={{ fontSize: 16 }} />}
+                          </IconButton>
+                        </Tooltip>
+                      ))}
+                    </Stack>
+                  </Box>
+                ) : (
+                  <PreviewPanel
+                    previewFeed={previewFeed}
+                    onClose={() => toggleRightFeed()}
+                    onAction={(query) => {
+                      handleSend(query);
+                    }}
+                    onRemoveItem={handleRemoveItem}
+                    onClearFeed={handleClearFeed}
+                    onApproveAction={handleApproveAction}
+                    onContentWorkflowReview={handleContentWorkflowReview}
+                    token={token}
+                    loading={loading}
+                  />
+                )}
               </Box>
             </Box>
           </Box>

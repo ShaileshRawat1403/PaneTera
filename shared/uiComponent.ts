@@ -24,6 +24,7 @@ export const UI_COMPONENT_TYPES = [
   'GitHistory',
   'DesktopApps',
   'MemoryRecall',
+  'ContentOpsStarter',
 ] as const;
 
 export type UiComponentType = (typeof UI_COMPONENT_TYPES)[number];

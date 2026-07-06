@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Box, Typography, Paper, Divider, IconButton, Button, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Grid, Card, CardContent, CardActionArea, Tooltip, LinearProgress, CircularProgress, Tabs, Tab, Chip, Stack } from '@mui/material';
+import { Box, Typography, Paper, Divider, IconButton, Button, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Grid, Card, CardContent, CardActionArea, Tooltip, LinearProgress, CircularProgress, Tabs, Tab, Chip, Stack, Collapse } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import FolderIcon from '@mui/icons-material/Folder';
@@ -12,6 +12,7 @@ import InfoIcon from '@mui/icons-material/Info';
 import ClearAllIcon from '@mui/icons-material/ClearAll';
 import ViewStreamIcon from '@mui/icons-material/ViewStream';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 
 export type { FeedItem } from '../../shared/uiComponent';
 import type { FeedItem } from '../../shared/uiComponent';
@@ -893,7 +894,15 @@ const DesktopAppsFeedCard: React.FC<{ token: string }> = ({ token }) => {
 
 export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onAction, onRemoveItem, onClearFeed, onApproveAction, onContentWorkflowReview, token, loading }) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
   const feedEndRef = useRef<HTMLDivElement>(null);
+
+  const toggleCard = (id: string) => {
+    setExpandedCards(prev => ({
+      ...prev,
+      [id]: !prev[id]
+    }));
+  };
 
   const handleCopy = (text: string, itemId: string) => {
     navigator.clipboard.writeText(text);
@@ -1007,232 +1016,248 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
             </Typography>
           </Box>
         ) : (
-          previewFeed.map((item) => (
-            <Paper
-              key={item.id}
-              elevation={0}
-              className="feed-card-animation"
-              sx={{
-                background: 'rgba(255, 255, 255, 0.02)',
-                border: '1px solid rgba(255, 255, 255, 0.06)',
-                borderRadius: '8px',
-                overflow: 'hidden',
-                display: 'flex',
-                flexDirection: 'column',
-                position: 'relative',
-                p: 0
-              }}
-            >
-              {/* Card Header */}
-              <Box
+          previewFeed.map((item) => {
+            const isExpanded = expandedCards[item.id] !== undefined
+              ? expandedCards[item.id]
+              : (previewFeed[previewFeed.length - 1]?.id === item.id);
+
+            return (
+              <Paper
+                key={item.id}
+                elevation={0}
+                className="feed-card-animation"
                 sx={{
+                  background: 'rgba(255, 255, 255, 0.02)',
+                  border: '1px solid rgba(255, 255, 255, 0.06)',
+                  borderRadius: '8px',
+                  overflow: 'hidden',
                   display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  px: 2,
-                  py: 1,
-                  background: 'rgba(255, 255, 255, 0.005)',
-                  borderBottom: '1px solid rgba(255, 255, 255, 0.04)'
+                  flexDirection: 'column',
+                  position: 'relative',
+                  p: 0
                 }}
               >
-                <Typography variant="caption" sx={{ color: '#b794f4', fontWeight: 700, fontSize: '0.7rem', letterSpacing: '0.05em' }}>
-                  {item.type === 'WorkspaceList' && 'WORKSPACES'}
-                  {item.type === 'FileList' && `FILE INDEX: ${item.data.workspace}`}
-                  {item.type === 'CodePreview' && `CODE: ${item.data.workspace}/${item.data.path}`}
-                  {item.type === 'SearchResults' && `SEARCH: "${item.data.keyword}"`}
-                  {item.type === 'WorkflowsList' && `PIPELINES: ${item.data.workspace}`}
-                  {item.type === 'ProposedAction' && 'AWAITING APPROVAL'}
-                  {item.type === 'ExecutionLogs' && `TASK CONSOLE`}
-                  {item.type === 'GitHistory' && `GIT STATUS: ${item.data.workspace}`}
-                  {item.type === 'DesktopApps' && `SYSTEM APP TELEMETRY`}
-                  {item.type === 'TerminalLogs' && 'TERMINAL SCAN'}
-                  {item.type === 'MemoryRecall' && 'MEMORY RECALL'}
-                  {item.type === 'ContentWorkflow' && 'GOVERNED CONTENT RUN'}
-                </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem', fontFamily: 'monospace' }}>
-                    {item.timestamp}
-                  </Typography>
-                  {item.type === 'CodePreview' && (
-                    <Tooltip title={copiedId === item.id ? "Copied!" : "Copy code"}>
-                      <IconButton size="small" onClick={() => handleCopy(item.data.content, item.id)} sx={{ color: '#a0aec0', p: 0.25 }}>
-                        <ContentCopyIcon sx={{ fontSize: 13 }} />
-                      </IconButton>
-                    </Tooltip>
-                  )}
-                  <IconButton size="small" onClick={() => onRemoveItem(item.id)} sx={{ color: '#a0aec0', p: 0.25 }}>
-                    <CloseIcon sx={{ fontSize: 13 }} />
-                  </IconButton>
-                </Box>
-              </Box>
-
-              {/* Card Content */}
-              <Box sx={{ p: 2 }}>
-                {item.type === 'WorkspaceList' && (
-                  <Box>
-                    {/* Live ecosystem status board */}
-                    <EcosystemStatusBoard token={token} onAction={onAction} />
-                    
-                    <Grid container spacing={1.5}>
-                      {item.data.map((ws: any, idx: number) => (
-                        <Grid item xs={12} key={idx}>
-                          <Card sx={{ background: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.04)', borderRadius: '12px' }}>
-                            <CardActionArea onClick={() => onAction(`List files in ${ws.name}`)}>
-                              <CardContent sx={{ p: 1.5 }}>
-                                <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
-                                  <FolderIcon color="primary" sx={{ mr: 1, fontSize: 18 }} />
-                                  <Typography variant="body2" sx={{ fontWeight: 600, color: '#f4f4f5' }}>
-                                    {ws.name}
-                                  </Typography>
-                                </Box>
-                                <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                                  {ws.path}
-                                </Typography>
-                              </CardContent>
-                            </CardActionArea>
-                          </Card>
-                        </Grid>
-                      ))}
-                    </Grid>
-                  </Box>
-                )}
-
-                {item.type === 'FileList' && (
-                  <FileListFeedCard data={item.data} onAction={onAction} />
-                )}
-
-                {item.type === 'CodePreview' && (
-                  <CodePreviewFeedCard data={item.data} />
-                )}
-
-                {item.type === 'SearchResults' && (
-                  <LaptopBrowserFrame url={`https://portal.local/search?q=${encodeURIComponent(item.data.keyword)}`}>
-                    <SearchResultsFeedCard data={item.data} onAction={onAction} />
-                  </LaptopBrowserFrame>
-                )}
-
-                {item.type === 'WorkflowsList' && (
-                  <WorkflowsFeedCard data={item.data} />
-                )}
-
-                {item.type === 'LiveAppWorkbench' && (
-                  <LiveAppWorkbenchCard
-                    variant="chat"
-                    data={item.data}
-                    onCancel={() => onRemoveItem(item.id)}
-                  />
-                )}
-
-                {item.type === 'RepoSetupProposal' && (
-                  <RepoSetupProposalCard
-                    variant="chat"
-                    data={item.data}
-                    onCancel={() => onRemoveItem(item.id)}
-                  />
-                )}
-
-                {item.type === 'ProposedAction' && (
-                  <ProposedActionCard
-                    workspaceName={item.data.workspaceName}
-                    command={item.data.command}
-                    reason={item.data.reason}
-                    riskLevel={item.data.riskLevel}
-                    executionMode={item.data.executionMode}
-                    isDryRun={item.data.isDryRun}
-                    allowed={item.data.allowed}
-                    description={item.data.description}
-                    onApprove={() => onApproveAction(item.id, item.data.workspaceName, item.data.command)}
-                    onCancel={() => onRemoveItem(item.id)}
-                  />
-                )}
-
-                {item.type === 'ExecutionLogs' && (
-                  <ExecutionLogsFeedCard data={item.data} procId={item.id} token={token} />
-                )}
-
-                {item.type === 'ContentWorkflow' && (
-                  <ContentWorkflowCard
-                    run={item.data.run}
-                    evidence={item.data.evidence}
-                    busy={Boolean(item.data.busy)}
-                    onReview={(action, notes) =>
-                      onContentWorkflowReview?.(item.id, item.data.run.runId, action, notes)
-                    }
-                  />
-                )}
-
-                {item.type === 'GitHistory' && (
-                  <GitHistoryFeedCard data={item.data} />
-                )}
-
-                {item.type === 'DesktopApps' && (
-                  <DesktopAppsFeedCard token={token} />
-                )}
-
-                {item.type === 'TerminalLogs' && (
-                  <Box
-                    sx={{
-                      background: '#040405',
-                      p: 1.5,
-                      borderRadius: '12px',
-                      border: '1px solid rgba(127, 85, 240, 0.12)',
-                      maxHeight: 280,
-                      overflowY: 'auto',
-                      overflowX: 'hidden',
-                      WebkitOverflowScrolling: 'touch',
-                    }}
-                  >
-                    <Typography component="div" sx={{ fontFamily: 'monospace', fontSize: '0.75rem', color: '#38bdf8', lineHeight: 1.5 }}>
-                      {item.data.logs.map((log: string, lIdx: number) => (
-                        <Box key={lIdx} sx={{ mb: 0.5, display: 'flex', alignItems: 'flex-start' }}>
-                          <Box sx={{ color: '#22c55e', mr: 1, userSelect: 'none' }}>❯</Box>
-                          <Box sx={{ flexGrow: 1, whiteSpace: 'pre-wrap' }}>{log}</Box>
-                        </Box>
-                      ))}
+                {/* Card Header (Clickable to collapse/expand) */}
+                <Box
+                  onClick={() => toggleCard(item.id)}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    px: 2,
+                    py: 1,
+                    background: 'rgba(255, 255, 255, 0.005)',
+                    borderBottom: isExpanded ? '1px solid rgba(255, 255, 255, 0.04)' : 'none',
+                    cursor: 'pointer',
+                    userSelect: 'none',
+                    transition: 'background 0.2s',
+                    '&:hover': { background: 'rgba(255, 255, 255, 0.02)' }
+                  }}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    {isExpanded ? <ExpandLessIcon sx={{ fontSize: 13, color: '#7f5af0' }} /> : <ExpandMoreIcon sx={{ fontSize: 13, color: '#a0aec0' }} />}
+                    <Typography variant="caption" sx={{ color: '#b794f4', fontWeight: 700, fontSize: '0.7rem', letterSpacing: '0.05em' }}>
+                      {item.type === 'WorkspaceList' && 'WORKSPACES'}
+                      {item.type === 'FileList' && `FILE INDEX: ${item.data.workspace}`}
+                      {item.type === 'CodePreview' && `CODE: ${item.data.workspace}/${item.data.path}`}
+                      {item.type === 'SearchResults' && `SEARCH: "${item.data.keyword}"`}
+                      {item.type === 'WorkflowsList' && `PIPELINES: ${item.data.workspace}`}
+                      {item.type === 'LiveAppWorkbench' && 'LIVE APP WORKBENCH'}
+                      {item.type === 'RepoSetupProposal' && 'REPO SETUP PROPOSAL'}
+                      {item.type === 'ProposedAction' && 'AWAITING APPROVAL'}
+                      {item.type === 'ExecutionLogs' && `TASK CONSOLE`}
+                      {item.type === 'GitHistory' && `GIT STATUS: ${item.data.workspace}`}
+                      {item.type === 'DesktopApps' && `SYSTEM APP TELEMETRY`}
+                      {item.type === 'TerminalLogs' && 'TERMINAL SCAN'}
+                      {item.type === 'MemoryRecall' && 'MEMORY RECALL'}
+                      {item.type === 'ContentWorkflow' && 'GOVERNED CONTENT RUN'}
                     </Typography>
                   </Box>
-                )}
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }} onClick={(e) => e.stopPropagation()}>
+                    <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem', fontFamily: 'monospace' }}>
+                      {item.timestamp}
+                    </Typography>
+                    {item.type === 'CodePreview' && (
+                      <Tooltip title={copiedId === item.id ? "Copied!" : "Copy code"}>
+                        <IconButton size="small" onClick={() => handleCopy(item.data.content, item.id)} sx={{ color: '#a0aec0', p: 0.25 }}>
+                          <ContentCopyIcon sx={{ fontSize: 13 }} />
+                        </IconButton>
+                      </Tooltip>
+                    )}
+                    <IconButton size="small" onClick={() => onRemoveItem(item.id)} sx={{ color: '#a0aec0', p: 0.25 }}>
+                      <CloseIcon sx={{ fontSize: 13 }} />
+                    </IconButton>
+                  </Box>
+                </Box>
 
-                {item.type === 'MemoryRecall' && (
-                  <Box
-                    sx={{
-                      background: 'linear-gradient(135deg, rgba(109,40,217,0.08) 0%, rgba(15,10,30,0.95) 100%)',
-                      p: 1.5,
-                      borderRadius: '12px',
-                      border: '1px solid rgba(109,40,217,0.25)',
-                      maxHeight: 260,
-                      overflowY: 'auto',
-                    }}
-                  >
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                      <Box sx={{
-                        width: 6, height: 6, borderRadius: '50%',
-                        background: 'linear-gradient(135deg, #7c3aed, #4f46e5)',
-                        boxShadow: '0 0 8px rgba(124,58,237,0.6)',
-                        flexShrink: 0
-                      }} />
-                      <Typography sx={{ fontSize: '0.7rem', color: '#a78bfa', fontFamily: 'monospace', letterSpacing: '0.08em' }}>
-                        SESSION MEMORY — workspace context recalled
-                      </Typography>
-                    </Box>
-                    {(item.data.memories as string[]).map((mem: string, mIdx: number) => (
-                      <Box key={mIdx} sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mb: 0.75 }}>
-                        <Box sx={{ color: '#7c3aed', fontSize: '0.7rem', mt: '2px', flexShrink: 0 }}>—</Box>
-                        <Typography sx={{ fontSize: '0.78rem', color: '#c4b5fd', lineHeight: 1.5, fontFamily: 'monospace' }}>
-                          {mem}
+                {/* Card Content */}
+                <Collapse in={isExpanded}>
+                  <Box sx={{ p: 2 }}>
+                    {item.type === 'WorkspaceList' && (
+                      <Box>
+                        {/* Live ecosystem status board */}
+                        <EcosystemStatusBoard token={token} onAction={onAction} />
+                        
+                        <Grid container spacing={1.5}>
+                          {item.data.map((ws: any, idx: number) => (
+                            <Grid item xs={12} key={idx}>
+                              <Card sx={{ background: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.04)', borderRadius: '12px' }}>
+                                <CardActionArea onClick={() => onAction(`List files in ${ws.name}`)}>
+                                  <CardContent sx={{ p: 1.5 }}>
+                                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+                                      <FolderIcon color="primary" sx={{ mr: 1, fontSize: 18 }} />
+                                      <Typography variant="body2" sx={{ fontWeight: 600, color: '#f4f4f5' }}>
+                                        {ws.name}
+                                      </Typography>
+                                    </Box>
+                                    <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                                      {ws.path}
+                                    </Typography>
+                                  </CardContent>
+                                </CardActionArea>
+                              </Card>
+                            </Grid>
+                          ))}
+                        </Grid>
+                      </Box>
+                    )}
+
+                    {item.type === 'FileList' && (
+                      <FileListFeedCard data={item.data} onAction={onAction} />
+                    )}
+
+                    {item.type === 'CodePreview' && (
+                      <CodePreviewFeedCard data={item.data} />
+                    )}
+
+                    {item.type === 'SearchResults' && (
+                      <LaptopBrowserFrame url={`https://portal.local/search?q=${encodeURIComponent(item.data.keyword)}`}>
+                        <SearchResultsFeedCard data={item.data} onAction={onAction} />
+                      </LaptopBrowserFrame>
+                    )}
+
+                    {item.type === 'WorkflowsList' && (
+                      <WorkflowsFeedCard data={item.data} />
+                    )}
+
+                    {item.type === 'LiveAppWorkbench' && (
+                      <LiveAppWorkbenchCard
+                        variant="chat"
+                        data={item.data}
+                        onCancel={() => onRemoveItem(item.id)}
+                      />
+                    )}
+
+                    {item.type === 'RepoSetupProposal' && (
+                      <RepoSetupProposalCard
+                        variant="chat"
+                        data={item.data}
+                        onCancel={() => onRemoveItem(item.id)}
+                      />
+                    )}
+
+                    {item.type === 'ProposedAction' && (
+                      <ProposedActionCard
+                        workspaceName={item.data.workspaceName}
+                        command={item.data.command}
+                        reason={item.data.reason}
+                        riskLevel={item.data.riskLevel}
+                        executionMode={item.data.executionMode}
+                        isDryRun={item.data.isDryRun}
+                        allowed={item.data.allowed}
+                        description={item.data.description}
+                        onApprove={() => onApproveAction?.(item.id, item.data.workspaceName, item.data.command)}
+                        onCancel={() => onRemoveItem(item.id)}
+                      />
+                    )}
+
+                    {item.type === 'ExecutionLogs' && (
+                      <ExecutionLogsFeedCard data={item.data} procId={item.id} token={token} />
+                    )}
+
+                    {item.type === 'ContentWorkflow' && (
+                      <ContentWorkflowCard
+                        run={item.data.run}
+                        evidence={item.data.evidence}
+                        busy={!!item.data.busy}
+                        onReview={(action, notes) => onContentWorkflowReview?.(item.id, item.data.run.runId, action, notes)}
+                      />
+                    )}
+
+                    {item.type === 'GitHistory' && (
+                      <GitHistoryFeedCard data={item.data} />
+                    )}
+
+                    {item.type === 'DesktopApps' && (
+                      <DesktopAppsFeedCard token={token} />
+                    )}
+
+                    {item.type === 'TerminalLogs' && (
+                      <Box
+                        sx={{
+                          background: '#040405',
+                          p: 1.5,
+                          borderRadius: '12px',
+                          border: '1px solid rgba(127, 85, 240, 0.12)',
+                          maxHeight: 280,
+                          overflowY: 'auto',
+                          overflowX: 'hidden',
+                          WebkitOverflowScrolling: 'touch'
+                        }}
+                      >
+                        <Typography component="div" sx={{ fontFamily: 'monospace', fontSize: '0.75rem', color: '#38bdf8', lineHeight: 1.5 }}>
+                          {(item.data.logs as string[]).map((log: string, lIdx: number) => (
+                            <Box key={lIdx} sx={{ mb: 0.5, display: 'flex', alignItems: 'flex-start' }}>
+                              <Box sx={{ color: '#22c55e', mr: 1, userSelect: 'none' }}>❯</Box>
+                              <Box sx={{ flexGrow: 1, whiteSpace: 'pre-wrap' }}>{log}</Box>
+                            </Box>
+                          ))}
                         </Typography>
                       </Box>
-                    ))}
-                    {(item.data.memories as string[]).length === 0 && (
-                      <Typography sx={{ fontSize: '0.75rem', color: '#6b7280', fontFamily: 'monospace', fontStyle: 'italic' }}>
-                        No prior context found. Memory will populate as you explore workspaces.
-                      </Typography>
+                    )}
+
+                    {item.type === 'MemoryRecall' && (
+                      <Box
+                        sx={{
+                          background: 'linear-gradient(135deg, rgba(109,40,217,0.08) 0%, rgba(15,10,30,0.95) 100%)',
+                          p: 1.5,
+                          borderRadius: '12px',
+                          border: '1px solid rgba(109,40,217,0.25)',
+                          maxHeight: 260,
+                          overflowY: 'auto',
+                        }}
+                      >
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                          <Box sx={{
+                            width: 6, height: 6, borderRadius: '50%',
+                            background: 'linear-gradient(135deg, #7c3aed, #4f46e5)',
+                            boxShadow: '0 0 8px rgba(124,58,237,0.6)',
+                            flexShrink: 0
+                          }} />
+                          <Typography sx={{ fontSize: '0.7rem', color: '#a78bfa', fontFamily: 'monospace', letterSpacing: '0.08em' }}>
+                            SESSION MEMORY — workspace context recalled
+                          </Typography>
+                        </Box>
+                        {(item.data.memories as string[]).map((mem: string, mIdx: number) => (
+                          <Box key={mIdx} sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mb: 0.75 }}>
+                            <Box sx={{ color: '#7c3aed', fontSize: '0.7rem', mt: '2px', flexShrink: 0 }}>—</Box>
+                            <Typography sx={{ fontSize: '0.78rem', color: '#c4b5fd', lineHeight: 1.5, fontFamily: 'monospace' }}>
+                              {mem}
+                            </Typography>
+                          </Box>
+                        ))}
+                        {(item.data.memories as string[]).length === 0 && (
+                          <Typography sx={{ fontSize: '0.75rem', color: '#6b7280', fontFamily: 'monospace', fontStyle: 'italic' }}>
+                            No prior context found. Memory will populate as you explore workspaces.
+                          </Typography>
+                        )}
+                      </Box>
                     )}
                   </Box>
-                )}
-              </Box>
-            </Paper>
-          ))
+                </Collapse>
+              </Paper>
+            );
+          })
         )}
         <div ref={feedEndRef} />
       </Box>

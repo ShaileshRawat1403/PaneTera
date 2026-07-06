@@ -1,6 +1,5 @@
-// src/components/InteractiveComponent.tsx
 import React, { useState } from 'react';
-import { Box, Typography, Card, CardContent, CardActionArea, Grid, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Paper, Divider } from '@mui/material';
+import { Box, Typography, Card, CardContent, CardActionArea, Grid, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Paper, Divider, TextField, Button, Chip, Stack } from '@mui/material';
 import type { UiComponent } from '../../shared/uiComponent';
 import FolderIcon from '@mui/icons-material/Folder';
 import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
@@ -15,10 +14,11 @@ interface ComponentProps {
   onAction: (query: string) => void;
   onApproveAction?: (id: string, workspaceName: string, command: string) => void;
   onCancelAction?: (id: string) => void;
+  onStartContentWorkflow?: (form: any) => void;
   activeLens?: string;
 }
 
-export const InteractiveComponent: React.FC<ComponentProps> = ({ uiComponent, onAction, onApproveAction, onCancelAction, activeLens }) => {
+export const InteractiveComponent: React.FC<ComponentProps> = ({ uiComponent, onAction, onApproveAction, onCancelAction, onStartContentWorkflow, activeLens }) => {
   const { type, data } = uiComponent;
   // Local only — the message log itself stays append-only/immutable, so
   // "did I already act on this" lives here rather than mutating history.
@@ -257,6 +257,225 @@ export const InteractiveComponent: React.FC<ComponentProps> = ({ uiComponent, on
           ))}
         </List>
       </Box>
+    );
+  }
+
+  if (type === 'WorkflowsList' && data) {
+    const { source, workflows, error } = data;
+
+    return (
+      <Box sx={{ mt: 2, mb: 1 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Typography variant="subtitle2" color="primary" sx={{ fontWeight: 'bold' }}>
+            {source === 'flowright' ? 'Flowright Governed Workflows' : 'Soothsayer Live Workflows Preview'}
+          </Typography>
+          <Chip
+            label={source === 'flowright' ? 'Governed Kernel' : 'Preview Only'}
+            size="small"
+            sx={{
+              height: 18,
+              fontSize: '0.65rem',
+              background: source === 'flowright' ? 'rgba(127, 85, 240, 0.08)' : 'rgba(245, 158, 11, 0.08)',
+              color: source === 'flowright' ? '#b794f4' : '#f59e0b',
+              border: source === 'flowright' ? '1px solid rgba(127, 85, 240, 0.15)' : '1px solid rgba(245, 158, 11, 0.15)'
+            }}
+          />
+        </Box>
+
+        {error ? (
+          <Paper variant="outlined" sx={{ p: 2, background: 'rgba(239, 68, 68, 0.03)', borderColor: 'rgba(239,68,68,0.15)', borderRadius: '8px' }}>
+            <Typography variant="body2" sx={{ color: '#ef4444', fontWeight: 600 }}>
+              {error}
+            </Typography>
+          </Paper>
+        ) : (
+          <Grid container spacing={2}>
+            {workflows.map((wf: any, idx: number) => (
+              <Grid item xs={12} key={idx}>
+                <Card sx={{ background: 'rgba(255, 255, 255, 0.015)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                  <CardContent sx={{ p: 2 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                      <Typography variant="body2" sx={{ fontWeight: '700', color: '#f4f4f5' }}>
+                        {wf.name}
+                      </Typography>
+                      <Chip
+                        label={wf.previewOnly ? 'PREVIEW ONLY' : 'RUNNABLE'}
+                        size="small"
+                        sx={{
+                          height: 18,
+                          fontSize: '0.55rem',
+                          fontWeight: 700,
+                          background: wf.previewOnly ? 'rgba(245, 158, 11, 0.08)' : 'rgba(34, 197, 94, 0.08)',
+                          color: wf.previewOnly ? '#f59e0b' : '#22c55e',
+                          border: wf.previewOnly ? '1px solid rgba(245, 158, 11, 0.15)' : '1px solid rgba(34, 197, 94, 0.15)'
+                        }}
+                      />
+                    </Box>
+
+                    <Typography variant="caption" sx={{ color: '#cbd5e1', display: 'block', mb: 1 }}>
+                      {wf.description}
+                    </Typography>
+
+                    <Box sx={{ mb: 2 }}>
+                      <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 700, display: 'block', mb: 0.5 }}>
+                        INPUTS REQUIRED:
+                      </Typography>
+                      {wf.inputs && wf.inputs.length > 0 ? (
+                        <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mt: 0.5 }}>
+                          {wf.inputs.map((inp: any, iIdx: number) => (
+                            <Chip
+                              key={iIdx}
+                              label={typeof inp === 'string' ? inp : inp.name}
+                              size="small"
+                              sx={{ height: 16, fontSize: '0.6rem', fontFamily: 'monospace', background: 'rgba(255,255,255,0.03)', color: '#a0aec0' }}
+                            />
+                          ))}
+                        </Stack>
+                      ) : (
+                        <Typography variant="caption" sx={{ color: '#71717a', fontStyle: 'italic' }}>
+                          None
+                        </Typography>
+                      )}
+                    </Box>
+
+                    <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                      {!wf.previewOnly && wf.id === 'websiteops.website_content_publish.v0' ? (
+                        <Button
+                          size="small"
+                          variant="contained"
+                          onClick={() => onAction('write a blog')}
+                          sx={{ background: '#7f5af0', textTransform: 'none', fontWeight: 700, borderRadius: '6px', '&:hover': { background: '#6d47dd' } }}
+                        >
+                          Open ContentOps starter
+                        </Button>
+                      ) : (
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          disabled
+                          sx={{ color: '#71717a', borderColor: 'rgba(255,255,255,0.08)', textTransform: 'none', borderRadius: '6px' }}
+                        >
+                          Preview only
+                        </Button>
+                      )}
+                    </Box>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+        )}
+      </Box>
+    );
+  }
+
+  if (type === 'ContentOpsStarter' && data) {
+    const { schema, siteGoal: initSiteGoal, contentBrief: initContentBrief, targetPages: initTargetPages, publishConstraints, schemaSource } = data;
+    
+    const [siteGoal, setSiteGoal] = useState(initSiteGoal || '');
+    const [targetPages, setTargetPages] = useState(initTargetPages || '');
+    const [contentBrief, setContentBrief] = useState(initContentBrief || '');
+    const [busy, setBusy] = useState(false);
+
+    const isFormValid = siteGoal.trim() !== '' && targetPages.trim() !== '' && contentBrief.trim() !== '';
+
+    const handleStart = async () => {
+      if (!isFormValid || busy) return;
+      setBusy(true);
+      if (onStartContentWorkflow) {
+        await onStartContentWorkflow({
+          siteGoal,
+          targetPages,
+          contentBrief,
+          sourceMaterial: '',
+          seoRequirements: '',
+          publishConstraints
+        });
+      }
+      setBusy(false);
+    };
+
+    return (
+      <Paper variant="outlined" sx={{ p: 3, background: 'rgba(255, 255, 255, 0.02)', borderColor: 'rgba(255, 255, 255, 0.08)', borderRadius: '12px' }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Typography variant="subtitle2" sx={{ color: '#b794f4', fontWeight: 800, letterSpacing: '0.05em' }}>
+            CONTENTOPS GOVERNED RUN STARTER
+          </Typography>
+          <Chip label={`Schema Source: ${schemaSource || 'local template'}`} size="small" sx={{ height: 18, fontSize: '0.6rem', background: 'rgba(127, 85, 240, 0.1)', color: '#b794f4' }} />
+        </Box>
+
+        <Typography variant="caption" sx={{ color: '#a0aec0', display: 'block', mb: 3, lineHeight: 1.5 }}>
+          Create and dry-run a content generation and validation run using the dynamic schema definition below. Action is approval-gated; publishing requires manual execution outside the loop.
+        </Typography>
+
+        <Stack spacing={2.5}>
+          {schema.inputs.map((input: any) => {
+            let val = '';
+            let onChange = (e: any) => {};
+            if (input.name === 'siteGoal') {
+              val = siteGoal;
+              onChange = (e: any) => setSiteGoal(e.target.value);
+            } else if (input.name === 'targetPages') {
+              val = targetPages;
+              onChange = (e: any) => setTargetPages(e.target.value);
+            } else if (input.name === 'contentBrief') {
+              val = contentBrief;
+              onChange = (e: any) => setContentBrief(e.target.value);
+            }
+
+            return (
+              <TextField
+                key={input.name}
+                label={input.label}
+                value={val}
+                onChange={onChange}
+                size="small"
+                fullWidth
+                required={input.required}
+                multiline={input.name !== 'targetPages'}
+                minRows={input.name === 'contentBrief' ? 3 : 2}
+                placeholder={input.description}
+                helperText={input.description}
+                FormHelperTextProps={{ sx: { color: '#71717a', fontSize: '0.7rem' } }}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    background: 'rgba(0,0,0,0.2)',
+                    '& fieldset': { borderColor: 'rgba(255, 255, 255, 0.1)' }
+                  },
+                  '& .MuiInputLabel-root': { color: '#cbd5e1' }
+                }}
+              />
+            );
+          })}
+
+          <Box>
+            <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 700, display: 'block', mb: 0.5 }}>
+              PUBLISHING CONSTRAINTS
+            </Typography>
+            <Paper variant="outlined" sx={{ p: 1.5, background: 'rgba(0,0,0,0.15)', borderColor: 'rgba(255,255,255,0.04)' }}>
+              <Typography variant="caption" sx={{ fontFamily: 'monospace', color: '#cbd5e1', display: 'block' }}>
+                {publishConstraints}
+              </Typography>
+            </Paper>
+          </Box>
+
+          <Button
+            variant="contained"
+            disabled={!isFormValid || busy}
+            onClick={handleStart}
+            sx={{
+              background: '#7f5af0',
+              fontWeight: 700,
+              textTransform: 'none',
+              borderRadius: '8px',
+              mt: 1,
+              '&:hover': { background: '#6d47dd' }
+            }}
+          >
+            {busy ? 'Starting run...' : 'Start governed run'}
+          </Button>
+        </Stack>
+      </Paper>
     );
   }
 

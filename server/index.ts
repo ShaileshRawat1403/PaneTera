@@ -9,6 +9,7 @@ import { readFileSafe, listWorkspaces, listFilesInWorkspace, searchFilesInWorksp
 import { executeCommand, type ExecutionMode, validateCommand, buildProposedActionData, parseLocalCommandProposal, selectedExecutionMode } from './execution';
 import { buildRepoSetupProposal } from './repoSetup';
 import { parseLiveAppIntent, buildLiveAppWorkbench } from './liveApp';
+import { parseWorkflowIntent } from './workflowIntents';
 
 dotenv.config();
 
@@ -1118,6 +1119,122 @@ async function askOllama(query: string): Promise<{ reply: string; uiComponent?: 
 // native UI cards, not model answers, so the model should not reinterpret them.
 async function resolveGatewayCardLocally(query: string): Promise<{ reply: string; uiComponent?: any } | null> {
   const q = query.toLowerCase().trim();
+
+  // Route workflow intents before provider chat
+  const workflowIntent = parseWorkflowIntent(query);
+  if (workflowIntent) {
+    if (workflowIntent.kind === 'flowright-workflows') {
+      try {
+        const templates = await flowrightApi('GET', '/api/templates');
+        return {
+          reply: `[LOCAL FALLBACK ENGINE] Flowright active workflows loaded from the local operator API.`,
+          uiComponent: {
+            type: 'WorkflowsList',
+            data: {
+              source: 'flowright',
+              workspace: 'flowright',
+              workflows: templates.map((t: any) => ({
+                id: t.id,
+                name: t.name || t.id,
+                label: t.label || t.name || t.id,
+                status: 'available',
+                description: t.description || 'Governed operations workflow.',
+                templatePath: t.templatePath || 'templates/websiteops/website-content-publish.workflow.yaml',
+                inputs: t.inputs || [],
+                approvalRequired: t.approvalRequired !== false,
+                previewOnly: false
+              }))
+            }
+          }
+        };
+      } catch (err: any) {
+        return {
+          reply: `Flowright workflow source is not available right now.`,
+          uiComponent: {
+            type: 'WorkflowsList',
+            data: {
+              source: 'flowright',
+              workspace: 'flowright',
+              workflows: [],
+              error: `Flowright API is not available: ${err.message}`
+            }
+          }
+        };
+      }
+    }
+
+    if (workflowIntent.kind === 'soothsayer-workflows') {
+      try {
+        const data = await buildLiveAppWorkbench('soothsayer');
+        if (!data.manifestAvailable) {
+          throw new Error('Manifest not available');
+        }
+        return {
+          reply: `I retrieved the workflows from Soothsayer's app-native manifest endpoint. These are preview-only.`,
+          uiComponent: {
+            type: 'WorkflowsList',
+            data: {
+              source: 'soothsayer',
+              workspace: 'soothsayer',
+              workflows: data.workflows.map((w: any) => ({
+                id: w.id,
+                name: w.label || w.id,
+                label: w.label || w.id,
+                status: w.status || 'available',
+                description: 'App-native preview-only workflow.',
+                templatePath: '',
+                inputs: [],
+                approvalRequired: true,
+                previewOnly: true
+              }))
+            }
+          }
+        };
+      } catch (err: any) {
+        return {
+          reply: `Soothsayer workflow source is not available right now.`,
+          uiComponent: {
+            type: 'WorkflowsList',
+            data: {
+              source: 'soothsayer',
+              workspace: 'soothsayer',
+              workflows: [],
+              error: 'Workbench manifest not available.'
+            }
+          }
+        };
+      }
+    }
+
+    if (workflowIntent.kind === 'contentops-draft') {
+      let siteGoal = 'Publish new article or plant care update.';
+      if (q.includes('mistake')) {
+        siteGoal = 'Keep the plant advice high quality';
+      }
+
+      return {
+        reply: `I opened the governed ContentOps workbench slot with your brief. Fill in the remaining fields and click "Start governed run" to execute.`,
+        uiComponent: {
+          type: 'ContentOpsStarter',
+          data: {
+            siteGoal,
+            targetPages: '',
+            contentBrief: workflowIntent.contentBrief || '',
+            publishConstraints: 'No autonomous publishing. Operator must approve before CMS or deploy handoff.',
+            schemaSource: 'local template',
+            schema: {
+              workflowId: 'websiteops.website_content_publish.v0',
+              inputs: [
+                { name: 'siteGoal', label: 'Site Goal', type: 'string', required: true, description: 'The overarching purpose of the content updates' },
+                { name: 'targetPages', label: 'Target Pages', type: 'string', required: true, description: 'Comma-separated target page names' },
+                { name: 'contentBrief', label: 'Content Brief', type: 'string', required: true, description: 'Detailed topic brief for the drafts' }
+              ]
+            }
+          }
+        }
+      };
+    }
+  }
 
   const setupProposal = await buildRepoSetupProposal(query);
   if (setupProposal) {
