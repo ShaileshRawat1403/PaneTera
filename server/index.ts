@@ -6,7 +6,7 @@ import path from 'path';
 import { exec, spawn, spawn as spawnProc, ChildProcess as CP } from 'child_process';
 import readline from 'readline';
 import { readFileSafe, listWorkspaces, listFilesInWorkspace, searchFilesInWorkspace } from './workspaceReader';
-import { executeCommand, type ExecutionMode, validateCommand } from './execution';
+import { executeCommand, type ExecutionMode, validateCommand, buildProposedActionData, parseLocalCommandProposal, selectedExecutionMode } from './execution';
 
 dotenv.config();
 
@@ -338,28 +338,7 @@ app.get('/api/search', async (req, res) => {
 
 let activeProcesses: { [id: string]: CP } = {};
 
-function selectedExecutionMode(): ExecutionMode {
-  const mode = process.env.PORTAL_EXECUTION_MODE;
-  return mode === 'apple-container' ? 'apple-container' : 'local-shell';
-}
 
-function buildProposedActionData(workspaceName: string, command: string, reason: string = '') {
-  const allowlistEntry = validateCommand(command);
-  const risk = allowlistEntry ? allowlistEntry.risk : 'dangerous';
-  const allowed = !!allowlistEntry;
-  const mode = selectedExecutionMode();
-
-  return {
-    workspaceName,
-    command,
-    reason,
-    riskLevel: risk,
-    executionMode: mode,
-    isDryRun: true, // Phase 1 is dry-run only
-    allowed,
-    description: allowlistEntry?.description || 'Blocked / Unknown Command'
-  };
-}
 
 // Helper to get Git details
 async function getWorkspaceGit(workspaceName: string): Promise<{ status: string; log: string }> {
@@ -1209,24 +1188,9 @@ async function resolveQueryLocally(query: string): Promise<{ reply: string; uiCo
   // 4.55. Build/test/lint intent — propose it, never auto-run it. This is
   // the local (no-LLM-key) path to the same approval-gated control-plane
   // pattern proposeExecution gives the LLM tool-calling paths.
-  const proposeVerbRegex = /\b(build|lint|verify|tests?)\b/i;
-  const proposeWorkspaceMatch = query.match(/(?:for|in)\s+([\w-]+)/i);
-  const proposeVerbMatch = query.match(proposeVerbRegex);
-  if (proposeVerbMatch && proposeWorkspaceMatch) {
-    const workspace = proposeWorkspaceMatch[1];
-    const verb = proposeVerbMatch[1].toLowerCase();
-    const isRust = workspace.toLowerCase() === 'rook';
-    // flowright has no npm test script, only build/verify/verify:full/verify:staging —
-    // route "test" there to the command that actually exists instead of one
-    // that would fail with a misleading "missing script" error.
-    const usesVerifyInsteadOfTest = workspace.toLowerCase() === 'flowright';
-    const command = verb.startsWith('verify')
-      ? 'npm run verify'
-      : verb.startsWith('lint')
-        ? 'npm run lint'
-        : verb.startsWith('test')
-          ? (isRust ? 'cargo test' : (usesVerifyInsteadOfTest ? 'npm run verify' : 'npm test'))
-          : (isRust ? 'cargo check' : 'npm run build');
+  const proposal = parseLocalCommandProposal(query);
+  if (proposal) {
+    const { workspace, command } = proposal;
     return {
       reply: `[LOCAL FALLBACK ENGINE] I can run "${command}" in workspace "${workspace}". Nothing runs until you approve it below.`,
       uiComponent: {

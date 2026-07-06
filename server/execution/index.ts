@@ -168,3 +168,62 @@ function generateId(): string {
   // Simple unique ID without external dependency
   return `exec-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
+
+export function selectedExecutionMode(): ExecutionMode {
+  const mode = process.env.PORTAL_EXECUTION_MODE;
+  return mode === 'apple-container' ? 'apple-container' : 'local-shell';
+}
+
+export interface ProposedActionData {
+  workspaceName: string;
+  command: string;
+  reason: string;
+  riskLevel: string;
+  executionMode: ExecutionMode;
+  isDryRun: boolean;
+  allowed: boolean;
+  description: string;
+}
+
+export function buildProposedActionData(
+  workspaceName: string,
+  command: string,
+  reason: string = '',
+): ProposedActionData {
+  const allowlistEntry = validateCommand(command);
+  const risk = allowlistEntry ? allowlistEntry.risk : 'dangerous';
+  const allowed = !!allowlistEntry;
+  const mode = selectedExecutionMode();
+
+  return {
+    workspaceName,
+    command,
+    reason,
+    riskLevel: risk,
+    executionMode: mode,
+    isDryRun: true, // Phase 1 is dry-run only
+    allowed,
+    description: allowlistEntry?.description || 'Blocked / Unknown Command',
+  };
+}
+
+export function parseLocalCommandProposal(query: string): { workspace: string; command: string } | null {
+  const proposeVerbRegex = /\b(build|lint|verify|tests?)\b/i;
+  const proposeWorkspaceMatch = query.match(/(?:for|in)\s+([\w-]+)/i);
+  const proposeVerbMatch = query.match(proposeVerbRegex);
+  if (proposeVerbMatch && proposeWorkspaceMatch) {
+    const workspace = proposeWorkspaceMatch[1];
+    const verb = proposeVerbMatch[1].toLowerCase();
+    const isRust = workspace.toLowerCase() === 'rook';
+    const usesVerifyInsteadOfTest = workspace.toLowerCase() === 'flowright';
+    const command = verb.startsWith('verify')
+      ? 'npm run verify'
+      : verb.startsWith('lint')
+        ? 'npm run lint'
+        : verb.startsWith('test')
+          ? (isRust ? 'cargo test' : (usesVerifyInsteadOfTest ? 'npm run verify' : 'npm test'))
+          : (isRust ? 'cargo check' : 'npm run build');
+    return { workspace, command };
+  }
+  return null;
+}
