@@ -192,33 +192,6 @@ const App: React.FC = () => {
   const handleSend = async (text: string) => {
     const normalizedQuery = text.toLowerCase();
     
-    // Command execution interceptor — proposes only. Nothing runs until the
-    // user clicks Approve on the resulting card; see handleApproveAction.
-    const execRegex = /(?:run|execute|exec)\s+(npm run \w+|npm test|cargo \w+|git diff|git status)\s+in\s+([\w-]+)/i;
-    const execMatch = text.match(execRegex);
-    if (execMatch) {
-      const command = execMatch[1].trim();
-      const workspace = execMatch[2].trim();
-      const procId = Math.random().toString(36).substr(2, 9);
-
-      addMessage({ role: 'user', content: text });
-      addMessage({
-        role: 'assistant',
-        content: `I can run "${command}" in ${workspace}. Nothing runs until you approve it.`,
-        uiComponent: { type: 'ProposedAction', data: { workspaceName: workspace, command, procId } }
-      });
-
-      setPreviewFeed(prev => [
-        ...prev,
-        {
-          id: procId,
-          type: 'ProposedAction',
-          data: { workspaceName: workspace, command },
-          timestamp: new Date().toLocaleTimeString()
-        }
-      ]);
-      return;
-    }
     if (normalizedQuery.includes('workspace')) {
       setJourneyStep(prev => Math.max(prev, 2));
     } else if (normalizedQuery.includes('git status') || normalizedQuery.includes('activity')) {

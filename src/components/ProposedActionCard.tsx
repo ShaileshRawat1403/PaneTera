@@ -250,7 +250,7 @@ export const ProposedActionCard: React.FC<ProposedActionCardProps> = ({
 
       {isDryRun && (
         <Typography variant="caption" sx={{ color: '#a78bfa', display: 'block', mt: 1, mb: 1.5, fontSize: '0.7rem' }}>
-          💡 Dry-run mode: this will simulate the execution and show preview logs.
+          Dry-run mode: this will simulate the execution and show preview logs.
         </Typography>
       )}
 
