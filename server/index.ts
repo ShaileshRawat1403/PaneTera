@@ -8,6 +8,7 @@ import readline from 'readline';
 import { readFileSafe, listWorkspaces, listFilesInWorkspace, searchFilesInWorkspace } from './workspaceReader';
 import { executeCommand, type ExecutionMode, validateCommand, buildProposedActionData, parseLocalCommandProposal, selectedExecutionMode } from './execution';
 import { buildRepoSetupProposal } from './repoSetup';
+import { parseLiveAppIntent, buildLiveAppWorkbench } from './liveApp';
 
 dotenv.config();
 
@@ -1125,6 +1126,19 @@ async function resolveQueryLocally(query: string): Promise<{ reply: string; uiCo
       uiComponent: {
         type: 'RepoSetupProposal',
         data: setupProposal
+      }
+    };
+  }
+
+  // 0.5. Live App Workbench check
+  const liveAppIntent = parseLiveAppIntent(query);
+  if (liveAppIntent) {
+    const data = await buildLiveAppWorkbench(liveAppIntent.appName);
+    return {
+      reply: 'I prepared a Soothsayer live app workbench preview. Manifest truth is shown only if the app exposes /api/portal-manifest.',
+      uiComponent: {
+        type: 'LiveAppWorkbench',
+        data
       }
     };
   }

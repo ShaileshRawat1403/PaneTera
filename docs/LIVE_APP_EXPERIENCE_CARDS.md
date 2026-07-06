@@ -1,13 +1,13 @@
 # Live Deployed App Experience Cards (Direction & Architecture)
 
 **Version**: 0.1.0  
-**Status**: Proposal / Specification (Phase 1: Docs Only)  
+**Status**: Phase 2 Active POC (Live App Workbench Preview)  
 
 ---
 
 ## 1. Purpose
 
-MYAI Portal should eventually support **Live Deployed App Experience Cards** to turn configured, live running applications into real-time interactive workbench views. The portal will act as the single door for operators to inspect, understand, and safely operate deployed instances of applications through governed interface cards.
+MYAI Portal supports **Live Deployed App Experience Cards** to turn configured, live running applications into real-time interactive workbench views. The portal acts as the single door for operators to inspect, understand, and safely operate deployed instances of applications through governed interface cards.
 
 **Soothsayer** (the Sans Serif Systems workflow runtime and host) serves as the primary candidate and reference model for this integration.
 
@@ -71,9 +71,9 @@ The target application should expose a read-only payload structure at `/api/port
 
 ## 5. Phased Roadmap
 
-- **Phase 1: Specification & Direction (Current)**: Lock the design contract and manifest formats in documentation (codebase remains untouched).
-- **Phase 2: LiveAppPreview Card**: Introduce the UI component layout in the portal client to render static/mock URLs.
-- **Phase 3: Manifest Adapter**: Write the server-side client to query `GET /api/portal-manifest` from a live target and validate it.
+- **Phase 1: Specification & Direction**: Lock the design contract and manifest formats in documentation (Completed).
+- **Phase 2: LiveAppPreview / LiveAppWorkbench Card (Current)**: Introduce the UI component layout and intent parser to preview the live application status and query parameters (Completed).
+- **Phase 3: Manifest Adapter**: Write the server-side client to query `GET /api/portal-manifest` from a live target and validate it (Lightweight fetch parser implemented).
 - **Phase 4: Persona Lenses**: Map the verified manifest telemetry to the five active persona views in the UI.
 - **Phase 5: Governed Actions**: Propose execution commands (e.g. restart service, run migrations) using the existing approval gate mechanism, routing them strictly through the allowlist.
 
@@ -95,3 +95,13 @@ The target application should expose a read-only payload structure at `/api/port
 - If the endpoint `/api/portal-manifest` is missing or fails, the card must show a degraded notice.
 - Changing a persona lens affects only the presentation layer. It must never change backend security tokens, permissions, or access controls.
 - Any action that attempts to change the application state must be wrapped in a `ProposedAction` and require manual operator validation.
+
+---
+
+## 8. Soothsayer Live App Workbench POC Status
+
+- **Status**: Implemented. The local fallback resolver handles queries like `inspect soothsayer` or `soothsayer status` and returns a `LiveAppWorkbench` preview-only card.
+- **Configuration**: Exposes target app endpoint via `SOOTHSAYER_LIVE_URL` env variable.
+- **Manifest Fetch**: Implemented as a lightweight HTTP fetch client targeting `${SOOTHSAYER_LIVE_URL}/api/portal-manifest`.
+- **Chrome Observation**: Mocked as `future` status in the card telemetry (observation extensions code remain out-of-scope for runtime build).
+

@@ -17,6 +17,7 @@ export type { FeedItem } from '../../shared/uiComponent';
 import type { FeedItem } from '../../shared/uiComponent';
 import { ProposedActionCard } from './ProposedActionCard';
 import { RepoSetupProposalCard } from './RepoSetupProposalCard';
+import { LiveAppWorkbenchCard } from './LiveAppWorkbenchCard';
 import { ContentWorkflowCard } from './ContentWorkflowCard';
 
 interface PreviewProps {
@@ -1116,6 +1117,14 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
 
                 {item.type === 'WorkflowsList' && (
                   <WorkflowsFeedCard data={item.data} />
+                )}
+
+                {item.type === 'LiveAppWorkbench' && (
+                  <LiveAppWorkbenchCard
+                    variant="chat"
+                    data={item.data}
+                    onCancel={() => onRemoveItem(item.id)}
+                  />
                 )}
 
                 {item.type === 'RepoSetupProposal' && (

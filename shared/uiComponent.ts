@@ -18,6 +18,7 @@ export const UI_COMPONENT_TYPES = [
   'WorkflowsList',
   'ProposedAction',
   'RepoSetupProposal',
+  'LiveAppWorkbench',
   'ContentWorkflow',
   'ExecutionLogs',
   'GitHistory',
