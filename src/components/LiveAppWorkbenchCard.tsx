@@ -17,7 +17,8 @@ export const LiveAppWorkbenchCard: React.FC<LiveAppWorkbenchCardProps> = ({
     appName,
     url,
     configured,
-    reachable,
+    urlReachable,
+    manifestReachable,
     manifestAvailable,
     manifestUrl,
     environment,
@@ -110,9 +111,16 @@ export const LiveAppWorkbenchCard: React.FC<LiveAppWorkbenchCardProps> = ({
           sx={{ height: 20, fontSize: '0.7rem' }}
         />
         <Chip
-          label={reachable === null ? 'Reachable: Unchecked' : reachable ? 'Reachable' : 'Unreachable'}
+          label={urlReachable === null ? 'URL: Unchecked' : urlReachable ? 'URL Reachable' : 'URL Unreachable'}
           size="small"
-          color={reachable === null ? 'default' : reachable ? 'success' : 'error'}
+          color={urlReachable === null ? 'default' : urlReachable ? 'success' : 'error'}
+          variant="outlined"
+          sx={{ height: 20, fontSize: '0.7rem' }}
+        />
+        <Chip
+          label={manifestReachable === null ? 'Manifest: Unchecked' : manifestReachable ? 'Manifest Reachable' : 'Manifest Unreachable'}
+          size="small"
+          color={manifestReachable === null ? 'default' : manifestReachable ? 'success' : 'error'}
           variant="outlined"
           sx={{ height: 20, fontSize: '0.7rem' }}
         />

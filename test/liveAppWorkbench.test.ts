@@ -48,26 +48,35 @@ async function runAsyncTests() {
   // 3. Configured tests with Mock Fetch
   const originalFetch = globalThis.fetch;
 
-  // Mock fetch to simulate successful manifest endpoint
+  // Mock fetch to handle base URL and manifest URL fetches
   globalThis.fetch = async (url: string | URL | Request) => {
-    assert.strictEqual(String(url), 'http://127.0.0.1:3101/api/portal-manifest');
-    return {
-      ok: true,
-      json: async () => ({
-        environment: 'staging',
-        version: '1.4.2-beta',
-        routes: ['GET /api/workflows', 'POST /api/workflows/run'],
-        features: ['flowright-runtime', 'dynamic-console'],
-        workflows: ['CMS Publish Workflow'],
-        health: { status: 'healthy', dbConnected: true },
-      }),
-    } as unknown as Response;
+    const urlStr = String(url);
+    if (urlStr === 'http://127.0.0.1:3101') {
+      return {
+        ok: true,
+      } as unknown as Response;
+    }
+    if (urlStr === 'http://127.0.0.1:3101/api/portal-manifest') {
+      return {
+        ok: true,
+        json: async () => ({
+          environment: 'staging',
+          version: '1.4.2-beta',
+          routes: ['GET /api/workflows', 'POST /api/workflows/run'],
+          features: ['flowright-runtime', 'dynamic-console'],
+          workflows: ['CMS Publish Workflow'],
+          health: { status: 'healthy', dbConnected: true },
+        }),
+      } as unknown as Response;
+    }
+    throw new Error(`Unexpected fetch URL: ${urlStr}`);
   };
 
   try {
     const proposal = await buildLiveAppWorkbench('soothsayer', 'http://127.0.0.1:3101/');
     assert.strictEqual(proposal.configured, true, 'Should be configured: true');
-    assert.strictEqual(proposal.reachable, true, 'Should be reachable: true');
+    assert.strictEqual(proposal.urlReachable, true, 'urlReachable should be true');
+    assert.strictEqual(proposal.manifestReachable, true, 'manifestReachable should be true');
     assert.strictEqual(proposal.manifestAvailable, true, 'Should be manifestAvailable: true');
     assert.strictEqual(proposal.environment, 'staging');
     assert.strictEqual(proposal.version, '1.4.2-beta');
@@ -77,7 +86,6 @@ async function runAsyncTests() {
     assert.ok(proposal.health && proposal.health.status === 'healthy');
     assert.strictEqual(proposal.previewOnly, true);
   } finally {
-    // Restore fetch
     globalThis.fetch = originalFetch;
   }
 
@@ -89,7 +97,8 @@ async function runAsyncTests() {
   try {
     const failedProposal = await buildLiveAppWorkbench('soothsayer', 'http://127.0.0.1:9999');
     assert.strictEqual(failedProposal.configured, true);
-    assert.strictEqual(failedProposal.reachable, false);
+    assert.strictEqual(failedProposal.urlReachable, false);
+    assert.strictEqual(failedProposal.manifestReachable, false);
     assert.strictEqual(failedProposal.manifestAvailable, false);
     assert.ok(
       failedProposal.warnings.some((w) => w.includes('Failed to reach manifest endpoint')),

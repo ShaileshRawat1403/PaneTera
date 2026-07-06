@@ -3,8 +3,6 @@
 // Core processor for Live Deployed App Experience Cards (Soothsayer POC).
 // Strictly preview-only and read-only. Does not support mutation or scraping.
 
-import type { ExecutionMode } from './execution/types';
-
 export type LiveAppTruthSource =
   | 'manifest'
   | 'url-preview'
@@ -15,7 +13,8 @@ export interface LiveAppWorkbenchData {
   appName: string;
   url: string | null;
   configured: boolean;
-  reachable: boolean | null;
+  urlReachable: boolean | null;
+  manifestReachable: boolean | null;
   manifestAvailable: boolean;
   manifestUrl: string | null;
   environment: string | null;
@@ -108,7 +107,8 @@ export async function buildLiveAppWorkbench(
       appName: 'Soothsayer',
       url: null,
       configured: false,
-      reachable: null,
+      urlReachable: null,
+      manifestReachable: null,
       manifestAvailable: false,
       manifestUrl: null,
       environment: null,
@@ -136,7 +136,8 @@ export async function buildLiveAppWorkbench(
 
   const manifestUrl = `${baseUrl}/api/portal-manifest`;
 
-  let reachable = false;
+  let urlReachable = false;
+  let manifestReachable = false;
   let manifestAvailable = false;
   let environment: string | null = null;
   let version: string | null = null;
@@ -145,17 +146,34 @@ export async function buildLiveAppWorkbench(
   let workflows: Array<{ id: string; label: string; status?: string }> = [];
   let health: Record<string, unknown> | null = null;
 
+  // 1. Base URL Reachability check
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 2000);
+    await fetch(baseUrl, {
+      signal: controller.signal,
+      method: 'GET', // Use GET in case HEAD is blocked/unsupported by edge
+    });
+    clearTimeout(timeoutId);
+    urlReachable = true;
+  } catch (e: any) {
+    // If it threw connection refused / timeout, it is unreachable.
+    // If it returned 401/403/etc, fetch resolves successfully (doesn't throw), so urlReachable becomes true.
+    urlReachable = false;
+    warnings.push(`Base URL reachability check failed: ${e.message}`);
+  }
 
+  // 2. Manifest Endpoint reachability check
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2000);
     const resp = await fetch(manifestUrl, {
       signal: controller.signal,
       headers: { Accept: 'application/json' },
     });
     clearTimeout(timeoutId);
 
-    reachable = true;
+    manifestReachable = true;
     if (resp.ok) {
       const body = (await resp.json()) as any;
       if (body && typeof body === 'object') {
@@ -188,10 +206,10 @@ export async function buildLiveAppWorkbench(
         warnings.push('Manifest endpoint returned invalid JSON structure.');
       }
     } else {
-      warnings.push(`Manifest fetch failed with HTTP status ${resp.status}`);
+      warnings.push(`Manifest fetch returned HTTP status ${resp.status}`);
     }
   } catch (e: any) {
-    reachable = false;
+    manifestReachable = false;
     warnings.push(`Failed to reach manifest endpoint: ${e.message}`);
   }
 
@@ -211,15 +229,15 @@ export async function buildLiveAppWorkbench(
     },
     {
       source: 'url-preview',
-      status: reachable ? 'available' : 'unavailable',
-      note: reachable ? 'Live app server is reachable.' : 'Live app server is unreachable.',
+      status: urlReachable ? 'available' : 'unavailable',
+      note: urlReachable ? 'Live app server is reachable.' : 'Live app server is unreachable.',
     },
     {
       source: 'manifest',
-      status: manifestAvailable ? 'available' : 'unavailable',
+      status: manifestAvailable ? 'available' : (manifestReachable ? 'unverified' : 'unavailable'),
       note: manifestAvailable
         ? 'Successfully parsed app-native /api/portal-manifest.'
-        : 'App-native portal-manifest is missing or returned errors.',
+        : (manifestReachable ? 'Manifest endpoint returned error or authentication challenge.' : 'App-native portal-manifest is unreachable.'),
     },
     {
       source: 'browser-observation',
@@ -232,7 +250,8 @@ export async function buildLiveAppWorkbench(
     appName: 'Soothsayer',
     url: baseUrl,
     configured: true,
-    reachable,
+    urlReachable,
+    manifestReachable,
     manifestAvailable,
     manifestUrl,
     environment,
