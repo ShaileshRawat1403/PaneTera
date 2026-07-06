@@ -7,6 +7,7 @@ import { exec, spawn, spawn as spawnProc, ChildProcess as CP } from 'child_proce
 import readline from 'readline';
 import { readFileSafe, listWorkspaces, listFilesInWorkspace, searchFilesInWorkspace } from './workspaceReader';
 import { executeCommand, type ExecutionMode, validateCommand, buildProposedActionData, parseLocalCommandProposal, selectedExecutionMode } from './execution';
+import { buildRepoSetupProposal } from './repoSetup';
 
 dotenv.config();
 
@@ -1115,6 +1116,18 @@ async function askOllama(query: string): Promise<{ reply: string; uiComponent?: 
 // Local deterministic parsing logic (acts as direct command backup)
 async function resolveQueryLocally(query: string): Promise<{ reply: string; uiComponent?: any }> {
   const q = query.toLowerCase().trim();
+
+  // 0. Repo Setup Proposal Intent check
+  const setupProposal = await buildRepoSetupProposal(query);
+  if (setupProposal) {
+    return {
+      reply: `[LOCAL FALLBACK ENGINE] I found a repo setup proposal. Review it before adding it to the portal.`,
+      uiComponent: {
+        type: 'RepoSetupProposal',
+        data: setupProposal
+      }
+    };
+  }
 
   // 1. Workspaces / Journey
   if (q.includes('workspace') || q.includes('journey')) {

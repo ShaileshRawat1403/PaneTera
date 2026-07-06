@@ -7,6 +7,7 @@ import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
 import SearchIcon from '@mui/icons-material/Search';
 import CodeIcon from '@mui/icons-material/Code';
 import { ProposedActionCard } from './ProposedActionCard';
+import { RepoSetupProposalCard } from './RepoSetupProposalCard';
 
 interface ComponentProps {
   uiComponent: UiComponent;
@@ -20,6 +21,25 @@ export const InteractiveComponent: React.FC<ComponentProps> = ({ uiComponent, on
   // Local only — the message log itself stays append-only/immutable, so
   // "did I already act on this" lives here rather than mutating history.
   const [resolution, setResolution] = useState<'pending' | 'approved' | 'cancelled'>('pending');
+
+  if (type === 'RepoSetupProposal' && data) {
+    if (resolution === 'cancelled') {
+      return (
+        <Box sx={{ mt: 2, mb: 1, p: 1.5, borderRadius: 2, background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.2)' }}>
+          <Typography variant="body2" sx={{ color: '#ef4444', fontWeight: 600 }}>
+            Proposal rejected.
+          </Typography>
+        </Box>
+      );
+    }
+    return (
+      <RepoSetupProposalCard
+        variant="chat"
+        data={data}
+        onCancel={() => setResolution('cancelled')}
+      />
+    );
+  }
 
   if (type === 'ProposedAction' && data) {
     const { workspaceName, command, procId, reason } = data;

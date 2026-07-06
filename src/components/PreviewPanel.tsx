@@ -16,6 +16,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 export type { FeedItem } from '../../shared/uiComponent';
 import type { FeedItem } from '../../shared/uiComponent';
 import { ProposedActionCard } from './ProposedActionCard';
+import { RepoSetupProposalCard } from './RepoSetupProposalCard';
 import { ContentWorkflowCard } from './ContentWorkflowCard';
 
 interface PreviewProps {
@@ -1115,6 +1116,14 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
 
                 {item.type === 'WorkflowsList' && (
                   <WorkflowsFeedCard data={item.data} />
+                )}
+
+                {item.type === 'RepoSetupProposal' && (
+                  <RepoSetupProposalCard
+                    variant="chat"
+                    data={item.data}
+                    onCancel={() => onRemoveItem(item.id)}
+                  />
                 )}
 
                 {item.type === 'ProposedAction' && (
