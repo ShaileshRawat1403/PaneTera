@@ -31,6 +31,23 @@ export interface LiveAppWorkbenchData {
   personaLenses: Array<'engineer' | 'pm' | 'ba' | 'qa' | 'exec'>;
   warnings: string[];
   previewOnly: true;
+  workbench?: {
+    views: Array<{
+      id: string;
+      type: string;
+      label: string;
+      status: 'template' | 'no-active-run' | 'awaiting-review' | 'available';
+      deepLink?: string;
+      data: {
+        title?: string;
+        subtitle?: string;
+        sections?: Array<{ title: string; body: string }>;
+        takeaways?: string[];
+        reviewState?: string;
+        evidenceSummary?: string;
+      };
+    }>;
+  };
 }
 
 /**
@@ -145,6 +162,7 @@ export async function buildLiveAppWorkbench(
   let features: Array<{ id: string; label: string; status?: string }> = [];
   let workflows: Array<{ id: string; label: string; status?: string }> = [];
   let health: Record<string, unknown> | null = null;
+  let workbench: any = null;
 
   // 1. Base URL Reachability check
   try {
@@ -201,6 +219,9 @@ export async function buildLiveAppWorkbench(
         }
         if (body.health && typeof body.health === 'object') {
           health = body.health;
+        }
+        if (body.workbench && typeof body.workbench === 'object') {
+          workbench = body.workbench;
         }
       } else {
         warnings.push('Manifest endpoint returned invalid JSON structure.');
@@ -264,5 +285,6 @@ export async function buildLiveAppWorkbench(
     personaLenses,
     warnings,
     previewOnly: true,
+    workbench,
   };
 }

@@ -8,7 +8,10 @@ import CodeIcon from '@mui/icons-material/Code';
 import { ProposedActionCard } from './ProposedActionCard';
 import { RepoSetupProposalCard } from './RepoSetupProposalCard';
 import { LiveAppWorkbenchCard } from './LiveAppWorkbenchCard';
-
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import InfoIcon from '@mui/icons-material/Info';
+import LaptopMacIcon from '@mui/icons-material/LaptopMac';
 interface ComponentProps {
   uiComponent: UiComponent;
   onAction: (query: string) => void;
@@ -475,6 +478,308 @@ export const InteractiveComponent: React.FC<ComponentProps> = ({ uiComponent, on
             {busy ? 'Starting run...' : 'Start governed run'}
           </Button>
         </Stack>
+      </Paper>
+    );
+  }
+
+  if (type === 'SoothsayerWorkbench' && data) {
+    const { url, manifestAvailable, environment, version, routes, features, workflows, health, workbench } = data;
+    const view = workbench?.views?.[0] || {
+      id: 'contentops-draft-preview',
+      type: 'draft-preview',
+      label: 'Draft Preview',
+      status: 'template',
+      data: {
+        title: 'Pruning Pothos: Mistakes You Are Probably Making',
+        subtitle: 'A guided manual for plant longevity and structural shape optimization.',
+        sections: [],
+        takeaways: [],
+        reviewState: 'Awaiting Operator Approval',
+        evidenceSummary: 'None'
+      }
+    };
+    const draft = view.data || {};
+
+    const [showIframe, setShowIframe] = useState(false);
+
+    return (
+      <Paper
+        variant="outlined"
+        sx={{
+          background: 'rgba(20, 20, 25, 0.7)',
+          borderColor: 'rgba(255, 255, 255, 0.08)',
+          borderRadius: '16px',
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+          boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.37)',
+          backdropFilter: 'blur(8px)'
+        }}
+      >
+        {/* Main App Bar Header */}
+        <Box
+          sx={{
+            p: 2,
+            background: 'linear-gradient(90deg, rgba(127, 85, 240, 0.15) 0%, rgba(9, 9, 11, 0.8) 100%)',
+            borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between'
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <LaptopMacIcon color="primary" sx={{ fontSize: 20 }} />
+            <Typography variant="body1" sx={{ fontWeight: 800, color: '#f4f4f5', letterSpacing: '0.05em' }}>
+              SOOTHSAYER WORKBENCH
+            </Typography>
+            <Chip
+              label={manifestAvailable ? 'CONNECTED' : 'OFFLINE TEMPLATE'}
+              size="small"
+              sx={{
+                height: 18,
+                fontSize: '0.6rem',
+                fontWeight: 800,
+                background: manifestAvailable ? 'rgba(34, 197, 94, 0.08)' : 'rgba(239, 68, 68, 0.08)',
+                color: manifestAvailable ? '#22c55e' : '#ef4444',
+                border: manifestAvailable ? '1px solid rgba(34, 197, 94, 0.15)' : '1px solid rgba(239, 68, 68, 0.15)'
+              }}
+            />
+          </Box>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button
+              size="small"
+              variant="outlined"
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              endIcon={<OpenInNewIcon sx={{ fontSize: 10 }} />}
+              sx={{
+                borderColor: 'rgba(255,255,255,0.08)',
+                color: '#cbd5e1',
+                textTransform: 'none',
+                fontSize: '0.7rem',
+                borderRadius: '6px',
+                '&:hover': { borderColor: 'rgba(255,255,255,0.2)' }
+              }}
+            >
+              Open live Soothsayer
+            </Button>
+          </Box>
+        </Box>
+
+        {/* Workspace Body Split View */}
+        <Grid container sx={{ minHeight: 480 }}>
+          {/* Mini Left Sidebar: App Context & Features */}
+          <Grid
+            item
+            xs={12}
+            md={3.5}
+            sx={{
+              borderRight: '1px solid rgba(255, 255, 255, 0.06)',
+              background: 'rgba(0, 0, 0, 0.2)',
+              p: 2.5,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 2.5
+            }}
+          >
+            <Box>
+              <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, display: 'block', mb: 1, letterSpacing: '0.05em' }}>
+                WORKSPACE / CONTEXT
+              </Typography>
+              <Paper variant="outlined" sx={{ p: 1.5, background: 'rgba(0,0,0,0.15)', borderColor: 'rgba(255,255,255,0.04)' }}>
+                <Typography variant="caption" sx={{ color: '#a1a1aa', display: 'block', mb: 0.5 }}>
+                  Active environment: <strong>{environment || 'production'}</strong>
+                </Typography>
+                <Typography variant="caption" sx={{ color: '#a1a1aa', display: 'block', mb: 0.5 }}>
+                  Version: <strong>{version || '1.0.0'}</strong>
+                </Typography>
+                <Typography variant="caption" sx={{ color: '#a1a1aa', display: 'block' }}>
+                  Health check: <strong style={{ color: '#22c55e' }}>online</strong>
+                </Typography>
+              </Paper>
+            </Box>
+
+            <Box>
+              <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, display: 'block', mb: 1, letterSpacing: '0.05em' }}>
+                ACTIVE SERVICES
+              </Typography>
+              <Stack spacing={1}>
+                {features.map((f: any) => (
+                  <Box key={f.id} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 0.5 }}>
+                    <Typography variant="caption" sx={{ color: '#cbd5e1', fontWeight: 600 }}>{f.label}</Typography>
+                    <Chip label="ONLINE" size="small" sx={{ height: 14, fontSize: '0.5rem', background: 'rgba(34, 197, 94, 0.08)', color: '#22c55e' }} />
+                  </Box>
+                ))}
+              </Stack>
+            </Box>
+
+            <Box>
+              <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, display: 'block', mb: 1, letterSpacing: '0.05em' }}>
+                APP WORKFLOWS
+              </Typography>
+              <Stack spacing={1}>
+                {workflows.map((w: any) => (
+                  <Box key={w.id} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <FolderIcon sx={{ fontSize: 13, color: '#7f5af0' }} />
+                    <Typography variant="caption" sx={{ color: '#cbd5e1', fontWeight: 600 }}>{w.label}</Typography>
+                  </Box>
+                ))}
+              </Stack>
+            </Box>
+
+            <Box sx={{ mt: 'auto' }}>
+              <Button
+                size="small"
+                fullWidth
+                variant="outlined"
+                onClick={() => setShowIframe(!showIframe)}
+                sx={{
+                  textTransform: 'none',
+                  fontSize: '0.7rem',
+                  borderColor: showIframe ? '#7f5af0' : 'rgba(255,255,255,0.06)',
+                  color: showIframe ? '#b794f4' : '#71717a'
+                }}
+              >
+                {showIframe ? 'Hide embedded preview' : 'Show live preview iframe'}
+              </Button>
+            </Box>
+          </Grid>
+
+          {/* Middle Workbench Area: Content Draft Preview & Run details */}
+          <Grid item xs={12} md={8.5} sx={{ p: 3, display: 'flex', flexDirection: 'column' }}>
+            {showIframe ? (
+              <Box sx={{ width: '100%', height: '100%', minHeight: 450, borderRadius: '8px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)' }}>
+                <iframe
+                  src={url}
+                  title="Soothsayer Live Preview"
+                  sandbox="allow-scripts allow-same-origin allow-forms"
+                  style={{ width: '100%', height: '100%', minHeight: 450, border: 'none', background: '#09090b' }}
+                />
+              </Box>
+            ) : (
+              <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 3.5 }}>
+                {/* Active View Header */}
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Box>
+                    <Typography variant="caption" sx={{ color: '#7f5af0', fontWeight: 800, display: 'block', mb: 0.5, letterSpacing: '0.05em' }}>
+                      ACTIVE VIEW
+                    </Typography>
+                    <Typography variant="h6" sx={{ color: '#f4f4f5', fontWeight: 800 }}>
+                      {view.label}
+                    </Typography>
+                  </Box>
+                  <Chip
+                    label={view.status.toUpperCase()}
+                    size="small"
+                    sx={{
+                      height: 18,
+                      fontSize: '0.6rem',
+                      fontWeight: 800,
+                      background: 'rgba(245, 158, 11, 0.08)',
+                      color: '#f59e0b',
+                      border: '1px solid rgba(245, 158, 11, 0.15)'
+                    }}
+                  />
+                </Box>
+
+                {/* Draft Content preview pane */}
+                <Paper variant="outlined" sx={{ p: 2.5, background: 'rgba(255,255,255,0.01)', borderColor: 'rgba(255,255,255,0.05)', borderRadius: '12px' }}>
+                  <Typography variant="body1" sx={{ color: '#f4f4f5', fontWeight: 800, mb: 0.5 }}>
+                    {draft.title}
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: '#a0aec0', fontStyle: 'italic', mb: 2 }}>
+                    {draft.subtitle}
+                  </Typography>
+
+                  <Divider sx={{ my: 1.5, borderColor: 'rgba(255,255,255,0.04)' }} />
+
+                  <Stack spacing={2} sx={{ mt: 2 }}>
+                    {draft.sections && draft.sections.map((sec: any, sIdx: number) => (
+                      <Box key={sIdx}>
+                        <Typography variant="subtitle2" sx={{ color: '#b794f4', fontWeight: 700, mb: 0.5 }}>
+                          {sec.title}
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: '#cbd5e1', lineHeight: 1.6 }}>
+                          {sec.body}
+                        </Typography>
+                      </Box>
+                    ))}
+                  </Stack>
+
+                  {draft.takeaways && draft.takeaways.length > 0 && (
+                    <Box sx={{ mt: 3, pt: 2, borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+                      <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, display: 'block', mb: 1 }}>
+                        KEY TAKEAWAYS
+                      </Typography>
+                      <List dense sx={{ p: 0 }}>
+                        {draft.takeaways.map((take: string, tIdx: number) => (
+                          <ListItem key={tIdx} sx={{ p: 0, py: 0.25 }}>
+                            <ListItemIcon sx={{ minWidth: 20, color: '#22c55e' }}>
+                              <CheckCircleIcon sx={{ fontSize: 12 }} />
+                            </ListItemIcon>
+                            <ListItemText primary={take} primaryTypographyProps={{ sx: { fontSize: '0.78rem', color: '#cbd5e1' } }} />
+                          </ListItem>
+                        ))}
+                      </List>
+                    </Box>
+                  )}
+                </Paper>
+
+                {/* Review/Evidence status board */}
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, display: 'block', mb: 0.5 }}>
+                      REVIEW STATE
+                    </Typography>
+                    <Paper variant="outlined" sx={{ p: 1.5, background: 'rgba(245, 158, 11, 0.02)', borderColor: 'rgba(245, 158, 11, 0.08)', borderRadius: '8px' }}>
+                      <Typography variant="body2" sx={{ color: '#f59e0b', fontWeight: 700 }}>
+                        {draft.reviewState}
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, display: 'block', mb: 0.5 }}>
+                      INTELLIGENCE EVIDENCE
+                    </Typography>
+                    <Paper variant="outlined" sx={{ p: 1.5, background: 'rgba(34, 197, 94, 0.02)', borderColor: 'rgba(34, 197, 94, 0.08)', borderRadius: '8px' }}>
+                      <Typography variant="caption" sx={{ color: '#a0aec0', display: 'block', lineHeight: 1.4 }}>
+                        {draft.evidenceSummary}
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                </Grid>
+
+                {/* Actions footer */}
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 'auto', pt: 2, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                  <Typography variant="caption" sx={{ color: '#71717a', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <InfoIcon sx={{ fontSize: 12 }} /> Actions are disabled (Preview-only). Run must be triggered manually.
+                  </Typography>
+                  <Box sx={{ display: 'flex', gap: 1 }}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      disabled
+                      sx={{ textTransform: 'none', borderRadius: '6px', color: '#71717a', borderColor: 'rgba(255,255,255,0.04)' }}
+                    >
+                      Start governed run
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="contained"
+                      href={view.deepLink || url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      sx={{ background: '#7f5af0', textTransform: 'none', fontWeight: 700, borderRadius: '6px', '&:hover': { background: '#6d47dd' } }}
+                    >
+                      View run in Soothsayer
+                    </Button>
+                  </Box>
+                </Box>
+              </Box>
+            )}
+          </Grid>
+        </Grid>
       </Paper>
     );
   }

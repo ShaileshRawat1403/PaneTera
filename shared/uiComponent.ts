@@ -25,6 +25,7 @@ export const UI_COMPONENT_TYPES = [
   'DesktopApps',
   'MemoryRecall',
   'ContentOpsStarter',
+  'SoothsayerWorkbench',
 ] as const;
 
 export type UiComponentType = (typeof UI_COMPONENT_TYPES)[number];

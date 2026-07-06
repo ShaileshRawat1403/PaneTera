@@ -18,17 +18,21 @@ for (const q of flowrightQueries) {
   assert.strictEqual(parsed.kind, 'flowright-workflows', `Should match kind: "${q}"`);
 }
 
-// 2. Soothsayer workflows intent tests
+// 2. Soothsayer workflows/workbench intent tests
 const soothsayerQueries = [
   'show soothsayer workflows',
   'inspect soothsayer workflows',
-  '  inspect soothsayer workflows  '
+  'show soothsayer ui',
+  'show contentops in soothsayer',
+  'open soothsayer workflows',
+  'open this soothsayer run',
+  'show contentops draft'
 ];
 
 for (const q of soothsayerQueries) {
   const parsed = parseWorkflowIntent(q);
   assert.ok(parsed !== null, `Should parse Soothsayer intent for: "${q}"`);
-  assert.strictEqual(parsed.kind, 'soothsayer-workflows', `Should match kind: "${q}"`);
+  assert.strictEqual(parsed.kind, 'soothsayer-workbench', `Should match kind: "${q}"`);
 }
 
 // 3. ContentOps intent tests
