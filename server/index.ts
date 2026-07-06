@@ -1114,11 +1114,11 @@ async function askOllama(query: string): Promise<{ reply: string; uiComponent?: 
   };
 }
 
-// Local deterministic parsing logic (acts as direct command backup)
-async function resolveQueryLocally(query: string): Promise<{ reply: string; uiComponent?: any }> {
+// Strict local workbench intents must resolve before any LLM path. These are
+// native UI cards, not model answers, so the model should not reinterpret them.
+async function resolveGatewayCardLocally(query: string): Promise<{ reply: string; uiComponent?: any } | null> {
   const q = query.toLowerCase().trim();
 
-  // 0. Repo Setup Proposal Intent check
   const setupProposal = await buildRepoSetupProposal(query);
   if (setupProposal) {
     return {
@@ -1130,7 +1130,6 @@ async function resolveQueryLocally(query: string): Promise<{ reply: string; uiCo
     };
   }
 
-  // 0.5. Live App Workbench check
   const liveAppIntent = parseLiveAppIntent(query);
   if (liveAppIntent) {
     const data = await buildLiveAppWorkbench(liveAppIntent.appName);
@@ -1141,6 +1140,37 @@ async function resolveQueryLocally(query: string): Promise<{ reply: string; uiCo
         data
       }
     };
+  }
+
+  if (q === 'list workspaces' || q === 'show connected systems' || q === 'connected systems') {
+    const workspaces = await listWorkspaces();
+    return {
+      reply: `[LOCAL FALLBACK ENGINE] Active registered workspaces loaded. Choose a directory inside the stream panel to begin.`,
+      uiComponent: { type: 'WorkspaceList', data: workspaces }
+    };
+  }
+
+  const proposal = parseLocalCommandProposal(query);
+  if (proposal) {
+    const { workspace, command } = proposal;
+    return {
+      reply: `[LOCAL FALLBACK ENGINE] I can run "${command}" in workspace "${workspace}". Nothing runs until you approve it below.`,
+      uiComponent: {
+        type: 'ProposedAction',
+        data: buildProposedActionData(workspace, command, `Requested via: "${query}"`)
+      }
+    };
+  }
+
+  return null;
+}
+
+// Local deterministic parsing logic (acts as direct command backup)
+async function resolveQueryLocally(query: string): Promise<{ reply: string; uiComponent?: any }> {
+  const q = query.toLowerCase().trim();
+  const gatewayCard = await resolveGatewayCardLocally(query);
+  if (gatewayCard) {
+    return gatewayCard;
   }
 
   // 1. Workspaces / Journey
@@ -1312,6 +1342,19 @@ app.post('/api/chat', async (req, res) => {
   const { query, history } = req.body as { query: string; history?: any[] };
   if (!query) {
     return res.status(400).json({ error: 'query missing' });
+  }
+
+  // Native workbench cards are local UI truth. Resolve them before provider
+  // calls so the model cannot swallow card intents such as "inspect soothsayer"
+  // or reinterpret them as ordinary workspace questions.
+  try {
+    const gatewayCard = await resolveGatewayCardLocally(query);
+    if (gatewayCard) {
+      return res.json(gatewayCard);
+    }
+  } catch (gatewayErr: any) {
+    console.error('[Error in local gateway resolver]:', gatewayErr);
+    return res.status(500).json({ error: gatewayErr.message || 'Error processing gateway card.' });
   }
 
   // Inject recalled memory context into the query before calling any LLM

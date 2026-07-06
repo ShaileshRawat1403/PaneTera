@@ -833,6 +833,7 @@ const App: React.FC = () => {
             flexGrow: 1,
             height: '100%',
             width: '100%',
+            minWidth: 0,
             filter: showTokenPrompt ? 'blur(2px)' : 'none',
             opacity: showTokenPrompt ? 0.45 : 1,
             pointerEvents: showTokenPrompt ? 'none' : 'auto',
@@ -845,7 +846,7 @@ const App: React.FC = () => {
               width: 280,
               minWidth: 280,
               borderRight: '1px solid rgba(255,255,255,0.08)',
-              display: 'flex',
+              display: { xs: 'none', md: 'flex' },
               flexDirection: 'column',
               background: 'rgba(9, 9, 11, 0.4)',
               p: 2.5,
@@ -1040,7 +1041,7 @@ const App: React.FC = () => {
           </Box>
 
           {/* ZONE 2 + ZONE 3: Main Dashboard Content Area */}
-          <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+          <Box sx={{ flexGrow: 1, minWidth: 0, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
             
             {/* Top Command Bar */}
             <Box
@@ -1051,11 +1052,12 @@ const App: React.FC = () => {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                px: 3,
+                gap: 2,
+                px: { xs: 2, md: 3 },
                 background: 'rgba(9, 9, 11, 0.2)'
               }}
             >
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0 }}>
                 <Typography variant="body2" sx={{ fontWeight: 800, color: '#f4f4f5', letterSpacing: '-0.01em' }}>
                   MyAI Portal
                 </Typography>
@@ -1065,7 +1067,7 @@ const App: React.FC = () => {
                 </Typography>
               </Box>
 
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1, md: 2 }, flexShrink: 0 }}>
                 {/* Search box trigger */}
                 <Chip 
                   label="Cmd+K for commands" 
@@ -1096,12 +1098,13 @@ const App: React.FC = () => {
             </Box>
 
             {/* Split layout containing Main Workbench + Right Inspector Feed */}
-            <Box sx={{ flexGrow: 1, display: 'flex', overflow: 'hidden' }}>
+            <Box sx={{ flexGrow: 1, minWidth: 0, display: 'flex', overflow: 'hidden' }}>
               
               {/* ZONE 2: Middle Main Workbench */}
               <Box
                 sx={{
                   flex: 1,
+                  minWidth: 0,
                   display: 'flex',
                   flexDirection: 'column',
                   height: '100%',
@@ -1353,7 +1356,7 @@ const App: React.FC = () => {
                 sx={{
                   width: 380,
                   minWidth: 380,
-                  display: 'flex',
+                  display: { xs: 'none', lg: 'flex' },
                   flexDirection: 'column',
                   height: '100%',
                   background: 'rgba(9, 9, 11, 0.15)'
