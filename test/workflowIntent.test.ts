@@ -1,4 +1,5 @@
 // test/workflowIntent.test.ts
+process.env.NODE_ENV = 'test';
 import assert from 'assert';
 import { parseWorkflowIntent } from '../server/workflowIntents';
 

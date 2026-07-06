@@ -48,6 +48,9 @@ export interface LiveAppWorkbenchData {
       };
     }>;
   };
+  workbenchReachable?: boolean;
+  workbenchAvailable?: boolean;
+  workbenchSource?: 'app-native-api' | 'fallback' | null;
 }
 
 /**
@@ -222,9 +225,6 @@ export async function buildLiveAppWorkbench(
         if (body.health && typeof body.health === 'object') {
           health = body.health;
         }
-        if (body.workbench && typeof body.workbench === 'object') {
-          workbench = body.workbench;
-        }
       } else {
         warnings.push('Manifest endpoint returned invalid JSON structure.');
       }
@@ -234,6 +234,39 @@ export async function buildLiveAppWorkbench(
   } catch (e: any) {
     manifestReachable = false;
     warnings.push(`Failed to reach manifest endpoint: ${e.message}`);
+  }
+
+  // 3. Dynamic Workbench Endpoint reachability check
+  let workbenchReachable = false;
+  let workbenchAvailable = false;
+  let workbenchSource: 'app-native-api' | 'fallback' | null = null;
+  const workbenchUrl = `${baseUrl}/api/portal-workbench`;
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2000);
+    const resp = await fetch(workbenchUrl, {
+      signal: controller.signal,
+      headers: { Accept: 'application/json' },
+    });
+    clearTimeout(timeoutId);
+
+    workbenchReachable = true;
+    if (resp.ok) {
+      const body = (await resp.json()) as any;
+      if (body && typeof body === 'object') {
+        workbenchAvailable = true;
+        workbenchSource = 'app-native-api';
+        workbench = body;
+      } else {
+        warnings.push('Workbench endpoint returned invalid JSON structure.');
+      }
+    } else {
+      warnings.push(`Workbench fetch returned HTTP status ${resp.status}`);
+    }
+  } catch (e: any) {
+    workbenchReachable = false;
+    warnings.push(`Failed to reach workbench endpoint: ${e.message}`);
   }
 
   if (!manifestAvailable) {
@@ -288,5 +321,8 @@ export async function buildLiveAppWorkbench(
     warnings,
     previewOnly: true,
     workbench,
+    workbenchReachable,
+    workbenchAvailable,
+    workbenchSource,
   };
 }

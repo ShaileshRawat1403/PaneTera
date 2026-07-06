@@ -1117,7 +1117,7 @@ async function askOllama(query: string): Promise<{ reply: string; uiComponent?: 
 
 // Strict local workbench intents must resolve before any LLM path. These are
 // native UI cards, not model answers, so the model should not reinterpret them.
-async function resolveGatewayCardLocally(query: string): Promise<{ reply: string; uiComponent?: any } | null> {
+export async function resolveGatewayCardLocally(query: string): Promise<{ reply: string; uiComponent?: any } | null> {
   const q = query.toLowerCase().trim();
 
   // Route workflow intents before provider chat
@@ -1226,7 +1226,9 @@ async function resolveGatewayCardLocally(query: string): Promise<{ reply: string
               workflows: data.workflows,
               health: data.health,
               workbench: data.workbench || null,
+              workbenchReachable: data.workbenchReachable,
               workbenchAvailable: hasWorkbench,
+              workbenchSource: data.workbenchSource,
             }
           }
         };
@@ -1250,7 +1252,9 @@ async function resolveGatewayCardLocally(query: string): Promise<{ reply: string
               ],
               workflows: [],
               workbench: null,
+              workbenchReachable: false,
               workbenchAvailable: false,
+              workbenchSource: 'fallback',
               workbenchError: err.message || 'Soothsayer manifest unreachable',
             }
           }
@@ -1259,32 +1263,64 @@ async function resolveGatewayCardLocally(query: string): Promise<{ reply: string
     }
 
     if (workflowIntent.kind === 'contentops-draft') {
-      let siteGoal = 'Publish new article or plant care update.';
-      if (q.includes('mistake')) {
-        siteGoal = 'Keep the plant advice high quality';
-      }
-
-      return {
-        reply: `I opened the governed ContentOps workbench slot with your brief. Fill in the remaining fields and click "Start governed run" to execute.`,
-        uiComponent: {
-          type: 'ContentOpsStarter',
-          data: {
-            siteGoal,
-            targetPages: '',
-            contentBrief: workflowIntent.contentBrief || '',
-            publishConstraints: 'No autonomous publishing. Operator must approve before CMS or deploy handoff.',
-            schemaSource: 'local template',
-            schema: {
-              workflowId: 'websiteops.website_content_publish.v0',
-              inputs: [
-                { name: 'siteGoal', label: 'Site Goal', type: 'string', required: true, description: 'The overarching purpose of the content updates' },
-                { name: 'targetPages', label: 'Target Pages', type: 'string', required: true, description: 'Comma-separated target page names' },
-                { name: 'contentBrief', label: 'Content Brief', type: 'string', required: true, description: 'Detailed topic brief for the drafts' }
-              ]
+      try {
+        const data = await buildLiveAppWorkbench('soothsayer');
+        const hasWorkbench = Boolean(data.workbench?.views?.length);
+        return {
+          reply: `I opened the Soothsayer app-native workbench with the topic pre-filled. You can review the schema inputs and propose a governed run.`,
+          uiComponent: {
+            type: 'SoothsayerWorkbench',
+            data: {
+              app: 'soothsayer',
+              url: data.url || 'https://ops-soothsayer-web-production.up.railway.app',
+              manifestAvailable: data.manifestAvailable,
+              environment: data.environment,
+              version: data.version,
+              routes: data.routes,
+              features: data.features,
+              workflows: data.workflows,
+              health: data.health,
+              workbench: data.workbench || null,
+              workbenchReachable: data.workbenchReachable,
+              workbenchAvailable: hasWorkbench,
+              workbenchSource: data.workbenchSource,
+              initialValues: {
+                topic: workflowIntent.contentBrief || ''
+              }
             }
           }
-        }
-      };
+        };
+      } catch (err: any) {
+        return {
+          reply: `Soothsayer is currently unreachable. I cannot show the app-native workbench without a live Soothsayer manifest.`,
+          uiComponent: {
+            type: 'SoothsayerWorkbench',
+            data: {
+              app: 'soothsayer',
+              url: 'https://ops-soothsayer-web-production.up.railway.app',
+              manifestAvailable: false,
+              environment: 'production',
+              version: '1.0.0',
+              routes: [
+                { path: '/api/health', label: 'Health', method: 'GET' },
+                { path: '/api/portal-manifest', label: 'Portal manifest', method: 'GET' }
+              ],
+              features: [
+                { id: 'flowright-operator', label: 'Flowright operator bridge', status: 'available' }
+              ],
+              workflows: [],
+              workbench: null,
+              workbenchReachable: false,
+              workbenchAvailable: false,
+              workbenchSource: 'fallback',
+              initialValues: {
+                topic: workflowIntent.contentBrief || ''
+              },
+              workbenchError: err.message || 'Soothsayer manifest unreachable'
+            }
+          }
+        };
+      }
     }
   }
 
@@ -1593,6 +1629,8 @@ app.post('/api/chat', async (req, res) => {
   }
 });
 
-app.listen(PORT, '127.0.0.1', () => {
-  console.log(`🚀 Portal backend listening on http://127.0.0.1:${PORT}`);
-});
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(PORT, '127.0.0.1', () => {
+    console.log(`🚀 Portal backend listening on http://127.0.0.1:${PORT}`);
+  });
+}

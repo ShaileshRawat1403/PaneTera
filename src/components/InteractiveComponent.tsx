@@ -12,6 +12,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import InfoIcon from '@mui/icons-material/Info';
 import LaptopMacIcon from '@mui/icons-material/LaptopMac';
+import { NativeWorkbenchRenderer } from './nativeWorkbench/NativeWorkbenchRenderer';
 interface ComponentProps {
   uiComponent: UiComponent;
   onAction: (query: string) => void;
@@ -632,135 +633,21 @@ export const InteractiveComponent: React.FC<ComponentProps> = ({ uiComponent, on
 
           {/* Middle Workbench Area: Content Draft Preview & Run details */}
           <Grid item xs={12} md={8.5} sx={{ p: 3, display: 'flex', flexDirection: 'column' }}>
-            {view ? (
-              <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 3.5 }}>
-                {/* Active View Header */}
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Box>
-                    <Typography variant="caption" sx={{ color: '#7f5af0', fontWeight: 800, display: 'block', mb: 0.5, letterSpacing: '0.05em' }}>
-                      ACTIVE VIEW
-                    </Typography>
-                    <Typography variant="h6" sx={{ color: '#f4f4f5', fontWeight: 800 }}>
-                      {view.label}
-                    </Typography>
-                  </Box>
-                  <Chip
-                    label={view.status.toUpperCase()}
-                    size="small"
-                    sx={{
-                      height: 18,
-                      fontSize: '0.6rem',
-                      fontWeight: 800,
-                      background: 'rgba(245, 158, 11, 0.08)',
-                      color: '#f59e0b',
-                      border: '1px solid rgba(245, 158, 11, 0.15)'
-                    }}
-                  />
-                </Box>
-
-                {/* Draft Content preview pane */}
-                <Paper variant="outlined" sx={{ p: 2.5, background: 'rgba(255,255,255,0.01)', borderColor: 'rgba(255,255,255,0.05)', borderRadius: '12px' }}>
-                  <Typography variant="body1" sx={{ color: '#f4f4f5', fontWeight: 800, mb: 0.5 }}>
-                    {draft.title}
-                  </Typography>
-                  <Typography variant="body2" sx={{ color: '#a0aec0', fontStyle: 'italic', mb: 2 }}>
-                    {draft.subtitle}
-                  </Typography>
-
-                  <Divider sx={{ my: 1.5, borderColor: 'rgba(255,255,255,0.04)' }} />
-
-                  <Stack spacing={2} sx={{ mt: 2 }}>
-                    {draft.sections && draft.sections.map((sec: any, sIdx: number) => (
-                      <Box key={sIdx}>
-                        <Typography variant="subtitle2" sx={{ color: '#b794f4', fontWeight: 700, mb: 0.5 }}>
-                          {sec.title}
-                        </Typography>
-                        <Typography variant="body2" sx={{ color: '#cbd5e1', lineHeight: 1.6 }}>
-                          {sec.body}
-                        </Typography>
-                      </Box>
-                    ))}
-                  </Stack>
-
-                  {draft.takeaways && draft.takeaways.length > 0 && (
-                    <Box sx={{ mt: 3, pt: 2, borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-                      <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, display: 'block', mb: 1 }}>
-                        KEY TAKEAWAYS
-                      </Typography>
-                      <List dense sx={{ p: 0 }}>
-                        {draft.takeaways.map((take: string, tIdx: number) => (
-                          <ListItem key={tIdx} sx={{ p: 0, py: 0.25 }}>
-                            <ListItemIcon sx={{ minWidth: 20, color: '#22c55e' }}>
-                              <CheckCircleIcon sx={{ fontSize: 12 }} />
-                            </ListItemIcon>
-                            <ListItemText primary={take} primaryTypographyProps={{ sx: { fontSize: '0.78rem', color: '#cbd5e1' } }} />
-                          </ListItem>
-                        ))}
-                      </List>
-                    </Box>
-                  )}
-                </Paper>
-
-                {/* Review/Evidence status board */}
-                <Grid container spacing={2}>
-                  <Grid item xs={12} md={6}>
-                    <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, display: 'block', mb: 0.5 }}>
-                      REVIEW STATE
-                    </Typography>
-                    <Paper variant="outlined" sx={{ p: 1.5, background: 'rgba(245, 158, 11, 0.02)', borderColor: 'rgba(245, 158, 11, 0.08)', borderRadius: '8px' }}>
-                      <Typography variant="body2" sx={{ color: '#f59e0b', fontWeight: 700 }}>
-                        {draft.reviewState}
-                      </Typography>
-                    </Paper>
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, display: 'block', mb: 0.5 }}>
-                      INTELLIGENCE EVIDENCE
-                    </Typography>
-                    <Paper variant="outlined" sx={{ p: 1.5, background: 'rgba(34, 197, 94, 0.02)', borderColor: 'rgba(34, 197, 94, 0.08)', borderRadius: '8px' }}>
-                      <Typography variant="caption" sx={{ color: '#a0aec0', display: 'block', lineHeight: 1.4 }}>
-                        {draft.evidenceSummary}
-                      </Typography>
-                    </Paper>
-                  </Grid>
-                </Grid>
-
-                {/* Actions footer */}
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 'auto', pt: 2, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                  <Typography variant="caption" sx={{ color: '#71717a', display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <InfoIcon sx={{ fontSize: 12 }} /> Actions are disabled (Preview-only). Run must be triggered manually.
-                  </Typography>
-                  <Box sx={{ display: 'flex', gap: 1 }}>
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      disabled
-                      sx={{ textTransform: 'none', borderRadius: '6px', color: '#71717a', borderColor: 'rgba(255,255,255,0.04)' }}
-                    >
-                      Start governed run
-                    </Button>
-                    <Button
-                      size="small"
-                      variant="contained"
-                      disabled={!view.deepLink}
-                      href={view.deepLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      sx={{ background: '#7f5af0', textTransform: 'none', fontWeight: 700, borderRadius: '6px', '&:hover': { background: '#6d47dd' } }}
-                    >
-                      {view.deepLink ? 'View run in Soothsayer' : 'No active run link'}
-                    </Button>
-                  </Box>
-                </Box>
+            {workbench?.views && workbench.views.length > 0 ? (
+              <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 3 }}>
+                <NativeWorkbenchRenderer
+                  views={workbench.views}
+                  initialValues={data.initialValues}
+                />
               </Box>
             ) : (
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, height: '100%' }}>
                 <Paper variant="outlined" sx={{ p: 3, background: 'rgba(245, 158, 11, 0.03)', borderColor: 'rgba(245, 158, 11, 0.16)', borderRadius: '12px' }}>
                   <Typography variant="caption" sx={{ color: '#f59e0b', fontWeight: 800, display: 'block', mb: 1 }}>
-                    WORKBENCH MANIFEST NOT AVAILABLE
+                    WORKBENCH SESSION NOT AVAILABLE
                   </Typography>
                   <Typography variant="body2" sx={{ color: '#cbd5e1', lineHeight: 1.6 }}>
-                    The live Soothsayer app responded, but it did not expose an app-native workbench view in its portal manifest. Portal will not fabricate a draft, review gate, evidence state, or run link.
+                    The live Soothsayer app responded, but it did not expose an app-native workbench view in its portal manifest or workbench session. Portal will not fabricate a draft, review gate, evidence state, or run link.
                   </Typography>
                   {workbenchError && (
                     <Typography variant="caption" sx={{ color: '#a1a1aa', display: 'block', mt: 1.5, fontFamily: 'monospace' }}>

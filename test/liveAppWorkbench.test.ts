@@ -74,6 +74,18 @@ async function runAsyncTests() {
         }),
       } as unknown as Response;
     }
+    if (urlStr === 'http://127.0.0.1:3101/api/portal-workbench') {
+      return {
+        ok: true,
+        json: async () => ({
+          app: 'soothsayer',
+          environment: 'staging',
+          views: [
+            { id: 'cms-form', type: 'schema-form', label: 'Start CMS Form', status: 'available' }
+          ]
+        }),
+      } as unknown as Response;
+    }
     throw new Error(`Unexpected fetch URL: ${urlStr}`);
   };
 
@@ -93,6 +105,10 @@ async function runAsyncTests() {
     assert.strictEqual(proposal.workflows[0].status, 'available');
     assert.ok(proposal.health && proposal.health.status === 'healthy');
     assert.strictEqual(proposal.previewOnly, true);
+    assert.strictEqual(proposal.workbenchReachable, true, 'workbenchReachable should be true');
+    assert.strictEqual(proposal.workbenchAvailable, true, 'workbenchAvailable should be true');
+    assert.strictEqual(proposal.workbenchSource, 'app-native-api', 'workbenchSource should be app-native-api');
+    assert.strictEqual(proposal.workbench?.app, 'soothsayer');
   } finally {
     globalThis.fetch = originalFetch;
   }
