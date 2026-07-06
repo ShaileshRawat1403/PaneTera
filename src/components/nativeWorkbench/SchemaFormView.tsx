@@ -35,6 +35,8 @@ export const SchemaFormView: React.FC<SchemaFormProps> = ({
   onSubmitProposal
 }) => {
   const fields = inputSchema?.fields || [];
+  const proposalActions = actions.filter((act) => act.kind === 'proposal' && act.requiresApproval === true);
+  const unsafeActionCount = actions.length - proposalActions.length;
   const [formValues, setFormValues] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {};
     fields.forEach((f) => {
@@ -57,6 +59,10 @@ export const SchemaFormView: React.FC<SchemaFormProps> = ({
   });
 
   const handleTriggerAction = (actionId: string) => {
+    const action = proposalActions.find((act) => act.id === actionId);
+    if (!action) {
+      return;
+    }
     setSubmittedAction(actionId);
     if (onSubmitProposal) {
       onSubmitProposal(actionId, formValues);
@@ -158,10 +164,31 @@ export const SchemaFormView: React.FC<SchemaFormProps> = ({
         </Typography>
       </Box>
 
+      {unsafeActionCount > 0 && (
+        <Box
+          sx={{
+            p: 1.5,
+            background: 'rgba(239, 68, 68, 0.05)',
+            border: '1px solid rgba(239, 68, 68, 0.14)',
+            borderRadius: '8px'
+          }}
+        >
+          <Typography variant="caption" sx={{ color: '#fca5a5', fontWeight: 700 }}>
+            {unsafeActionCount} app action{unsafeActionCount === 1 ? '' : 's'} hidden because only proposal actions requiring approval can be rendered.
+          </Typography>
+        </Box>
+      )}
+
       {/* Dynamic Actions Render */}
       <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1.5, mt: 1 }}>
-        {actions.map((act) => {
+        {proposalActions.length === 0 && (
+          <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 700 }}>
+            No approved proposal actions are available for this form.
+          </Typography>
+        )}
+        {proposalActions.map((act) => {
           const isSubmitted = submittedAction === act.id;
+          const label = act.label?.toLowerCase().includes('propose') ? act.label : 'Propose governed run';
           return (
             <Stack key={act.id} direction="row" alignItems="center" spacing={1.5}>
               {act.risk && (
@@ -190,7 +217,7 @@ export const SchemaFormView: React.FC<SchemaFormProps> = ({
                   '&:hover': { background: '#6d47dd' }
                 }}
               >
-                {isSubmitted ? 'Proposal Submitted' : 'Propose governed run'}
+                {isSubmitted ? 'Proposal Submitted' : label}
               </Button>
             </Stack>
           );

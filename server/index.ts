@@ -1211,8 +1211,8 @@ export async function resolveGatewayCardLocally(query: string): Promise<{ reply:
         const hasWorkbench = Boolean(data.workbench?.views?.length);
         return {
           reply: hasWorkbench
-            ? `I loaded the Soothsayer app-native workbench view from its manifest. You can inspect its workspace context, workflow status, and draft preview below.`
-            : `Soothsayer is reachable, but its app-native workbench manifest is not exposed yet. I can show the live app manifest summary and a deep link, but not a native draft/run surface.`,
+            ? `I loaded the Soothsayer app-native workbench session. You can inspect its workspace context, workflow status, and native views below.`
+            : `Soothsayer is reachable, but its app-native workbench session is not exposed yet. I can show the live app manifest summary and a deep link, but not a native draft/run surface.`,
           uiComponent: {
             type: 'SoothsayerWorkbench',
             data: {
@@ -1265,7 +1265,17 @@ export async function resolveGatewayCardLocally(query: string): Promise<{ reply:
     if (workflowIntent.kind === 'contentops-draft') {
       try {
         const data = await buildLiveAppWorkbench('soothsayer');
-        const hasWorkbench = Boolean(data.workbench?.views?.length);
+        const formFirstWorkbench = data.workbench
+          ? {
+              ...data.workbench,
+              views: [...data.workbench.views].sort((a: any, b: any) => {
+                if (a.type === 'schema-form' && b.type !== 'schema-form') return -1;
+                if (a.type !== 'schema-form' && b.type === 'schema-form') return 1;
+                return 0;
+              }),
+            }
+          : null;
+        const hasWorkbench = Boolean(formFirstWorkbench?.views?.length);
         return {
           reply: `I opened the Soothsayer app-native workbench with the topic pre-filled. You can review the schema inputs and propose a governed run.`,
           uiComponent: {
@@ -1280,7 +1290,7 @@ export async function resolveGatewayCardLocally(query: string): Promise<{ reply:
               features: data.features,
               workflows: data.workflows,
               health: data.health,
-              workbench: data.workbench || null,
+              workbench: formFirstWorkbench,
               workbenchReachable: data.workbenchReachable,
               workbenchAvailable: hasWorkbench,
               workbenchSource: data.workbenchSource,

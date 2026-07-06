@@ -5,9 +5,46 @@
 
 export type LiveAppTruthSource =
   | 'manifest'
+  | 'workbench'
   | 'url-preview'
   | 'browser-observation'
   | 'user-config';
+
+export interface AppNativeWorkbenchView {
+  id: string;
+  type: string;
+  label: string;
+  status: 'template' | 'no-active-run' | 'awaiting-review' | 'available';
+  source?: string;
+  updatedAt?: string;
+  deepLink?: string;
+  data?: Record<string, unknown>;
+  layout?: Record<string, unknown>;
+  inputSchema?: {
+    fields: Array<{
+      name: string;
+      label: string;
+      type: 'string' | 'select';
+      required?: boolean;
+      options?: string[];
+      description?: string;
+    }>;
+  };
+  actions?: Array<{
+    id: string;
+    label: string;
+    kind: 'proposal';
+    risk: 'low' | 'medium' | 'high';
+    requiresApproval: true;
+  }>;
+}
+
+export interface AppNativeWorkbenchSession {
+  app: string;
+  environment: string;
+  updatedAt: string;
+  views: AppNativeWorkbenchView[];
+}
 
 export interface LiveAppWorkbenchData {
   appName: string;
@@ -31,23 +68,7 @@ export interface LiveAppWorkbenchData {
   personaLenses: Array<'engineer' | 'pm' | 'ba' | 'qa' | 'exec'>;
   warnings: string[];
   previewOnly: true;
-  workbench?: {
-    views: Array<{
-      id: string;
-      type: string;
-      label: string;
-      status: 'template' | 'no-active-run' | 'awaiting-review' | 'available';
-      deepLink?: string;
-      data: {
-        title?: string;
-        subtitle?: string;
-        sections?: Array<{ title: string; body: string }>;
-        takeaways?: string[];
-        reviewState?: string;
-        evidenceSummary?: string;
-      };
-    }>;
-  };
+  workbench?: AppNativeWorkbenchSession;
   workbenchReachable?: boolean;
   workbenchAvailable?: boolean;
   workbenchSource?: 'app-native-api' | 'fallback' | null;
@@ -165,7 +186,7 @@ export async function buildLiveAppWorkbench(
   let features: Array<{ id: string; label: string; status?: string }> = [];
   let workflows: Array<{ id: string; label: string; status?: string }> = [];
   let health: Record<string, unknown> | null = null;
-  let workbench: any = null;
+  let workbench: AppNativeWorkbenchSession | undefined;
 
   // 1. Base URL Reachability check
   try {
@@ -254,12 +275,20 @@ export async function buildLiveAppWorkbench(
     workbenchReachable = true;
     if (resp.ok) {
       const body = (await resp.json()) as any;
-      if (body && typeof body === 'object') {
-        workbenchAvailable = true;
+      if (body && typeof body === 'object' && Array.isArray(body.views)) {
+        workbenchAvailable = body.views.length > 0;
         workbenchSource = 'app-native-api';
-        workbench = body;
+        workbench = {
+          app: typeof body.app === 'string' ? body.app : appName,
+          environment: typeof body.environment === 'string' ? body.environment : (environment || 'unknown'),
+          updatedAt: typeof body.updatedAt === 'string' ? body.updatedAt : new Date().toISOString(),
+          views: body.views,
+        };
+        if (!workbenchAvailable) {
+          warnings.push('Workbench endpoint returned no native views.');
+        }
       } else {
-        warnings.push('Workbench endpoint returned invalid JSON structure.');
+        warnings.push('Workbench endpoint returned invalid JSON structure. Expected an object with a views array.');
       }
     } else {
       warnings.push(`Workbench fetch returned HTTP status ${resp.status}`);
@@ -294,6 +323,13 @@ export async function buildLiveAppWorkbench(
       note: manifestAvailable
         ? 'Successfully parsed app-native /api/portal-manifest.'
         : (manifestReachable ? 'Manifest endpoint returned error or authentication challenge.' : 'App-native portal-manifest is unreachable.'),
+    },
+    {
+      source: 'workbench',
+      status: workbenchAvailable ? 'available' : (workbenchReachable ? 'unverified' : 'unavailable'),
+      note: workbenchAvailable
+        ? 'Successfully parsed app-native /api/portal-workbench.'
+        : (workbenchReachable ? 'Workbench endpoint did not expose usable native views.' : 'App-native portal-workbench is unreachable.'),
     },
     {
       source: 'browser-observation',

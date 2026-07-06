@@ -42,6 +42,7 @@ const contentOpsQueries = [
   { q: 'draft a blog post', expectedBrief: 'draft a blog post' },
   { q: 'create content update', expectedBrief: 'create content update' },
   { q: 'write a post for pruningmypothos', expectedBrief: 'pruningmypothos' },
+  { q: 'write a blog post about pothos pruning mistakes', expectedBrief: 'pothos pruning mistakes' },
   { q: 'write a blog about pothos watering guide', expectedBrief: 'pothos watering guide' },
   { q: 'draft a blog post about pothos pruning mistakes', expectedBrief: 'pothos pruning mistakes' },
   { q: 'write a post about watering techniques', expectedBrief: 'watering techniques' }
@@ -63,6 +64,7 @@ const ignoredQueries = [
   'inspect soothsayer',
   'run npm run verify in flowright',
   'git status in flowright',
+  'publish this',
   'show soothsayer ui' // Wait, does the prompt say "show soothsayer ui" is a workflow intent or live app intent?
   // User says: "show soothsayer ui" is a strict native intent: "Strict native intents must be local-first: show soothsayer ui, show soothsayer workflows, write a blog..."
   // Wait, so "show soothsayer ui" should also route!
@@ -70,7 +72,7 @@ const ignoredQueries = [
 
 for (const q of ignoredQueries) {
   // Let's test normal developer commands
-  if (q === 'check my commit for regressions' || q === 'run npm run verify in flowright' || q === 'git status in flowright') {
+  if (q === 'check my commit for regressions' || q === 'run npm run verify in flowright' || q === 'git status in flowright' || q === 'publish this') {
     const parsed = parseWorkflowIntent(q);
     assert.strictEqual(parsed, null, `Should NOT swallow query: "${q}"`);
   }

@@ -109,11 +109,58 @@ async function runAsyncTests() {
     assert.strictEqual(proposal.workbenchAvailable, true, 'workbenchAvailable should be true');
     assert.strictEqual(proposal.workbenchSource, 'app-native-api', 'workbenchSource should be app-native-api');
     assert.strictEqual(proposal.workbench?.app, 'soothsayer');
+    assert.ok(
+      proposal.sourceLabels.some((sl) => sl.source === 'workbench' && sl.status === 'available'),
+      'Should expose workbench as an available app-native truth source',
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }
 
-  // 4. Configured tests with Failing fetch
+  // 4. Configured tests with invalid workbench payload
+  globalThis.fetch = async (url: string | URL | Request) => {
+    const urlStr = String(url);
+    if (urlStr === 'http://127.0.0.1:3102') {
+      return {
+        ok: true,
+      } as unknown as Response;
+    }
+    if (urlStr === 'http://127.0.0.1:3102/api/portal-manifest') {
+      return {
+        ok: true,
+        json: async () => ({
+          environment: 'staging',
+          version: '1.4.2-beta',
+          routes: [],
+          features: [],
+          workflows: [],
+          health: { status: 'healthy' },
+        }),
+      } as unknown as Response;
+    }
+    if (urlStr === 'http://127.0.0.1:3102/api/portal-workbench') {
+      return {
+        ok: true,
+        json: async () => ({ app: 'soothsayer', viewsCount: 1 }),
+      } as unknown as Response;
+    }
+    throw new Error(`Unexpected fetch URL: ${urlStr}`);
+  };
+
+  try {
+    const invalidWorkbench = await buildLiveAppWorkbench('soothsayer', 'http://127.0.0.1:3102');
+    assert.strictEqual(invalidWorkbench.workbenchReachable, true);
+    assert.strictEqual(invalidWorkbench.workbenchAvailable, false);
+    assert.strictEqual(invalidWorkbench.workbenchSource, null);
+    assert.ok(
+      invalidWorkbench.warnings.some((w) => w.includes('Expected an object with a views array')),
+      'Should warn when workbench payload is not a native views session',
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  // 5. Configured tests with Failing fetch
   globalThis.fetch = async (url: string | URL | Request) => {
     throw new Error('Connection refused');
   };
