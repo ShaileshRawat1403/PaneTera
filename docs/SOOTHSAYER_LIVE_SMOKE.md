@@ -1,6 +1,6 @@
 # Soothsayer Live App Smoke Test Results
 
-**Date / Time**: 2026-07-06T17:50:00+05:30  
+**Date / Time**: 2026-07-06T18:12:00+05:30  
 **Tested URL**: `https://ops-soothsayer-web-production.up.railway.app`  
 
 ---
@@ -9,33 +9,35 @@
 
 ### 1. Base URL Reachability
 - **Status**: **PASS** (HTTP Status 401)
-- **Notes**: The base URL is active and reachable. The server (`railway-hikari`) responded with `401 Unauthorized` indicating Basic Authentication is active (`www-authenticate: Basic realm="Soothsayer Testing"`).
+- **Notes**: The base URL is active and reachable. The server (`railway-hikari`) responded with `401 Unauthorized` indicating Basic Authentication is active (`www-authenticate: Basic realm="Soothsayer Testing"`), proving connection.
 
 ### 2. Manifest Endpoint Reachability
-- **Status**: **PASS / NOTE** (HTTP Status 401)
-- **Notes**: The manifest endpoint `/api/portal-manifest` is reachable and responded with `401 Unauthorized`. It did not crash or freeze the portal parser.
+- **Status**: **PASS** (HTTP Status 200)
+- **Notes**: The manifest endpoint `/api/portal-manifest` was successfully bypassed from the Basic Authentication password gate. It resolves with `200 OK` and returns public-safe, structured JSON.
 
 ### 3. Portal Helper Behavior
 - **Status**: **PASS**
-- **Notes**: Invoking `buildLiveAppWorkbench('soothsayer', 'https://ops-soothsayer-web-production.up.railway.app')` returns:
+- **Notes**: Invoking `buildLiveAppWorkbench('soothsayer', 'https://ops-soothsayer-web-production.up.railway.app')` returns a fully parsed manifest payload:
   - `configured: true`
   - `urlReachable: true`
   - `manifestReachable: true`
-  - `manifestAvailable: false`
-  - `previewOnly: true`
-  - Source labels section contains correct configuration (`user-config: available`, `url-preview: available`, `manifest: unverified` with note `Manifest endpoint returned error or authentication challenge.`, `browser-observation: future`).
+  - `manifestAvailable: true`
+  - `environment: "production"`
+  - `version: "1.0.0"`
+  - Active routes, features, workflows, and health metrics are fully mapped from the live railway container instance.
+  - Warnings is empty `[]`.
 
 ### 4. Portal Chat / Local Resolver Behavior
 - **Status**: **PASS**
-- **Notes**: Prompting `inspect soothsayer` triggers the `LiveAppWorkbench` query intent locally and returns a structured card indicating the live app server is online but manifest JSON content is currently unverified.
+- **Notes**: Prompting `inspect soothsayer` triggers the `LiveAppWorkbench` query intent locally and returns a structured card indicating the live app server is online and manifest JSON content is verified and parsed successfully.
 
 ### 5. UI Card Behavior
 - **Status**: **PASS**
 - **Notes**: The [LiveAppWorkbenchCard.tsx](file:///Users/Shailesh/MYAIAGENTS/myai-portal/src/components/LiveAppWorkbenchCard.tsx) displays:
   - Application Name: Soothsayer
   - Target URL
-  - Status indicators (Configured: success, URL Reachable: success, Manifest Reachable: success, Manifest Available: warning)
-  - Detail warnings indicating `HTTP status 401` was encountered
+  - Status indicators (Configured: success, URL Reachable: success, Manifest Reachable: success, Manifest Available: success)
+  - Detail lists of routes, features, workflows, and health status
   - Preview only mode and disabled future persona lenses.
 
 ### 6. Regression Checks
