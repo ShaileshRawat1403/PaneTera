@@ -483,24 +483,10 @@ export const InteractiveComponent: React.FC<ComponentProps> = ({ uiComponent, on
   }
 
   if (type === 'SoothsayerWorkbench' && data) {
-    const { url, manifestAvailable, environment, version, routes, features, workflows, health, workbench } = data;
-    const view = workbench?.views?.[0] || {
-      id: 'contentops-draft-preview',
-      type: 'draft-preview',
-      label: 'Draft Preview',
-      status: 'template',
-      data: {
-        title: 'Pruning Pothos: Mistakes You Are Probably Making',
-        subtitle: 'A guided manual for plant longevity and structural shape optimization.',
-        sections: [],
-        takeaways: [],
-        reviewState: 'Awaiting Operator Approval',
-        evidenceSummary: 'None'
-      }
-    };
-    const draft = view.data || {};
-
-    const [showIframe, setShowIframe] = useState(false);
+    const { url, manifestAvailable, environment, version, routes, features, workflows, health, workbench, workbenchError } = data;
+    const view = workbench?.views?.[0] || null;
+    const draft = view?.data || {};
+    const healthStatus = typeof health?.status === 'string' ? health.status : 'unknown';
 
     return (
       <Paper
@@ -533,15 +519,15 @@ export const InteractiveComponent: React.FC<ComponentProps> = ({ uiComponent, on
               SOOTHSAYER WORKBENCH
             </Typography>
             <Chip
-              label={manifestAvailable ? 'CONNECTED' : 'OFFLINE TEMPLATE'}
+              label={manifestAvailable ? (view ? 'APP MANIFEST' : 'WORKBENCH NOT EXPOSED') : 'MANIFEST UNAVAILABLE'}
               size="small"
               sx={{
                 height: 18,
                 fontSize: '0.6rem',
                 fontWeight: 800,
-                background: manifestAvailable ? 'rgba(34, 197, 94, 0.08)' : 'rgba(239, 68, 68, 0.08)',
-                color: manifestAvailable ? '#22c55e' : '#ef4444',
-                border: manifestAvailable ? '1px solid rgba(34, 197, 94, 0.15)' : '1px solid rgba(239, 68, 68, 0.15)'
+                background: manifestAvailable && view ? 'rgba(34, 197, 94, 0.08)' : 'rgba(245, 158, 11, 0.08)',
+                color: manifestAvailable && view ? '#22c55e' : '#f59e0b',
+                border: manifestAvailable && view ? '1px solid rgba(34, 197, 94, 0.15)' : '1px solid rgba(245, 158, 11, 0.15)'
               }}
             />
           </Box>
@@ -595,7 +581,7 @@ export const InteractiveComponent: React.FC<ComponentProps> = ({ uiComponent, on
                   Version: <strong>{version || '1.0.0'}</strong>
                 </Typography>
                 <Typography variant="caption" sx={{ color: '#a1a1aa', display: 'block' }}>
-                  Health check: <strong style={{ color: '#22c55e' }}>online</strong>
+                  Health check: <strong style={{ color: healthStatus === 'available' ? '#22c55e' : '#f59e0b' }}>{healthStatus}</strong>
                 </Typography>
               </Paper>
             </Box>
@@ -608,7 +594,16 @@ export const InteractiveComponent: React.FC<ComponentProps> = ({ uiComponent, on
                 {features.map((f: any) => (
                   <Box key={f.id} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 0.5 }}>
                     <Typography variant="caption" sx={{ color: '#cbd5e1', fontWeight: 600 }}>{f.label}</Typography>
-                    <Chip label="ONLINE" size="small" sx={{ height: 14, fontSize: '0.5rem', background: 'rgba(34, 197, 94, 0.08)', color: '#22c55e' }} />
+                    <Chip
+                      label={(f.status || 'unverified').toUpperCase()}
+                      size="small"
+                      sx={{
+                        height: 14,
+                        fontSize: '0.5rem',
+                        background: f.status === 'available' ? 'rgba(34, 197, 94, 0.08)' : 'rgba(255,255,255,0.04)',
+                        color: f.status === 'available' ? '#22c55e' : '#a1a1aa'
+                      }}
+                    />
                   </Box>
                 ))}
               </Stack>
@@ -629,35 +624,15 @@ export const InteractiveComponent: React.FC<ComponentProps> = ({ uiComponent, on
             </Box>
 
             <Box sx={{ mt: 'auto' }}>
-              <Button
-                size="small"
-                fullWidth
-                variant="outlined"
-                onClick={() => setShowIframe(!showIframe)}
-                sx={{
-                  textTransform: 'none',
-                  fontSize: '0.7rem',
-                  borderColor: showIframe ? '#7f5af0' : 'rgba(255,255,255,0.06)',
-                  color: showIframe ? '#b794f4' : '#71717a'
-                }}
-              >
-                {showIframe ? 'Hide embedded preview' : 'Show live preview iframe'}
-              </Button>
+              <Typography variant="caption" sx={{ color: '#71717a', lineHeight: 1.4, display: 'block' }}>
+                Embedded live view is disabled until Soothsayer explicitly allows portal framing. Use the live link above for the real app.
+              </Typography>
             </Box>
           </Grid>
 
           {/* Middle Workbench Area: Content Draft Preview & Run details */}
           <Grid item xs={12} md={8.5} sx={{ p: 3, display: 'flex', flexDirection: 'column' }}>
-            {showIframe ? (
-              <Box sx={{ width: '100%', height: '100%', minHeight: 450, borderRadius: '8px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)' }}>
-                <iframe
-                  src={url}
-                  title="Soothsayer Live Preview"
-                  sandbox="allow-scripts allow-same-origin allow-forms"
-                  style={{ width: '100%', height: '100%', minHeight: 450, border: 'none', background: '#09090b' }}
-                />
-              </Box>
-            ) : (
+            {view ? (
               <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 3.5 }}>
                 {/* Active View Header */}
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -767,14 +742,68 @@ export const InteractiveComponent: React.FC<ComponentProps> = ({ uiComponent, on
                     <Button
                       size="small"
                       variant="contained"
-                      href={view.deepLink || url}
+                      disabled={!view.deepLink}
+                      href={view.deepLink}
                       target="_blank"
                       rel="noopener noreferrer"
                       sx={{ background: '#7f5af0', textTransform: 'none', fontWeight: 700, borderRadius: '6px', '&:hover': { background: '#6d47dd' } }}
                     >
-                      View run in Soothsayer
+                      {view.deepLink ? 'View run in Soothsayer' : 'No active run link'}
                     </Button>
                   </Box>
+                </Box>
+              </Box>
+            ) : (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, height: '100%' }}>
+                <Paper variant="outlined" sx={{ p: 3, background: 'rgba(245, 158, 11, 0.03)', borderColor: 'rgba(245, 158, 11, 0.16)', borderRadius: '12px' }}>
+                  <Typography variant="caption" sx={{ color: '#f59e0b', fontWeight: 800, display: 'block', mb: 1 }}>
+                    WORKBENCH MANIFEST NOT AVAILABLE
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: '#cbd5e1', lineHeight: 1.6 }}>
+                    The live Soothsayer app responded, but it did not expose an app-native workbench view in its portal manifest. Portal will not fabricate a draft, review gate, evidence state, or run link.
+                  </Typography>
+                  {workbenchError && (
+                    <Typography variant="caption" sx={{ color: '#a1a1aa', display: 'block', mt: 1.5, fontFamily: 'monospace' }}>
+                      {workbenchError}
+                    </Typography>
+                  )}
+                </Paper>
+
+                <Paper variant="outlined" sx={{ p: 2.5, background: 'rgba(255,255,255,0.01)', borderColor: 'rgba(255,255,255,0.05)', borderRadius: '12px' }}>
+                  <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, display: 'block', mb: 1.5 }}>
+                    AVAILABLE APP MANIFEST SUMMARY
+                  </Typography>
+                  <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                    {workflows.map((w: any) => (
+                      <Chip
+                        key={w.id}
+                        label={w.label || w.id}
+                        size="small"
+                        sx={{ background: 'rgba(127, 85, 240, 0.08)', color: '#b794f4', border: '1px solid rgba(127, 85, 240, 0.18)' }}
+                      />
+                    ))}
+                    {routes.map((r: any) => (
+                      <Chip
+                        key={r.path}
+                        label={`${r.label || 'GET'} ${r.path}`}
+                        size="small"
+                        sx={{ background: 'rgba(255,255,255,0.03)', color: '#cbd5e1' }}
+                      />
+                    ))}
+                  </Stack>
+                </Paper>
+
+                <Box sx={{ mt: 'auto', display: 'flex', justifyContent: 'flex-end' }}>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    sx={{ background: '#7f5af0', textTransform: 'none', fontWeight: 700, borderRadius: '6px', '&:hover': { background: '#6d47dd' } }}
+                  >
+                    Open live Soothsayer
+                  </Button>
                 </Box>
               </Box>
             )}
