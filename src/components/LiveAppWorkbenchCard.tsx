@@ -1,17 +1,19 @@
 import React from 'react';
-import { Box, Typography, Button, Chip, Stack, List, ListItem, ListItemText, Divider } from '@mui/material';
+import { Box, Typography, Button, Chip, Stack, Divider } from '@mui/material';
 import type { LiveAppWorkbenchData } from '../../server/liveApp';
 
 export interface LiveAppWorkbenchCardProps {
   data: LiveAppWorkbenchData;
   onCancel?: () => void;
-  variant?: 'chat' | 'feed';
+  variant?: 'chat' | 'feed' | 'active';
+  activeLens?: string;
 }
 
 export const LiveAppWorkbenchCard: React.FC<LiveAppWorkbenchCardProps> = ({
   data,
   onCancel,
   variant = 'chat',
+  activeLens = 'engineer',
 }) => {
   const {
     appName,
@@ -20,132 +22,156 @@ export const LiveAppWorkbenchCard: React.FC<LiveAppWorkbenchCardProps> = ({
     urlReachable,
     manifestReachable,
     manifestAvailable,
-    manifestUrl,
     environment,
     version,
     routes,
     features,
     workflows,
-    health,
+    health: healthRaw,
     sourceLabels,
     personaLenses,
     warnings,
   } = data;
 
-  const outerSx = variant === 'chat' ? { mt: 2, mb: 1 } : {};
+  const health = healthRaw as any;
 
-  // Status mapping colors
+  // Visual emphasis highlights based on active lens
+  const highlightEndpoints = activeLens === 'engineer';
+  const highlightWorkflows = activeLens === 'pm' || activeLens === 'ba';
+  const highlightEcosystem = activeLens === 'qa';
+  const highlightHealth = activeLens === 'qa' || activeLens === 'exec';
+  const highlightTruth = activeLens === 'exec';
+
   const getSourceStatusColor = (status: string) => {
     switch (status) {
       case 'available':
-        return 'success';
+        return '#22c55e';
       case 'unavailable':
-        return 'error';
+        return '#ef4444';
       case 'unverified':
-        return 'warning';
+        return '#fbbf24';
       case 'future':
       default:
-        return 'default';
+        return '#71717a';
     }
   };
 
   return (
     <Box
       sx={{
-        ...outerSx,
-        background: 'rgba(127, 85, 240, 0.03)',
-        backdropFilter: 'blur(12px)',
-        border: '1px solid rgba(127, 85, 240, 0.25)',
-        borderRadius: '14px',
-        p: 2.5,
+        background: 'rgba(255, 255, 255, 0.02)',
+        border: '1px solid rgba(255, 255, 255, 0.08)',
+        borderRadius: '12px',
+        p: 3,
         transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+        '&:hover': {
+          borderColor: 'rgba(127, 85, 240, 0.25)',
+        }
       }}
     >
-      {/* Title Header */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
-        <Typography variant="caption" sx={{ color: '#a78bfa', fontWeight: 700, letterSpacing: '0.06em' }}>
-          LIVE APP WORKBENCH
-        </Typography>
+      {/* Title & Badge */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Typography variant="caption" sx={{ color: '#7f5af0', fontWeight: 800, letterSpacing: '0.06em' }}>
+            LIVE APP WORKBENCH
+          </Typography>
+          {health && (
+            <Chip
+              label={health.status.toUpperCase()}
+              size="small"
+              sx={{
+                height: 16,
+                fontSize: '0.55rem',
+                fontWeight: 800,
+                background: health.status === 'available' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(255, 255, 255, 0.05)',
+                color: health.status === 'available' ? '#22c55e' : '#cbd5e1',
+                border: health.status === 'available' ? '1px solid rgba(34, 197, 94, 0.2)' : '1px solid transparent',
+              }}
+            />
+          )}
+        </Box>
         <Chip
           label="PREVIEW ONLY"
           size="small"
           sx={{
             height: 18,
-            fontSize: '0.6rem',
-            fontWeight: 700,
-            background: 'rgba(127, 85, 240, 0.12)',
-            color: '#d8b4fe',
-            border: '1px solid rgba(127, 85, 240, 0.25)',
+            fontSize: '0.65rem',
+            fontWeight: 800,
+            background: 'rgba(127, 85, 240, 0.08)',
+            color: '#b794f4',
+            border: '1px solid rgba(127, 85, 240, 0.18)',
           }}
         />
       </Box>
 
-      {/* App details */}
-      <Typography variant="body2" sx={{ color: '#f4f4f5', mb: 0.5, lineHeight: 1.5 }}>
-        Application:{' '}
-        <Box component="span" sx={{ fontWeight: 700, color: '#c084fc' }}>
+      {/* Identifiers */}
+      <Box sx={{ mb: 2 }}>
+        <Typography variant="h6" sx={{ fontWeight: 800, color: '#f4f4f5', letterSpacing: '-0.02em' }}>
           {appName}
-        </Box>
-      </Typography>
-
-      <Typography
-        variant="caption"
-        sx={{
-          color: '#94a3b8',
-          display: 'block',
-          fontFamily: 'monospace',
-          mb: 1.5,
-          wordBreak: 'break-all',
-        }}
-      >
-        URL: {url || 'Not configured'}
-      </Typography>
+        </Typography>
+        <Typography variant="caption" sx={{ fontFamily: 'monospace', color: '#71717a', display: 'block', mt: 0.5 }}>
+          {url || 'Not configured'}
+        </Typography>
+      </Box>
 
       {/* Main Status Indicators */}
-      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 2.5 }}>
+      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 3 }}>
         <Chip
           label={configured ? 'Configured' : 'Unconfigured'}
           size="small"
-          color={configured ? 'success' : 'error'}
-          variant="outlined"
-          sx={{ height: 20, fontSize: '0.7rem' }}
+          sx={{
+            height: 20,
+            fontSize: '0.65rem',
+            fontWeight: 600,
+            background: configured ? 'rgba(34, 197, 94, 0.06)' : 'rgba(239, 68, 68, 0.06)',
+            color: configured ? '#22c55e' : '#ef4444',
+            border: `1px solid ${configured ? 'rgba(34, 197, 94, 0.18)' : 'rgba(239, 68, 68, 0.18)'}`,
+          }}
         />
         <Chip
-          label={urlReachable === null ? 'URL: Unchecked' : urlReachable ? 'URL Reachable' : 'URL Unreachable'}
+          label={urlReachable ? 'URL Reachable' : 'URL Unreachable'}
           size="small"
-          color={urlReachable === null ? 'default' : urlReachable ? 'success' : 'error'}
-          variant="outlined"
-          sx={{ height: 20, fontSize: '0.7rem' }}
+          sx={{
+            height: 20,
+            fontSize: '0.65rem',
+            fontWeight: 600,
+            background: urlReachable ? 'rgba(34, 197, 94, 0.06)' : 'rgba(239, 68, 68, 0.06)',
+            color: urlReachable ? '#22c55e' : '#ef4444',
+            border: `1px solid ${urlReachable ? 'rgba(34, 197, 94, 0.18)' : 'rgba(239, 68, 68, 0.18)'}`,
+          }}
         />
         <Chip
-          label={manifestReachable === null ? 'Manifest: Unchecked' : manifestReachable ? 'Manifest Reachable' : 'Manifest Unreachable'}
+          label={manifestReachable ? 'Manifest Reachable' : 'Manifest Unreachable'}
           size="small"
-          color={manifestReachable === null ? 'default' : manifestReachable ? 'success' : 'error'}
-          variant="outlined"
-          sx={{ height: 20, fontSize: '0.7rem' }}
+          sx={{
+            height: 20,
+            fontSize: '0.65rem',
+            fontWeight: 600,
+            background: manifestReachable ? 'rgba(34, 197, 94, 0.06)' : 'rgba(239, 68, 68, 0.06)',
+            color: manifestReachable ? '#22c55e' : '#ef4444',
+            border: `1px solid ${manifestReachable ? 'rgba(34, 197, 94, 0.18)' : 'rgba(239, 68, 68, 0.18)'}`,
+          }}
         />
         <Chip
           label={manifestAvailable ? 'Manifest Available' : 'Manifest Missing'}
           size="small"
-          color={manifestAvailable ? 'success' : 'warning'}
-          variant="outlined"
-          sx={{ height: 20, fontSize: '0.7rem' }}
-        />
-        <Chip
-          label="Browser Observation: Future"
-          size="small"
-          color="default"
-          variant="outlined"
-          sx={{ height: 20, fontSize: '0.7rem', opacity: 0.6 }}
+          sx={{
+            height: 20,
+            fontSize: '0.65rem',
+            fontWeight: 600,
+            background: manifestAvailable ? 'rgba(34, 197, 94, 0.06)' : 'rgba(251, 191, 36, 0.06)',
+            color: manifestAvailable ? '#22c55e' : '#fbbf24',
+            border: `1px solid ${manifestAvailable ? 'rgba(34, 197, 94, 0.18)' : 'rgba(251, 191, 36, 0.18)'}`,
+          }}
         />
       </Stack>
 
-      <Divider sx={{ my: 1.5, borderColor: 'rgba(255, 255, 255, 0.06)' }} />
+      <Divider sx={{ my: 2, borderColor: 'rgba(255, 255, 255, 0.06)' }} />
 
-      {/* Truth Sources Section */}
-      <Box sx={{ mb: 2 }}>
-        <Typography variant="caption" sx={{ color: '#a1a1aa', fontWeight: 700, display: 'block', mb: 1 }}>
-          Integration Truth Sources:
+      {/* Integration Truth Sources */}
+      <Box sx={{ mb: 2.5, opacity: highlightTruth ? 1 : 0.8, p: highlightTruth ? 1.5 : 0, borderRadius: '8px', border: highlightTruth ? '1px solid rgba(127, 85, 240, 0.3)' : 'none', background: highlightTruth ? 'rgba(127, 85, 240, 0.02)' : 'none' }}>
+        <Typography variant="caption" sx={{ color: highlightTruth ? '#b794f4' : '#a1a1aa', fontWeight: 800, display: 'block', mb: 1.5 }}>
+          Integration Truth Sources {highlightTruth && '— Focused Lens'}
         </Typography>
         <Stack spacing={1}>
           {sourceLabels.map((sl) => (
@@ -153,15 +179,16 @@ export const LiveAppWorkbenchCard: React.FC<LiveAppWorkbenchCardProps> = ({
               key={sl.source}
               sx={{
                 display: 'flex',
-                alignItems: 'flex-start',
+                alignItems: 'center',
                 justifyContent: 'space-between',
                 p: 1,
-                borderRadius: '8px',
-                background: 'rgba(255, 255, 255, 0.02)',
+                px: 1.5,
+                borderRadius: '6px',
+                background: 'rgba(255, 255, 255, 0.01)',
                 border: '1px solid rgba(255, 255, 255, 0.04)',
               }}
             >
-              <Box sx={{ mr: 2 }}>
+              <Box>
                 <Typography variant="caption" sx={{ fontWeight: 700, color: '#e2e8f0', display: 'block' }}>
                   {sl.source === 'user-config'
                     ? 'Portal config'
@@ -171,15 +198,20 @@ export const LiveAppWorkbenchCard: React.FC<LiveAppWorkbenchCardProps> = ({
                     ? 'App-Native Manifest'
                     : 'Chrome Extension'}
                 </Typography>
-                <Typography variant="caption" sx={{ color: '#94a3b8', fontSize: '0.7rem' }}>
+                <Typography variant="caption" sx={{ color: '#71717a', fontSize: '0.65rem' }}>
                   {sl.note}
                 </Typography>
               </Box>
               <Chip
                 label={sl.status.toUpperCase()}
                 size="small"
-                color={getSourceStatusColor(sl.status)}
-                sx={{ height: 16, fontSize: '0.55rem', fontWeight: 800 }}
+                sx={{
+                  height: 16,
+                  fontSize: '0.55rem',
+                  fontWeight: 800,
+                  background: 'rgba(255,255,255,0.03)',
+                  color: getSourceStatusColor(sl.status)
+                }}
               />
             </Box>
           ))}
@@ -189,149 +221,147 @@ export const LiveAppWorkbenchCard: React.FC<LiveAppWorkbenchCardProps> = ({
       {/* Manifest details if loaded */}
       {manifestAvailable && (
         <>
-          <Divider sx={{ my: 1.5, borderColor: 'rgba(255, 255, 255, 0.06)' }} />
-          <Box sx={{ mb: 2 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.5 }}>
-              <Typography variant="caption" sx={{ color: '#c084fc', fontWeight: 700 }}>
-                Manifest Telemetry:
+          {/* Active endpoints */}
+          <Box sx={{ mb: 2, opacity: highlightEndpoints ? 1 : 0.8, p: highlightEndpoints ? 1.5 : 0, borderRadius: '8px', border: highlightEndpoints ? '1px solid rgba(127, 85, 240, 0.3)' : 'none', background: highlightEndpoints ? 'rgba(127, 85, 240, 0.02)' : 'none' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+              <Typography variant="caption" sx={{ color: highlightEndpoints ? '#b794f4' : '#a1a1aa', fontWeight: 800 }}>
+                Active Endpoints ({routes.length}) {highlightEndpoints && '— Focused Lens'}
               </Typography>
-              <Typography variant="caption" sx={{ color: '#94a3b8', fontFamily: 'monospace' }}>
+              <Typography variant="caption" sx={{ color: '#71717a', fontFamily: 'monospace' }}>
                 {environment} / v{version}
               </Typography>
             </Box>
-
-            {routes.length > 0 && (
-              <Box sx={{ mb: 1.5 }}>
-                <Typography variant="caption" sx={{ color: '#a1a1aa', display: 'block', mb: 0.5 }}>
-                  Active API Endpoints ({routes.length}):
-                </Typography>
-                <Stack direction="row" spacing={0.8} flexWrap="wrap" useFlexGap>
-                  {routes.slice(0, 5).map((r, idx) => (
-                    <Chip
-                      key={idx}
-                      label={`${r.label || 'ANY'} ${r.path}`}
-                      size="small"
-                      sx={{
-                        height: 18,
-                        fontSize: '0.65rem',
-                        fontFamily: 'monospace',
-                        background: 'rgba(255, 255, 255, 0.03)',
-                        color: '#cbd5e1',
-                      }}
-                    />
-                  ))}
-                  {routes.length > 5 && (
-                    <Typography variant="caption" sx={{ color: '#94a3b8', alignSelf: 'center', fontSize: '0.65rem' }}>
-                      +{routes.length - 5} more
-                    </Typography>
-                  )}
-                </Stack>
-              </Box>
-            )}
-
-            {features.length > 0 && (
-              <Box sx={{ mb: 1.5 }}>
-                <Typography variant="caption" sx={{ color: '#a1a1aa', display: 'block', mb: 0.5 }}>
-                  Ecosystem Modules:
-                </Typography>
-                <Stack direction="row" spacing={0.8} flexWrap="wrap" useFlexGap>
-                  {features.map((f) => (
-                    <Chip
-                      key={f.id}
-                      label={f.label}
-                      size="small"
-                      variant="outlined"
-                      sx={{ height: 18, fontSize: '0.65rem', color: '#818cf8', borderColor: 'rgba(129,140,248,0.2)' }}
-                    />
-                  ))}
-                </Stack>
-              </Box>
-            )}
-
-            {workflows.length > 0 && (
-              <Box sx={{ mb: 1 }}>
-                <Typography variant="caption" sx={{ color: '#a1a1aa', display: 'block', mb: 0.5 }}>
-                  Active Workflows:
-                </Typography>
-                <Stack direction="row" spacing={0.8} flexWrap="wrap" useFlexGap>
-                  {workflows.map((w) => (
-                    <Chip
-                      key={w.id}
-                      label={w.label}
-                      size="small"
-                      sx={{ height: 18, fontSize: '0.65rem', background: 'rgba(16,185,129,0.1)', color: '#34d399' }}
-                    />
-                  ))}
-                </Stack>
-              </Box>
-            )}
-
-            {health && (
-              <Box sx={{ mt: 1.5 }}>
-                <Typography variant="caption" sx={{ color: '#a1a1aa', display: 'block', mb: 0.5 }}>
-                  Health Metrics:
-                </Typography>
-                <Typography variant="caption" sx={{ fontFamily: 'monospace', color: '#34d399', display: 'block' }}>
-                  {JSON.stringify(health)}
-                </Typography>
-              </Box>
-            )}
+            <Stack direction="row" spacing={0.8} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
+              {routes.slice(0, 5).map((r, idx) => (
+                <Chip
+                  key={idx}
+                  label={`${r.label || 'ANY'} ${r.path}`}
+                  size="small"
+                  sx={{
+                    height: 18,
+                    fontSize: '0.6rem',
+                    fontFamily: 'monospace',
+                    background: 'rgba(255, 255, 255, 0.02)',
+                    border: '1px solid rgba(255, 255, 255, 0.05)',
+                    color: '#cbd5e1',
+                  }}
+                />
+              ))}
+            </Stack>
           </Box>
+
+          {/* Ecosystem modules */}
+          <Box sx={{ mb: 2, opacity: highlightEcosystem ? 1 : 0.8, p: highlightEcosystem ? 1.5 : 0, borderRadius: '8px', border: highlightEcosystem ? '1px solid rgba(127, 85, 240, 0.3)' : 'none', background: highlightEcosystem ? 'rgba(127, 85, 240, 0.02)' : 'none' }}>
+            <Typography variant="caption" sx={{ color: highlightEcosystem ? '#b794f4' : '#a1a1aa', fontWeight: 800, display: 'block', mb: 1 }}>
+              Ecosystem Modules ({features.length}) {highlightEcosystem && '— Focused Lens'}
+            </Typography>
+            <Stack direction="row" spacing={0.8} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
+              {features.map((f) => (
+                <Chip
+                  key={f.id}
+                  label={f.label}
+                  size="small"
+                  sx={{
+                    height: 18,
+                    fontSize: '0.6rem',
+                    background: 'rgba(255, 255, 255, 0.02)',
+                    border: '1px solid rgba(255, 255, 255, 0.05)',
+                    color: '#cbd5e1',
+                  }}
+                />
+              ))}
+            </Stack>
+          </Box>
+
+          {/* Active workflows */}
+          <Box sx={{ mb: 2, opacity: highlightWorkflows ? 1 : 0.8, p: highlightWorkflows ? 1.5 : 0, borderRadius: '8px', border: highlightWorkflows ? '1px solid rgba(127, 85, 240, 0.3)' : 'none', background: highlightWorkflows ? 'rgba(127, 85, 240, 0.02)' : 'none' }}>
+            <Typography variant="caption" sx={{ color: highlightWorkflows ? '#b794f4' : '#a1a1aa', fontWeight: 800, display: 'block', mb: 1 }}>
+              Governed Workflows ({workflows.length}) {highlightWorkflows && '— Focused Lens'}
+            </Typography>
+            <Stack direction="row" spacing={0.8} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
+              {workflows.map((w) => (
+                <Chip
+                  key={w.id}
+                  label={w.label}
+                  size="small"
+                  sx={{
+                    height: 18,
+                    fontSize: '0.6rem',
+                    background: 'rgba(34, 197, 94, 0.05)',
+                    color: '#22c55e',
+                    border: '1px solid rgba(34, 197, 94, 0.15)',
+                  }}
+                />
+              ))}
+            </Stack>
+          </Box>
+
+          {/* Health metrics */}
+          {health && (
+            <Box sx={{ mb: 2, opacity: highlightHealth ? 1 : 0.8, p: highlightHealth ? 1.5 : 0, borderRadius: '8px', border: highlightHealth ? '1px solid rgba(127, 85, 240, 0.3)' : 'none', background: highlightHealth ? 'rgba(127, 85, 240, 0.02)' : 'none' }}>
+              <Typography variant="caption" sx={{ color: highlightHealth ? '#b794f4' : '#a1a1aa', fontWeight: 800, display: 'block', mb: 1 }}>
+                Health Check Endpoint {highlightHealth && '— Focused Lens'}
+              </Typography>
+              <Typography variant="caption" sx={{ fontFamily: 'monospace', color: '#22c55e', display: 'block', mt: 0.5 }}>
+                {health.endpoint} [Status: Available]
+              </Typography>
+            </Box>
+          )}
         </>
       )}
 
-      {/* Warnings */}
-      {warnings.length > 0 && (
-        <Stack spacing={0.5} sx={{ mb: 2, mt: 1.5 }}>
-          {warnings.map((warning, idx) => (
-            <Typography key={idx} variant="caption" sx={{ color: '#fbbf24', display: 'block' }}>
-              ⚠️ {warning}
-            </Typography>
-          ))}
-        </Stack>
+      {/* Warnings block (only show if warnings exist) */}
+      {warnings && warnings.length > 0 && (
+        <Box sx={{ p: 1.5, mb: 2, background: 'rgba(251, 191, 36, 0.05)', border: '1px solid rgba(251, 191, 36, 0.2)', borderRadius: '8px' }}>
+          <Stack spacing={0.5}>
+            {warnings.map((warning, idx) => (
+              <Typography key={idx} variant="caption" sx={{ color: '#fbbf24', display: 'block' }}>
+                ⚠️ {warning}
+              </Typography>
+            ))}
+          </Stack>
+        </Box>
       )}
 
-      <Divider sx={{ my: 1.5, borderColor: 'rgba(255, 255, 255, 0.06)' }} />
+      <Divider sx={{ my: 2, borderColor: 'rgba(255, 255, 255, 0.06)' }} />
 
-      {/* Persona Lenses */}
-      <Box sx={{ mb: 2 }}>
-        <Typography variant="caption" sx={{ color: '#a1a1aa', display: 'block', mb: 1 }}>
-          Persona Lenses (Future View Modes):
+      {/* Persona lenses selectors display (readout format) */}
+      <Box sx={{ mb: 2.5 }}>
+        <Typography variant="caption" sx={{ color: '#71717a', display: 'block', mb: 1 }}>
+          Persona Lenses (Current Context: {activeLens.toUpperCase()})
         </Typography>
         <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
           {personaLenses.map((lens) => (
-            <Button
+            <Chip
               key={lens}
-              disabled
+              label={lens.toUpperCase()}
               size="small"
+              variant={activeLens === lens ? 'filled' : 'outlined'}
               sx={{
-                height: 24,
-                fontSize: '0.65rem',
-                borderRadius: '6px',
-                background: 'rgba(255,255,255,0.03)',
-                color: 'rgba(255,255,255,0.3)',
-                border: '1px solid rgba(255,255,255,0.06)',
-                px: 1.5,
+                height: 20,
+                fontSize: '0.55rem',
+                fontWeight: 700,
+                color: activeLens === lens ? '#b794f4' : 'rgba(255,255,255,0.3)',
+                borderColor: activeLens === lens ? 'rgba(127, 85, 240, 0.3)' : 'rgba(255,255,255,0.06)',
+                background: activeLens === lens ? 'rgba(127, 85, 240, 0.12)' : 'transparent',
               }}
-            >
-              {lens.toUpperCase()}
-            </Button>
+            />
           ))}
         </Stack>
       </Box>
 
-      {/* Action Buttons */}
+      {/* Footer controls */}
       <Box sx={{ display: 'flex', gap: 1 }}>
         <Button
           size="small"
           variant="contained"
           disabled
           sx={{
-            background: 'rgba(255, 255, 255, 0.05)',
-            color: 'rgba(255, 255, 255, 0.3)',
-            borderRadius: '8px',
+            background: 'rgba(255, 255, 255, 0.04)',
+            color: 'rgba(255, 255, 255, 0.3) !important',
+            borderRadius: '6px',
             textTransform: 'none',
-            fontWeight: 700,
+            fontSize: '0.75rem',
           }}
         >
           Preview only
@@ -342,17 +372,18 @@ export const LiveAppWorkbenchCard: React.FC<LiveAppWorkbenchCardProps> = ({
             variant="outlined"
             onClick={onCancel}
             sx={{
-              color: '#a1a1aa',
-              borderColor: 'rgba(255,255,255,0.15)',
-              borderRadius: '8px',
+              color: '#71717a',
+              borderColor: 'rgba(255,255,255,0.1)',
+              borderRadius: '6px',
               textTransform: 'none',
+              fontSize: '0.75rem',
               '&:hover': {
-                borderColor: 'rgba(255,255,255,0.3)',
-                background: 'rgba(255,255,255,0.04)',
+                borderColor: 'rgba(255,255,255,0.2)',
+                background: 'rgba(255,255,255,0.02)',
               },
             }}
           >
-            Reject
+            Dismiss
           </Button>
         )}
       </Box>

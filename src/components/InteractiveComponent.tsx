@@ -15,9 +15,10 @@ interface ComponentProps {
   onAction: (query: string) => void;
   onApproveAction?: (id: string, workspaceName: string, command: string) => void;
   onCancelAction?: (id: string) => void;
+  activeLens?: string;
 }
 
-export const InteractiveComponent: React.FC<ComponentProps> = ({ uiComponent, onAction, onApproveAction, onCancelAction }) => {
+export const InteractiveComponent: React.FC<ComponentProps> = ({ uiComponent, onAction, onApproveAction, onCancelAction, activeLens }) => {
   const { type, data } = uiComponent;
   // Local only — the message log itself stays append-only/immutable, so
   // "did I already act on this" lives here rather than mutating history.
@@ -38,6 +39,7 @@ export const InteractiveComponent: React.FC<ComponentProps> = ({ uiComponent, on
         variant="chat"
         data={data}
         onCancel={() => setResolution('cancelled')}
+        activeLens={activeLens}
       />
     );
   }

@@ -5,7 +5,7 @@ html, body, #root {
   height: 100%;
   margin: 0;
   font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  background: #09090b;
+  background: #08090b;
   color: #f4f4f5;
   overflow: hidden;
   position: relative;
@@ -15,7 +15,7 @@ html, body, #root {
   box-sizing: border-box;
 }
 
-/* Premium Apple/Vercel radial backdrop glow */
+/* Subtle dark Vercel/Codex radial backdrop glow */
 body::before {
   content: '';
   position: absolute;
@@ -24,8 +24,8 @@ body::before {
   width: 100%;
   height: 100%;
   background: 
-    radial-gradient(circle at 50% -20%, rgba(127, 85, 240, 0.08), transparent 70%),
-    radial-gradient(circle at 10% 80%, rgba(6, 182, 212, 0.03), transparent 50%);
+    radial-gradient(circle at 50% -10%, rgba(127, 85, 240, 0.05), transparent 60%),
+    radial-gradient(circle at 10% 90%, rgba(34, 197, 94, 0.015), transparent 40%);
   pointer-events: none;
   z-index: 0;
 }
@@ -34,7 +34,7 @@ body::before {
 @keyframes appleSpringIn {
   0% {
     opacity: 0;
-    transform: scale(0.96) translateY(10px);
+    transform: scale(0.98) translateY(6px);
   }
   100% {
     opacity: 1;
@@ -43,7 +43,7 @@ body::before {
 }
 
 .feed-card-animation {
-  animation: appleSpringIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: appleSpringIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 /* Flashing text cursor for terminal logging */
@@ -63,23 +63,19 @@ body::before {
 
 /* Custom premium scrollbar styling */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.01);
+  background: rgba(255, 255, 255, 0.005);
   border-radius: 99px;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.08);
   border-radius: 99px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(127, 85, 240, 0.5);
-  border: 2px solid transparent;
-  background-clip: padding-box;
+  background: rgba(127, 85, 240, 0.4);
 }
 
 .scroll-container {
@@ -88,14 +84,12 @@ body::before {
   overscroll-behavior-y: contain;
 }
 
-/* A quiet pulse for things genuinely waiting on the person, not a loud
-   attention-grab — used on the approval card border only. */
 @keyframes pulseGlow {
   0%, 100% {
-    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.18);
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.12);
   }
   50% {
-    box-shadow: 0 0 0 6px rgba(245, 158, 11, 0);
+    box-shadow: 0 0 0 4px rgba(245, 158, 11, 0);
   }
 }
 

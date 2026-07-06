@@ -912,11 +912,10 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
         height: '100%',
         display: 'flex',
         flexDirection: 'column',
-        background: 'rgba(20, 20, 25, 0.55)',
-        border: '1px solid rgba(255, 255, 255, 0.08)',
-        borderRadius: '24px',
+        background: 'rgba(9, 9, 11, 0.35)',
+        borderLeft: '1px solid rgba(255, 255, 255, 0.08)',
+        borderRadius: 0,
         overflow: 'hidden',
-        boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.3)'
       }}
     >
       {/* Header bar */}
@@ -925,31 +924,29 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          px: 3,
-          py: 2,
+          px: 2.5,
+          py: 1.5,
           borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-          background: 'rgba(255, 255, 255, 0.01)'
+          background: 'rgba(9, 9, 11, 0.2)'
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-          <ViewStreamIcon sx={{ color: '#7f5af0', fontSize: 18 }} />
-          <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#f4f4f5', letterSpacing: '-0.01em' }}>
-            Intelligence Feed
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <ViewStreamIcon sx={{ color: '#7f5af0', fontSize: 16 }} />
+          <Typography variant="caption" sx={{ fontWeight: 800, color: '#f4f4f5', letterSpacing: '0.04em' }}>
+            INTELLIGENCE FEED
           </Typography>
         </Box>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <Box sx={{ display: 'flex', gap: 0.5 }}>
-            {previewFeed.length > 0 && (
-              <Tooltip title="Clear Feed Dashboard">
-                <IconButton size="small" onClick={onClearFeed} sx={{ color: '#a0aec0' }}>
-                  <ClearAllIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-            )}
-            <IconButton size="small" onClick={onClose} sx={{ color: '#a0aec0' }}>
-              <CloseIcon fontSize="small" />
-            </IconButton>
-          </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          {previewFeed.length > 0 && (
+            <Tooltip title="Clear Feed">
+              <IconButton size="small" onClick={onClearFeed} sx={{ color: '#a0aec0' }}>
+                <ClearAllIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
+          <IconButton size="small" onClick={onClose} sx={{ color: '#a0aec0' }}>
+            <CloseIcon fontSize="small" />
+          </IconButton>
         </Box>
       </Box>
 
@@ -964,7 +961,7 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
       )}
 
       {/* Preview Feed Body */}
-      <Box className="scroll-container" sx={{ flexGrow: 1, overflowY: 'auto', p: 3, display: 'flex', flexDirection: 'column', gap: 3 }}>
+      <Box className="scroll-container" sx={{ flexGrow: 1, overflowY: 'auto', p: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
         {previewFeed.length === 0 ? (
           <Box
             sx={{
@@ -973,9 +970,9 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              border: '1px dashed rgba(255, 255, 255, 0.08)',
-              borderRadius: '20px',
-              p: 4,
+              border: '1px dashed rgba(255, 255, 255, 0.05)',
+              borderRadius: '8px',
+              p: 3,
               textAlign: 'center',
               minHeight: '100%',
               position: 'relative'
@@ -983,30 +980,29 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
           >
             <Box
               sx={{
-                width: 72,
-                height: 72,
+                width: 56,
+                height: 56,
                 borderRadius: '50%',
                 background: 'rgba(127, 85, 240, 0.04)',
                 border: '1px solid rgba(127, 85, 240, 0.12)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                mb: 2,
-                boxShadow: '0 0 20px rgba(127, 85, 240, 0.05)'
+                mb: 1.5,
               }}
             >
               {loading ? (
-                <CircularProgress size={26} sx={{ color: '#7f5af0' }} />
+                <CircularProgress size={20} sx={{ color: '#7f5af0' }} />
               ) : (
-                <TerminalIcon sx={{ fontSize: 32, color: '#7f5af0' }} />
+                <TerminalIcon sx={{ fontSize: 24, color: '#7f5af0' }} />
               )}
             </Box>
-            <Typography variant="body1" sx={{ color: '#f4f4f5', fontWeight: 600, mb: 1 }}>
-              {loading ? 'Waiting for response' : 'Intelligence Feed'}
+            <Typography variant="caption" sx={{ color: '#f4f4f5', fontWeight: 700, display: 'block', mb: 0.5 }}>
+              {loading ? 'WAITING FOR TELEMETRY' : 'INTELLIGENCE FEED'}
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 280, fontSize: '0.85rem', lineHeight: 1.6 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ maxWidth: 220, fontSize: '0.75rem', lineHeight: 1.4, display: 'block' }}>
               {loading
-                ? "Nothing to show yet — real components land here once the backend actually returns something."
+                ? "Waiting for backend response logs..."
                 : 'Interactive files, telemetry statistics, and search components will stream here as you explore.'}
             </Typography>
           </Box>
@@ -1017,14 +1013,14 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
               elevation={0}
               className="feed-card-animation"
               sx={{
-                background: 'rgba(255, 255, 255, 0.015)',
+                background: 'rgba(255, 255, 255, 0.02)',
                 border: '1px solid rgba(255, 255, 255, 0.06)',
-                borderRadius: '16px',
-                overflow: 'visible',
+                borderRadius: '8px',
+                overflow: 'hidden',
                 display: 'flex',
                 flexDirection: 'column',
                 position: 'relative',
-                p: 0.5
+                p: 0
               }}
             >
               {/* Card Header */}
