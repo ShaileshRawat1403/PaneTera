@@ -141,7 +141,7 @@ const App: React.FC = () => {
     };
   }, [token]);
 
-  // On session start: recall workspace memory from rook MCP and show in feed
+  // On session start: recall workspace memory if memory bridge is available
   useEffect(() => {
     if (!token) return;
     const now = new Date().toLocaleTimeString();
@@ -150,18 +150,22 @@ const App: React.FC = () => {
     })
       .then(r => r.json())
       .then((data: { memories: string[]; bridgeReady: boolean }) => {
-        setPreviewFeed(prev => [
-          {
-            id: 'memory-recall-session',
-            type: 'MemoryRecall',
-            data: { memories: data.memories || [], bridgeReady: data.bridgeReady },
-            timestamp: now
-          },
-          ...prev
-        ]);
+        // Only show recall card if bridge is actually connected and has memories
+        if (data.bridgeReady && data.memories && data.memories.length > 0) {
+          setPreviewFeed(prev => [
+            {
+              id: 'memory-recall-session',
+              type: 'MemoryRecall',
+              data: { memories: data.memories, bridgeReady: true },
+              timestamp: now
+            },
+            ...prev
+          ]);
+        }
       })
-      .catch(() => { /* bridge unavailable — silently skip */ });
+      .catch(() => { /* memory bridge unavailable — silently skip */ });
   }, [token]);
+
 
 
   // Cmd+K palette listener

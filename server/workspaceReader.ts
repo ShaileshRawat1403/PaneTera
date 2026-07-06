@@ -78,6 +78,7 @@ export async function listFilesInWorkspace(workspaceName: string): Promise<strin
   const workspaces = await listWorkspaces();
   const ws = workspaces.find(w => w.name === workspaceName);
   if (!ws) throw new Error(`Workspace ${workspaceName} not allowed`);
+  const workspacePath = ws.path;
 
   const fileList: string[] = [];
   async function recurse(dir: string) {
@@ -104,7 +105,7 @@ export async function listFilesInWorkspace(workspaceName: string): Promise<strin
         try {
           const stat = await fs.stat(fullPath);
           if (stat.size > MAX_SIZE) continue;
-          const rel = path.relative(ws.path, fullPath);
+          const rel = path.relative(workspacePath, fullPath);
           fileList.push(rel);
         } catch (e) {
           // Skip un-statable files
@@ -112,7 +113,7 @@ export async function listFilesInWorkspace(workspaceName: string): Promise<strin
       }
     }
   }
-  await recurse(ws.path);
+  await recurse(workspacePath);
   return fileList;
 }
 
@@ -144,4 +145,3 @@ export async function searchFilesInWorkspace(workspaceName: string, keyword: str
   }
   return results;
 }
-

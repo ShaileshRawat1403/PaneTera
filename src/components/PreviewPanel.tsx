@@ -1122,6 +1122,11 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
                     workspaceName={item.data.workspaceName}
                     command={item.data.command}
                     reason={item.data.reason}
+                    riskLevel={item.data.riskLevel}
+                    executionMode={item.data.executionMode}
+                    isDryRun={item.data.isDryRun}
+                    allowed={item.data.allowed}
+                    description={item.data.description}
                     onApprove={() => onApproveAction(item.id, item.data.workspaceName, item.data.command)}
                     onCancel={() => onRemoveItem(item.id)}
                   />
@@ -1193,7 +1198,7 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
                         flexShrink: 0
                       }} />
                       <Typography sx={{ fontSize: '0.7rem', color: '#a78bfa', fontFamily: 'monospace', letterSpacing: '0.08em' }}>
-                        ROOK MEMORY — workspace context recalled
+                        SESSION MEMORY — workspace context recalled
                       </Typography>
                     </Box>
                     {(item.data.memories as string[]).map((mem: string, mIdx: number) => (

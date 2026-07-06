@@ -3,9 +3,10 @@ import express, { Request, Response, NextFunction } from 'express';
 import dotenv from 'dotenv';
 import chokidar from 'chokidar';
 import path from 'path';
-import { spawn as spawnProc, ChildProcess as CP } from 'child_process';
+import { exec, spawn, spawn as spawnProc, ChildProcess as CP } from 'child_process';
 import readline from 'readline';
 import { readFileSafe, listWorkspaces, listFilesInWorkspace, searchFilesInWorkspace } from './workspaceReader';
+import { executeCommand, type ExecutionMode, validateCommand } from './execution';
 
 dotenv.config();
 
@@ -44,12 +45,12 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
-// ── Rook MCP Memory Bridge ───────────────────────────────────────────────────
+// ── Rook MCP Memory Bridge (optional) ────────────────────────────────────────
 // Spawns `rook mcp memory` as a child process and communicates over stdio
-// using JSON-RPC (MCP protocol). No changes to the rook repo are needed.
+// using JSON-RPC (MCP protocol). Only starts if ROOK_BINARY_PATH is set.
+// Portal works fine without it — memory recall cards show "unavailable".
 
-const ROOK_BINARY = process.env.ROOK_BINARY_PATH
-  || '/Users/Shailesh/MYAIAGENTS/rook/target/debug/rook';
+const ROOK_BINARY = process.env.ROOK_BINARY_PATH || '';
 
 interface McpRpcReq  { jsonrpc: '2.0'; id: number; method: string; params: Record<string, unknown>; }
 interface McpRpcResp { jsonrpc: '2.0'; id: number; result?: unknown; error?: { code: number; message: string }; }
@@ -151,9 +152,13 @@ class RookMemoryBridge {
 }
 
 const memoryBridge = new RookMemoryBridge();
-memoryBridge.start().catch((e: Error) =>
-  console.warn('[MemoryBridge] Could not start rook memory server (build rook first):', e.message)
-);
+if (ROOK_BINARY) {
+  memoryBridge.start().catch((e: Error) =>
+    console.warn('[MemoryBridge] Could not start rook memory server:', e.message)
+  );
+} else {
+  console.log('[MemoryBridge] ROOK_BINARY_PATH not set — memory bridge disabled (portal works without it)');
+}
 // ─────────────────────────────────────────────────────────────────────────────
 
 // SSE Clients registration
@@ -331,9 +336,30 @@ app.get('/api/search', async (req, res) => {
   }
 });
 
-import { exec, spawn, ChildProcess } from 'child_process';
+let activeProcesses: { [id: string]: CP } = {};
 
-let activeProcesses: { [id: string]: ChildProcess } = {};
+function selectedExecutionMode(): ExecutionMode {
+  const mode = process.env.PORTAL_EXECUTION_MODE;
+  return mode === 'apple-container' ? 'apple-container' : 'local-shell';
+}
+
+function buildProposedActionData(workspaceName: string, command: string, reason: string = '') {
+  const allowlistEntry = validateCommand(command);
+  const risk = allowlistEntry ? allowlistEntry.risk : 'dangerous';
+  const allowed = !!allowlistEntry;
+  const mode = selectedExecutionMode();
+
+  return {
+    workspaceName,
+    command,
+    reason,
+    riskLevel: risk,
+    executionMode: mode,
+    isDryRun: true, // Phase 1 is dry-run only
+    allowed,
+    description: allowlistEntry?.description || 'Blocked / Unknown Command'
+  };
+}
 
 // Helper to get Git details
 async function getWorkspaceGit(workspaceName: string): Promise<{ status: string; log: string }> {
@@ -385,27 +411,6 @@ app.post('/api/execute', async (req, res) => {
       return res.status(404).json({ error: `Workspace ${workspaceName} not found` });
     }
 
-    // Command verification
-    const allowedCmds = [
-      { match: /^npm\s+run\s+test$/, cmd: 'npm', args: ['run', 'test'] },
-      { match: /^npm\s+test$/, cmd: 'npm', args: ['test'] },
-      { match: /^npm\s+run\s+build$/, cmd: 'npm', args: ['run', 'build'] },
-      { match: /^npm\s+run\s+lint$/, cmd: 'npm', args: ['run', 'lint'] },
-      { match: /^npm\s+run\s+verify$/, cmd: 'npm', args: ['run', 'verify'] },
-      { match: /^cargo\s+check$/, cmd: 'cargo', args: ['check'] },
-      { match: /^cargo\s+test$/, cmd: 'cargo', args: ['test'] },
-      { match: /^git\s+diff$/, cmd: 'git', args: ['diff'] },
-      { match: /^git\s+status$/, cmd: 'git', args: ['status'] }
-    ];
-
-    const matched = allowedCmds.find(item => item.match.test(command.trim()));
-    if (!matched) {
-      return res.status(400).json({ error: `Command "${command}" is not in the portal safe execution allowlist.` });
-    }
-
-    const child = spawn(matched.cmd, matched.args, { cwd: ws.path, shell: true });
-    activeProcesses[procId] = child;
-
     const broadcastLog = (type: 'stdout' | 'stderr' | 'status', text: string) => {
       sseClients.forEach(client => {
         client.write(`data: ${JSON.stringify({
@@ -418,31 +423,30 @@ app.post('/api/execute', async (req, res) => {
       });
     };
 
-    // A spawn failure (bad cwd, missing binary, missing shell, permissions)
-    // must not crash the server for every connected user over one failed
-    // command. Surface it as a visible, honest failure in the stream —
-    // found this the hard way running a real smoke test against a real
-    // workspace, where an environment-specific cwd issue took the whole
-    // process down before this handler existed.
-    child.on('error', (err: Error) => {
-      broadcastLog('status', `Process failed to start: ${err.message}`);
-      delete activeProcesses[procId];
-    });
+    const result = await executeCommand(
+      command,
+      ws.path,
+      ws.name,
+      selectedExecutionMode()
+    );
 
-    child.stdout?.on('data', (data) => {
-      broadcastLog('stdout', data.toString());
-    });
+    if (result.stdout) {
+      broadcastLog('stdout', result.stdout);
+    }
+    if (result.stderr) {
+      broadcastLog('stderr', result.stderr);
+    }
 
-    child.stderr?.on('data', (data) => {
-      broadcastLog('stderr', data.toString());
-    });
+    const statusText = result.dryRun
+      ? `Dry-run completed via ${result.adapter}. No command was executed.`
+      : `Process completed with exit code: ${result.exitCode}`;
+    broadcastLog('status', statusText);
 
-    child.on('close', (code) => {
-      broadcastLog('status', `Process completed with exit code: ${code}`);
-      delete activeProcesses[procId];
-    });
+    if (!result.success) {
+      return res.status(400).json({ error: result.stderr || 'Execution failed validation' });
+    }
 
-    res.json({ success: true, message: 'Execution initiated' });
+    res.json({ success: true, message: statusText, result });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -852,7 +856,7 @@ async function askGemini(query: string, history: any[] = []): Promise<{ reply: s
           toolResult = { proposed: true, workspaceName: args.workspaceName, command: args.command };
           uiComponent = {
             type: 'ProposedAction',
-            data: { workspaceName: args.workspaceName, command: args.command, reason: args.reason || '' }
+            data: buildProposedActionData(args.workspaceName, args.command, args.reason || '')
           };
         } else {
           throw new Error(`Unknown function: ${name}`);
@@ -1074,7 +1078,7 @@ async function askOpenAI(query: string, history: any[] = []): Promise<{ reply: s
           toolResult = { proposed: true, workspaceName: args.workspaceName, command: args.command };
           uiComponent = {
             type: 'ProposedAction',
-            data: { workspaceName: args.workspaceName, command: args.command, reason: args.reason || '' }
+            data: buildProposedActionData(args.workspaceName, args.command, args.reason || '')
           };
         } else {
           throw new Error(`Unknown function: ${name}`);
@@ -1227,7 +1231,7 @@ async function resolveQueryLocally(query: string): Promise<{ reply: string; uiCo
       reply: `[LOCAL FALLBACK ENGINE] I can run "${command}" in workspace "${workspace}". Nothing runs until you approve it below.`,
       uiComponent: {
         type: 'ProposedAction',
-        data: { workspaceName: workspace, command, reason: `Requested via: "${query}"` }
+        data: buildProposedActionData(workspace, command, `Requested via: "${query}"`)
       }
     };
   }

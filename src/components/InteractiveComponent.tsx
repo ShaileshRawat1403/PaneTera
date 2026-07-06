@@ -48,6 +48,11 @@ export const InteractiveComponent: React.FC<ComponentProps> = ({ uiComponent, on
         workspaceName={workspaceName}
         command={command}
         reason={reason}
+        riskLevel={data.riskLevel}
+        executionMode={data.executionMode}
+        isDryRun={data.isDryRun}
+        allowed={data.allowed}
+        description={data.description}
         onApprove={() => {
           if (procId && onApproveAction) {
             onApproveAction(procId, workspaceName, command);
