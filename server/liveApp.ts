@@ -209,12 +209,14 @@ export async function buildLiveAppWorkbench(
           features = body.features.map((f: any) => ({
             id: typeof f === 'string' ? f : f.id || '',
             label: typeof f === 'string' ? f : f.label || f.id || '',
+            status: typeof f === 'object' && typeof f.status === 'string' ? f.status : undefined,
           }));
         }
         if (Array.isArray(body.workflows)) {
           workflows = body.workflows.map((w: any) => ({
             id: typeof w === 'string' ? w : w.id || w.name || '',
             label: typeof w === 'string' ? w : w.label || w.name || w.id || '',
+            status: typeof w === 'object' && typeof w.status === 'string' ? w.status : undefined,
           }));
         }
         if (body.health && typeof body.health === 'object') {

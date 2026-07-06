@@ -63,8 +63,13 @@ async function runAsyncTests() {
           environment: 'staging',
           version: '1.4.2-beta',
           routes: ['GET /api/workflows', 'POST /api/workflows/run'],
-          features: ['flowright-runtime', 'dynamic-console'],
-          workflows: ['CMS Publish Workflow'],
+          features: [
+            { id: 'flowright-runtime', label: 'Flowright runtime', status: 'available' },
+            { id: 'dynamic-console', label: 'Dynamic console', status: 'configured-by-env' },
+          ],
+          workflows: [
+            { id: 'cms-publish', label: 'CMS Publish Workflow', status: 'available' },
+          ],
           health: { status: 'healthy', dbConnected: true },
         }),
       } as unknown as Response;
@@ -82,7 +87,10 @@ async function runAsyncTests() {
     assert.strictEqual(proposal.version, '1.4.2-beta');
     assert.strictEqual(proposal.routes.length, 2);
     assert.strictEqual(proposal.features.length, 2);
+    assert.strictEqual(proposal.features[0].status, 'available');
+    assert.strictEqual(proposal.features[1].status, 'configured-by-env');
     assert.strictEqual(proposal.workflows.length, 1);
+    assert.strictEqual(proposal.workflows[0].status, 'available');
     assert.ok(proposal.health && proposal.health.status === 'healthy');
     assert.strictEqual(proposal.previewOnly, true);
   } finally {
