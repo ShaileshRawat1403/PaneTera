@@ -21,7 +21,7 @@ interface ComponentProps {
   onCancelAction?: (id: string) => void;
   onStartContentWorkflow?: (form: any) => void;
   activeLens?: string;
-  variant?: 'feed' | 'main' | 'chat';
+  variant?: 'feed' | 'main' | 'chat' | 'native-plane' | 'live-plane';
 }
 
 export const InteractiveComponent: React.FC<ComponentProps> = ({ uiComponent, onAction, onApproveAction, onCancelAction, onStartContentWorkflow, activeLens, variant = 'main' }) => {
@@ -517,6 +517,124 @@ export const InteractiveComponent: React.FC<ComponentProps> = ({ uiComponent, on
     const draft = view?.data || {};
     const healthStatus = typeof health?.status === 'string' ? health.status : 'unknown';
 
+    if (variant === 'live-plane') {
+      const liveEnabled = data.embed?.allowed && data.embedUrl;
+      return (
+        <Paper
+          variant="outlined"
+          sx={{
+            height: '100%',
+            minHeight: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            background: 'rgba(8, 9, 11, 0.92)',
+            borderColor: 'rgba(255, 255, 255, 0.08)',
+            borderRadius: 0,
+            overflow: 'hidden',
+          }}
+        >
+          <Box
+            sx={{
+              px: 2,
+              py: 1.5,
+              borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 2,
+              flexShrink: 0,
+            }}
+          >
+            <Box sx={{ minWidth: 0 }}>
+              <Typography variant="caption" sx={{ color: '#b794f4', fontWeight: 900, letterSpacing: '0.08em', display: 'block' }}>
+                LIVE APP PLANE
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#f4f4f5', fontWeight: 800, lineHeight: 1.2 }}>
+                Soothsayer
+              </Typography>
+              <Typography variant="caption" sx={{ color: '#71717a', wordBreak: 'break-all' }}>
+                {url}
+              </Typography>
+            </Box>
+            <Button
+              size="small"
+              variant="outlined"
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              endIcon={<OpenInNewIcon sx={{ fontSize: 12 }} />}
+              sx={{ borderColor: 'rgba(255,255,255,0.1)', color: '#cbd5e1', borderRadius: '6px', flexShrink: 0 }}
+            >
+              Open
+            </Button>
+          </Box>
+
+          {liveEnabled ? (
+            <>
+              {Array.isArray(data.embed.routes) && data.embed.routes.length > 0 && (
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  sx={{
+                    px: 2,
+                    py: 1.25,
+                    borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+                    flexWrap: 'wrap',
+                    flexShrink: 0,
+                  }}
+                  useFlexGap
+                >
+                  {data.embed.routes.map((route: any) => {
+                    const isSelected = activeRouteId === route.id;
+                    return (
+                      <Chip
+                        key={route.id}
+                        label={route.label}
+                        onClick={() => {
+                          setActiveRouteId(route.id);
+                          if (route.embedUrl) {
+                            setIframeSrc(route.embedUrl);
+                          }
+                        }}
+                        variant={isSelected ? 'filled' : 'outlined'}
+                        size="small"
+                        sx={{
+                          cursor: 'pointer',
+                          fontSize: '0.75rem',
+                          height: 26,
+                          background: isSelected ? '#7f5af0' : 'transparent',
+                          color: isSelected ? '#fff' : '#cbd5e1',
+                          borderColor: isSelected ? '#7f5af0' : 'rgba(255, 255, 255, 0.16)',
+                        }}
+                      />
+                    );
+                  })}
+                </Stack>
+              )}
+              <Box sx={{ flexGrow: 1, minHeight: 0, background: '#050505' }}>
+                <iframe
+                  src={iframeSrc || data.embedUrl}
+                  title="Live Soothsayer"
+                  sandbox="allow-scripts allow-forms allow-same-origin allow-popups"
+                  referrerPolicy="no-referrer"
+                  style={{ width: '100%', height: '100%', border: 'none', background: '#fff' }}
+                />
+              </Box>
+            </>
+          ) : (
+            <Box sx={{ p: 3 }}>
+              <Typography variant="body2" sx={{ color: '#f59e0b', fontWeight: 700, mb: 1 }}>
+                Live embed is not configured.
+              </Typography>
+              <Typography variant="caption" sx={{ color: '#a1a1aa', lineHeight: 1.6 }}>
+                The app-native workbench is available, but the portal server did not receive a signed live app URL.
+              </Typography>
+            </Box>
+          )}
+        </Paper>
+      );
+    }
+
     if (variant === 'feed' || variant === 'chat') {
       return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -684,7 +802,7 @@ export const InteractiveComponent: React.FC<ComponentProps> = ({ uiComponent, on
                     Embedded Live View Allowed
                   </Typography>
                   <Typography variant="caption" sx={{ color: '#a1a1aa', lineHeight: 1.4, display: 'block' }}>
-                    Soothsayer allows portal framing. Switch to the "Live App" tab to browse.
+                    Soothsayer allows portal framing. The live app is open in the right-side live plane.
                   </Typography>
                 </Paper>
               ) : (
@@ -697,7 +815,7 @@ export const InteractiveComponent: React.FC<ComponentProps> = ({ uiComponent, on
 
           {/* Middle Workbench Area: Content Draft Preview & Run details */}
           <Grid item xs={12} md={8.5} sx={{ p: 3, display: 'flex', flexDirection: 'column' }}>
-            {data.embed?.allowed && data.embedUrl ? (
+            {data.embed?.allowed && data.embedUrl && variant !== 'native-plane' ? (
               <Box sx={{ borderBottom: 1, borderColor: 'rgba(255, 255, 255, 0.08)', mb: 2 }}>
                 <Tabs value={activeTab} onChange={(e, val) => setActiveTab(val)} textColor="primary" indicatorColor="primary">
                   <Tab label="Native Workbench" value="native" sx={{ textTransform: 'none', minWidth: 100, fontSize: '0.8rem', fontWeight: 600 }} />
@@ -706,7 +824,7 @@ export const InteractiveComponent: React.FC<ComponentProps> = ({ uiComponent, on
               </Box>
             ) : null}
 
-            {activeTab === 'live' && data.embed?.allowed && data.embedUrl ? (
+            {activeTab === 'live' && data.embed?.allowed && data.embedUrl && variant !== 'native-plane' ? (
               <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                 {/* Safe route selector Chips */}
                 {Array.isArray(data.embed.routes) && data.embed.routes.length > 0 && (
@@ -810,7 +928,7 @@ export const InteractiveComponent: React.FC<ComponentProps> = ({ uiComponent, on
     );
   }
   if (type === 'BrowserObservation') {
-    return <BrowserObservationView data={data} variant={variant} />;
+    return <BrowserObservationView data={data} variant={variant === 'feed' ? 'feed' : 'main'} />;
   }
 
   return null;

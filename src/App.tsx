@@ -127,7 +127,7 @@ const App: React.FC = () => {
 
   const handleRightResize = (deltaX: number) => {
     setRightFeedWidth(prev => {
-      const next = Math.max(320, Math.min(620, prev + deltaX));
+      const next = Math.max(320, Math.min(1100, prev + deltaX));
       localStorage.setItem('portal-right-width', String(next));
       return next;
     });
@@ -137,6 +137,23 @@ const App: React.FC = () => {
     setWorkbenchMode(nextMode);
     localStorage.setItem('portal-workbench-mode', nextMode);
   };
+
+  const isSoothsayerLivePlaneActive = Boolean(
+    activeComponent?.type === 'SoothsayerWorkbench' &&
+    (activeComponent.data as any)?.embed?.allowed &&
+    (activeComponent.data as any)?.embedUrl
+  );
+
+  useEffect(() => {
+    if (isSoothsayerLivePlaneActive && isRightFeedCollapsed) {
+      setIsRightFeedCollapsed(false);
+      localStorage.setItem('portal-right-collapsed', 'false');
+    }
+    if (isSoothsayerLivePlaneActive && rightFeedWidth < 760) {
+      setRightFeedWidth(760);
+      localStorage.setItem('portal-right-width', '760');
+    }
+  }, [isSoothsayerLivePlaneActive, isRightFeedCollapsed, rightFeedWidth]);
 
   const toggleLeftRail = () => {
     setIsLeftRailCollapsed(prev => {
@@ -672,7 +689,7 @@ const App: React.FC = () => {
           onCancelAction={handleRemoveItem}
           onStartContentWorkflow={handleStartContentWorkflow}
           activeLens={activeLens}
-          variant="main"
+          variant={isSoothsayerLivePlaneActive ? 'native-plane' : 'main'}
         />
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
           <Button 
@@ -1294,7 +1311,17 @@ const App: React.FC = () => {
               </Box>
             }
             rightFeedContent={
-              isRightFeedCollapsed ? (
+              isSoothsayerLivePlaneActive && activeComponent ? (
+                <InteractiveComponent
+                  uiComponent={activeComponent}
+                  onAction={handleSend}
+                  onApproveAction={handleApproveAction}
+                  onCancelAction={handleRemoveItem}
+                  onStartContentWorkflow={handleStartContentWorkflow}
+                  activeLens={activeLens}
+                  variant="live-plane"
+                />
+              ) : isRightFeedCollapsed ? (
                 <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', pt: 2, gap: 2, height: '100%', overflowY: 'auto' }}>
                   <IconButton
                     onClick={toggleRightFeed}
