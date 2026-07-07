@@ -4,6 +4,7 @@ import { DraftPreviewView } from './DraftPreviewView';
 import { SchemaFormView } from './SchemaFormView';
 import { StatusBoardView } from './StatusBoardView';
 import { UnknownNativeView } from './UnknownNativeView';
+import { BrowserObservationView } from './BrowserObservationView';
 
 interface WorkbenchView {
   id: string;
@@ -44,6 +45,8 @@ export const NativeWorkbenchRenderer: React.FC<NativeWorkbenchRendererProps> = (
             );
           case 'status-board':
             return <StatusBoardView key={view.id} data={view.data || {}} />;
+          case 'browser-observation':
+            return <BrowserObservationView key={view.id} data={view.data || null} />;
           default:
             return (
               <UnknownNativeView

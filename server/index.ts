@@ -13,7 +13,7 @@ import { parseWorkflowIntent } from './workflowIntents';
 
 dotenv.config();
 
-const app = express();
+export const app = express();
 const PORT = Number(process.env.PORT) || 4000;
 const TOKEN = process.env.PORTAL_TOKEN || '';
 
@@ -155,10 +155,12 @@ class RookMemoryBridge {
 }
 
 const memoryBridge = new RookMemoryBridge();
-if (ROOK_BINARY) {
+if (ROOK_BINARY && process.env.NODE_ENV !== 'test') {
   memoryBridge.start().catch((e: Error) =>
     console.warn('[MemoryBridge] Could not start rook memory server:', e.message)
   );
+} else if (ROOK_BINARY) {
+  // Silent during test
 } else {
   console.log('[MemoryBridge] ROOK_BINARY_PATH not set — memory bridge disabled (portal works without it)');
 }
@@ -539,9 +541,11 @@ class FlowrightApiBridge {
 }
 
 const flowrightBridge = new FlowrightApiBridge();
-flowrightBridge.start().catch((e: Error) =>
-  console.warn('[FlowrightBridge] Could not start flowright API:', e.message)
-);
+if (process.env.NODE_ENV !== 'test') {
+  flowrightBridge.start().catch((e: Error) =>
+    console.warn('[FlowrightBridge] Could not start flowright API:', e.message)
+  );
+}
 
 // Only allow template paths that actually live inside this flowright repo's
 // own templates directory.
@@ -1261,6 +1265,25 @@ export async function resolveGatewayCardLocally(query: string): Promise<{ reply:
         };
       }
     }
+    if (workflowIntent.kind === 'browser-observation') {
+      const latest = latestObservations[latestObservations.length - 1];
+      if (!latest) {
+        return {
+          reply: `There are no stored Chrome browser observations yet. Use a trusted local agent to capture and post page outlines to "/api/browser-observation".`,
+          uiComponent: {
+            type: 'BrowserObservation',
+            data: null
+          }
+        };
+      }
+      return {
+        reply: `I retrieved the latest browser observation for "${latest.title}".`,
+        uiComponent: {
+          type: 'BrowserObservation',
+          data: latest
+        }
+      };
+    }
 
     if (workflowIntent.kind === 'contentops-draft') {
       try {
@@ -1551,6 +1574,126 @@ Please run standard workspace queries directly:
 Local terminal is operational. Ready for queries.`
   };
 }
+
+export const latestObservations: any[] = [];
+
+function isSuspicious(val: any): boolean {
+  if (!val) return false;
+
+  if (typeof val === 'string') {
+    const s = val.trim();
+    if (/^Bearer\s/i.test(s)) return true;
+    if (s.startsWith('sk-')) return true;
+    if (s.startsWith('eyJ')) return true;
+    return false;
+  }
+
+  if (Array.isArray(val)) {
+    return val.some(isSuspicious);
+  }
+
+  if (typeof val === 'object') {
+    const suspiciousKeys = [
+      'cookie', 'cookies', 'localStorage', 'sessionStorage', 'authorization',
+      'auth', 'authToken', 'token', 'password', 'passwd', 'secret',
+      'credential', 'credentials', 'bearer', 'apiKey', 'accessKey',
+      'refreshToken', 'jwt'
+    ];
+    for (const key of Object.keys(val)) {
+      if (suspiciousKeys.some(k => k.toLowerCase() === key.toLowerCase())) {
+        return true;
+      }
+      if (isSuspicious(val[key])) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+app.post('/api/browser-observation', (req, res) => {
+  const body = req.body;
+  if (!body || typeof body !== 'object') {
+    return res.status(400).json({ error: 'Body must be an object' });
+  }
+
+  // 1. Recursive suspicious check
+  if (isSuspicious(body)) {
+    return res.status(400).json({ error: 'Payload contains suspicious auth/credential keys or token-like values' });
+  }
+
+  // 2. Validate required fields
+  const { source, url, title, observedAt, domOutline, screenshotDataUrl, selectedText } = body;
+  if (!source || !url || !title || !observedAt || !domOutline) {
+    return res.status(400).json({ error: 'Missing required observation fields (source, url, title, observedAt, domOutline)' });
+  }
+
+  if (source !== 'chrome-observation') {
+    return res.status(400).json({ error: 'Invalid source. Must be "chrome-observation"' });
+  }
+
+  if (!Array.isArray(domOutline)) {
+    return res.status(400).json({ error: 'domOutline must be an array' });
+  }
+
+  // 3. Sanitize domOutline
+  const sanitizedOutline: any[] = [];
+  for (const item of domOutline) {
+    if (!item || typeof item !== 'object') continue;
+    const role = String(item.role || '').toLowerCase();
+    const rawText = String(item.text || '').trim();
+
+    // Ignore passwords and input values entirely
+    if (role === 'input' && (rawText.toLowerCase().includes('password') || rawText.toLowerCase().includes('passwd'))) {
+      continue;
+    }
+    if (!rawText) continue;
+
+    sanitizedOutline.push({
+      role: item.role,
+      text: rawText.substring(0, 300),
+      level: typeof item.level === 'number' ? item.level : undefined
+    });
+  }
+  const cappedOutline = sanitizedOutline.slice(0, 80);
+
+  // 4. Validate screenshot
+  if (screenshotDataUrl) {
+    if (typeof screenshotDataUrl !== 'string') {
+      return res.status(400).json({ error: 'screenshotDataUrl must be a string' });
+    }
+    const isPng = screenshotDataUrl.startsWith('data:image/png;base64,');
+    const isJpeg = screenshotDataUrl.startsWith('data:image/jpeg;base64,');
+    const isWebp = screenshotDataUrl.startsWith('data:image/webp;base64,');
+    if (!isPng && !isJpeg && !isWebp) {
+      return res.status(400).json({ error: 'Screenshot format must be PNG, JPEG, or WebP base64 data URL' });
+    }
+    if (screenshotDataUrl.length > 1.5 * 1024 * 1024) {
+      return res.status(400).json({ error: 'Screenshot exceeds 1.5MB size limit' });
+    }
+  }
+
+  const sanitizedObs = {
+    source,
+    url,
+    title,
+    observedAt,
+    domOutline: cappedOutline,
+    screenshotDataUrl,
+    selectedText: typeof selectedText === 'string' ? selectedText.substring(0, 500) : undefined
+  };
+
+  latestObservations.push(sanitizedObs);
+  if (latestObservations.length > 10) {
+    latestObservations.shift();
+  }
+
+  res.status(200).json({
+    type: 'BrowserObservation',
+    data: sanitizedObs
+  });
+});
 
 // Post chat endpoint - routes queries to natural language engine
 app.post('/api/chat', async (req, res) => {

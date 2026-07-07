@@ -26,6 +26,7 @@ export const UI_COMPONENT_TYPES = [
   'MemoryRecall',
   'ContentOpsStarter',
   'SoothsayerWorkbench',
+  'BrowserObservation',
 ] as const;
 
 export type UiComponentType = (typeof UI_COMPONENT_TYPES)[number];

@@ -20,7 +20,16 @@ export interface ContentOpsDraftIntent {
   siteGoal?: string;
 }
 
-export type WorkflowIntent = FlowrightWorkflowsIntent | SoothsayerWorkflowsIntent | SoothsayerWorkbenchIntent | ContentOpsDraftIntent;
+export interface BrowserObservationIntent {
+  kind: 'browser-observation';
+}
+
+export type WorkflowIntent =
+  | FlowrightWorkflowsIntent
+  | SoothsayerWorkflowsIntent
+  | SoothsayerWorkbenchIntent
+  | ContentOpsDraftIntent
+  | BrowserObservationIntent;
 
 export function parseWorkflowIntent(query: string): WorkflowIntent | null {
   const q = query.trim().toLowerCase();
@@ -47,6 +56,17 @@ export function parseWorkflowIntent(query: string): WorkflowIntent | null {
   ];
   if (soothsayerWorkbenchPatterns.some(p => p.test(q))) {
     return { kind: 'soothsayer-workbench' };
+  }
+
+  // 2.5 Browser Observation patterns
+  const browserObservationPatterns = [
+    /^show latest browser observation$/,
+    /^show chrome observation$/,
+    /^what does chrome see$/,
+    /^show observed page$/
+  ];
+  if (browserObservationPatterns.some(p => p.test(q))) {
+    return { kind: 'browser-observation' };
   }
 
   // 3. ContentOps patterns

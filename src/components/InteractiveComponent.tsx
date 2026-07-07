@@ -13,6 +13,7 @@ import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import InfoIcon from '@mui/icons-material/Info';
 import LaptopMacIcon from '@mui/icons-material/LaptopMac';
 import { NativeWorkbenchRenderer } from './nativeWorkbench/NativeWorkbenchRenderer';
+import { BrowserObservationView } from './nativeWorkbench/BrowserObservationView';
 interface ComponentProps {
   uiComponent: UiComponent;
   onAction: (query: string) => void;
@@ -698,6 +699,9 @@ export const InteractiveComponent: React.FC<ComponentProps> = ({ uiComponent, on
         </Grid>
       </Paper>
     );
+  }
+  if (type === 'BrowserObservation') {
+    return <BrowserObservationView data={data} />;
   }
 
   return null;

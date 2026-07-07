@@ -102,3 +102,25 @@ Web page outlines observed via the browser are kept distinct from app-native API
 - Must be labeled as **browser-observed** (`Observed in Chrome`).
 - Read-only; no autonomous script execution.
 - Rejects credentials, cookies, local storage, password inputs.
+
+```typescript
+interface BrowserObservation {
+  source: "chrome-observation";
+  url: string;
+  title: string;
+  observedAt: string;
+  domOutline: Array<{
+    role: "heading" | "button" | "link" | "input" | "text" | "region";
+    text: string;
+    level?: number;
+  }>;
+  screenshotDataUrl?: string;
+  selectedText?: string;
+}
+```
+
+### Safety Policy
+1. No auth headers, credentials, cookies, localStorage, tokens, or private secrets may be collected.
+2. Only visible text outline elements may be sent. Text fields containing input values must be ignored.
+3. Obvious secret values (Bearer, JWT, API Keys) are actively rejected by the Portal receiver API.
+
