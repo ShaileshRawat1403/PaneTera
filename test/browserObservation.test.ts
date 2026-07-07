@@ -81,6 +81,13 @@ async function runTests() {
     const resCookies = await makePostRequest('/api/browser-observation', payloadWithCookies);
     assert.strictEqual(resCookies.status, 400, 'Payload with cookies must be rejected');
 
+    const payloadWithCookieLikeKey = {
+      ...validPayload,
+      session_cookie_value: 'abc'
+    };
+    const resCookieLikeKey = await makePostRequest('/api/browser-observation', payloadWithCookieLikeKey);
+    assert.strictEqual(resCookieLikeKey.status, 400, 'Payload with cookie-like key names must be rejected');
+
     // 4. Rejects payload with nested suspicious keys (token)
     const payloadWithNestedToken = {
       ...validPayload,
@@ -101,6 +108,13 @@ async function runTests() {
     };
     const resSkKey = await makePostRequest('/api/browser-observation', payloadWithSkKey);
     assert.strictEqual(resSkKey.status, 400, 'Payload with sk- prefix value must be rejected');
+
+    const payloadWithUpperSkKey = {
+      ...validPayload,
+      title: 'SK-1234567890abcdef'
+    };
+    const resUpperSkKey = await makePostRequest('/api/browser-observation', payloadWithUpperSkKey);
+    assert.strictEqual(resUpperSkKey.status, 400, 'Payload with uppercase SK- prefix value must be rejected');
 
     // 6. Rejects oversized screenshot (over 1.5MB)
     const hugeBase64 = 'data:image/png;base64,' + 'A'.repeat(1.6 * 1024 * 1024);
@@ -125,18 +139,44 @@ async function runTests() {
     assert.strictEqual(resCapping.body.data.domOutline.length, 80, 'DOM outline must be capped to 80 items');
     assert.strictEqual(resCapping.body.data.domOutline[0].text.length, 300, 'Each text item must be capped to 300 chars');
 
-    // 8. Retrieval check: "show latest browser observation"
+    // 8. Drops unsupported roles and password inputs from the observation outline
+    const payloadWithUnsafeOutline = {
+      ...validPayload,
+      domOutline: [
+        { role: 'script', text: 'console.log("no")' },
+        { role: 'input', text: 'password' },
+        { role: 'heading', text: 'Visible Heading', level: 1 }
+      ]
+    };
+    const resUnsafeOutline = await makePostRequest('/api/browser-observation', payloadWithUnsafeOutline);
+    assert.strictEqual(resUnsafeOutline.status, 200);
+    assert.deepStrictEqual(
+      resUnsafeOutline.body.data.domOutline,
+      [{ role: 'heading', text: 'Visible Heading', level: 1 }],
+      'Observation should keep only allowed roles and drop password inputs',
+    );
+
+    // 9. Retrieval check: "show latest browser observation"
     const chatRes = await makePostRequest('/api/chat', { query: 'show latest browser observation' });
     assert.strictEqual(chatRes.status, 200);
     assert.strictEqual(chatRes.body.uiComponent?.type, 'BrowserObservation');
     assert.strictEqual(chatRes.body.uiComponent?.data?.title, 'A Safe Page');
 
-    // 9. Core developer queries check
+    // 10. Core developer queries check
     const checkCommit = parseWorkflowIntent('check my commit for regressions');
     assert.strictEqual(checkCommit, null, 'Core dev commands should not be parsed by workflow gateway');
 
     const verifyFlow = parseWorkflowIntent('run npm run verify in flowright');
     assert.strictEqual(verifyFlow, null);
+
+    const gitStatus = parseWorkflowIntent('git status in flowright');
+    assert.strictEqual(gitStatus, null);
+
+    const soothsayerUi = parseWorkflowIntent('show soothsayer ui');
+    assert.strictEqual(soothsayerUi?.kind, 'soothsayer-workbench');
+
+    const blog = parseWorkflowIntent('write a blog post about pothos pruning mistakes');
+    assert.strictEqual(blog?.kind, 'contentops-draft');
 
     console.log('✓ All browser observation and security tests passed!');
   } finally {

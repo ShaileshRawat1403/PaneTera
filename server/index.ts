@@ -23,7 +23,7 @@ if (TOKEN === 'changeme-12345' || !TOKEN) {
   process.exit(1);
 }
 
-app.use(express.json());
+app.use(express.json({ limit: '2mb' }));
 
 // CORS – restrict to localhost origins only
 app.use((req: Request, res: Response, next: NextFunction) => {
@@ -218,7 +218,9 @@ async function setupWatcher() {
   });
 }
 
-setupWatcher().catch(err => console.error('Error starting chokidar watcher:', err));
+if (process.env.NODE_ENV !== 'test') {
+  setupWatcher().catch(err => console.error('Error starting chokidar watcher:', err));
+}
 
 // SSE endpoint to broadcast filesystem event updates
 app.get('/api/events', (req: Request, res: Response) => {
@@ -1582,9 +1584,10 @@ function isSuspicious(val: any): boolean {
 
   if (typeof val === 'string') {
     const s = val.trim();
+    const lower = s.toLowerCase();
     if (/^Bearer\s/i.test(s)) return true;
-    if (s.startsWith('sk-')) return true;
-    if (s.startsWith('eyJ')) return true;
+    if (lower.startsWith('sk-')) return true;
+    if (lower.startsWith('eyj')) return true;
     return false;
   }
 
@@ -1598,9 +1601,10 @@ function isSuspicious(val: any): boolean {
       'auth', 'authToken', 'token', 'password', 'passwd', 'secret',
       'credential', 'credentials', 'bearer', 'apiKey', 'accessKey',
       'refreshToken', 'jwt'
-    ];
+    ].map(k => k.toLowerCase());
     for (const key of Object.keys(val)) {
-      if (suspiciousKeys.some(k => k.toLowerCase() === key.toLowerCase())) {
+      const normalizedKey = key.toLowerCase();
+      if (suspiciousKeys.some(k => normalizedKey.includes(k))) {
         return true;
       }
       if (isSuspicious(val[key])) {
@@ -1639,10 +1643,15 @@ app.post('/api/browser-observation', (req, res) => {
 
   // 3. Sanitize domOutline
   const sanitizedOutline: any[] = [];
+  const allowedRoles = new Set(['heading', 'button', 'link', 'input', 'text', 'region']);
   for (const item of domOutline) {
     if (!item || typeof item !== 'object') continue;
     const role = String(item.role || '').toLowerCase();
     const rawText = String(item.text || '').trim();
+
+    if (!allowedRoles.has(role)) {
+      continue;
+    }
 
     // Ignore passwords and input values entirely
     if (role === 'input' && (rawText.toLowerCase().includes('password') || rawText.toLowerCase().includes('passwd'))) {
@@ -1651,7 +1660,7 @@ app.post('/api/browser-observation', (req, res) => {
     if (!rawText) continue;
 
     sanitizedOutline.push({
-      role: item.role,
+      role,
       text: rawText.substring(0, 300),
       level: typeof item.level === 'number' ? item.level : undefined
     });
