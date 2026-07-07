@@ -9,12 +9,14 @@ interface ResizeHandleProps {
 export const ResizeHandle: React.FC<ResizeHandleProps> = ({ onResize, direction }) => {
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
-    const startX = e.clientX;
+    let previousX = e.clientX;
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
+      const movementX = moveEvent.clientX - previousX;
+      previousX = moveEvent.clientX;
       const deltaX = direction === 'left' 
-        ? moveEvent.clientX - startX 
-        : startX - moveEvent.clientX;
+        ? movementX 
+        : -movementX;
       onResize(deltaX);
     };
 
