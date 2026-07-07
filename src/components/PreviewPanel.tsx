@@ -13,6 +13,8 @@ import ClearAllIcon from '@mui/icons-material/ClearAll';
 import ViewStreamIcon from '@mui/icons-material/ViewStream';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import LaunchIcon from '@mui/icons-material/Launch';
+import PushPinIcon from '@mui/icons-material/PushPin';
 
 export type { FeedItem } from '../../shared/uiComponent';
 import type { FeedItem } from '../../shared/uiComponent';
@@ -20,6 +22,7 @@ import { ProposedActionCard } from './ProposedActionCard';
 import { RepoSetupProposalCard } from './RepoSetupProposalCard';
 import { LiveAppWorkbenchCard } from './LiveAppWorkbenchCard';
 import { ContentWorkflowCard } from './ContentWorkflowCard';
+import { InteractiveComponent } from './InteractiveComponent';
 
 interface PreviewProps {
   previewFeed: FeedItem[];
@@ -30,9 +33,7 @@ interface PreviewProps {
   onApproveAction: (id: string, workspaceName: string, command: string) => void;
   onContentWorkflowReview?: (itemId: string, runId: string, action: 'approve' | 'reject' | 'request_revision', notes: string) => void;
   token: string;
-  /** True while a request is in flight and hasn't produced a real feed item
-      yet. Used only to swap the empty-state copy/icon for an honest
-      "waiting" one — never to fabricate a fake progress narrative. */
+  onOpenInWorkbench?: (item: any) => void;
   loading?: boolean;
 }
 
@@ -892,9 +893,10 @@ const DesktopAppsFeedCard: React.FC<{ token: string }> = ({ token }) => {
   );
 };
 
-export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onAction, onRemoveItem, onClearFeed, onApproveAction, onContentWorkflowReview, token, loading }) => {
+export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onAction, onRemoveItem, onClearFeed, onApproveAction, onContentWorkflowReview, token, onOpenInWorkbench, loading }) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
+  const [pinnedCards, setPinnedCards] = useState<Record<string, boolean>>({});
   const feedEndRef = useRef<HTMLDivElement>(null);
 
   const toggleCard = (id: string) => {
@@ -970,7 +972,7 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
       )}
 
       {/* Preview Feed Body */}
-      <Box className="scroll-container" sx={{ flexGrow: 1, overflowY: 'auto', p: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <Box className="scroll-container" sx={{ flexGrow: 1, minHeight: 0, overflowY: 'auto', p: 2, pb: 6, display: 'flex', flexDirection: 'column', gap: 2 }}>
         {previewFeed.length === 0 ? (
           <Box
             sx={{
@@ -1017,78 +1019,113 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
           </Box>
         ) : (
           previewFeed.map((item) => {
-            const isExpanded = expandedCards[item.id] !== undefined
-              ? expandedCards[item.id]
-              : (previewFeed[previewFeed.length - 1]?.id === item.id);
+              const isExpanded = expandedCards[item.id] !== undefined
+                ? expandedCards[item.id]
+                : (previewFeed[previewFeed.length - 1]?.id === item.id);
 
-            return (
-              <Paper
-                key={item.id}
-                elevation={0}
-                className="feed-card-animation"
-                sx={{
-                  background: 'rgba(255, 255, 255, 0.02)',
-                  border: '1px solid rgba(255, 255, 255, 0.06)',
-                  borderRadius: '8px',
-                  overflow: 'hidden',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  position: 'relative',
-                  p: 0
-                }}
-              >
-                {/* Card Header (Clickable to collapse/expand) */}
-                <Box
-                  onClick={() => toggleCard(item.id)}
+              const MAIN_WORKBENCH_COMPONENTS = new Set([
+                "SoothsayerWorkbench",
+                "BrowserObservation",
+                "LiveAppWorkbench",
+                "ContentOpsStarter",
+                "ProposedAction",
+                "RepoSetupProposal"
+              ]);
+              const canOpenInWorkbench = MAIN_WORKBENCH_COMPONENTS.has(item.type);
+
+              return (
+                <Paper
+                  key={item.id}
+                  elevation={0}
+                  className="feed-card-animation"
                   sx={{
+                    background: 'rgba(255, 255, 255, 0.02)',
+                    border: pinnedCards[item.id]
+                      ? '1.5px solid #7f5af0'
+                      : '1px solid rgba(255, 255, 255, 0.06)',
+                    boxShadow: pinnedCards[item.id] ? '0 0 12px rgba(127, 85, 240, 0.2)' : 'none',
+                    borderRadius: '8px',
+                    overflow: 'hidden',
                     display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    px: 2,
-                    py: 1,
-                    background: 'rgba(255, 255, 255, 0.005)',
-                    borderBottom: isExpanded ? '1px solid rgba(255, 255, 255, 0.04)' : 'none',
-                    cursor: 'pointer',
-                    userSelect: 'none',
-                    transition: 'background 0.2s',
-                    '&:hover': { background: 'rgba(255, 255, 255, 0.02)' }
+                    flexDirection: 'column',
+                    position: 'relative',
+                    p: 0
                   }}
                 >
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    {isExpanded ? <ExpandLessIcon sx={{ fontSize: 13, color: '#7f5af0' }} /> : <ExpandMoreIcon sx={{ fontSize: 13, color: '#a0aec0' }} />}
-                    <Typography variant="caption" sx={{ color: '#b794f4', fontWeight: 700, fontSize: '0.7rem', letterSpacing: '0.05em' }}>
-                      {item.type === 'WorkspaceList' && 'WORKSPACES'}
-                      {item.type === 'FileList' && `FILE INDEX: ${item.data.workspace}`}
-                      {item.type === 'CodePreview' && `CODE: ${item.data.workspace}/${item.data.path}`}
-                      {item.type === 'SearchResults' && `SEARCH: "${item.data.keyword}"`}
-                      {item.type === 'WorkflowsList' && `PIPELINES: ${item.data.workspace}`}
-                      {item.type === 'LiveAppWorkbench' && 'LIVE APP WORKBENCH'}
-                      {item.type === 'RepoSetupProposal' && 'REPO SETUP PROPOSAL'}
-                      {item.type === 'ProposedAction' && 'AWAITING APPROVAL'}
-                      {item.type === 'ExecutionLogs' && `TASK CONSOLE`}
-                      {item.type === 'GitHistory' && `GIT STATUS: ${item.data.workspace}`}
-                      {item.type === 'DesktopApps' && `SYSTEM APP TELEMETRY`}
-                      {item.type === 'TerminalLogs' && 'TERMINAL SCAN'}
-                      {item.type === 'MemoryRecall' && 'MEMORY RECALL'}
-                      {item.type === 'ContentWorkflow' && 'GOVERNED CONTENT RUN'}
-                    </Typography>
-                  </Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }} onClick={(e) => e.stopPropagation()}>
-                    <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem', fontFamily: 'monospace' }}>
-                      {item.timestamp}
-                    </Typography>
-                    {item.type === 'CodePreview' && (
-                      <Tooltip title={copiedId === item.id ? "Copied!" : "Copy code"}>
-                        <IconButton size="small" onClick={() => handleCopy(item.data.content, item.id)} sx={{ color: '#a0aec0', p: 0.25 }}>
-                          <ContentCopyIcon sx={{ fontSize: 13 }} />
+                  {/* Card Header (Clickable to collapse/expand) */}
+                  <Box
+                    onClick={() => toggleCard(item.id)}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      px: 2,
+                      py: 1,
+                      background: 'rgba(255, 255, 255, 0.005)',
+                      borderBottom: isExpanded ? '1px solid rgba(255, 255, 255, 0.04)' : 'none',
+                      cursor: 'pointer',
+                      userSelect: 'none',
+                      transition: 'background 0.2s',
+                      '&:hover': { background: 'rgba(255, 255, 255, 0.02)' }
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      {isExpanded ? <ExpandLessIcon sx={{ fontSize: 13, color: '#7f5af0' }} /> : <ExpandMoreIcon sx={{ fontSize: 13, color: '#a0aec0' }} />}
+                      <Typography variant="caption" sx={{ color: '#b794f4', fontWeight: 700, fontSize: '0.7rem', letterSpacing: '0.05em' }}>
+                        {item.type === 'WorkspaceList' && 'WORKSPACES'}
+                        {item.type === 'FileList' && `FILE INDEX: ${item.data.workspace}`}
+                        {item.type === 'CodePreview' && `CODE: ${item.data.workspace}/${item.data.path}`}
+                        {item.type === 'SearchResults' && `SEARCH: "${item.data.keyword}"`}
+                        {item.type === 'WorkflowsList' && `PIPELINES: ${item.data.workspace}`}
+                        {item.type === 'LiveAppWorkbench' && 'LIVE APP WORKBENCH'}
+                        {item.type === 'RepoSetupProposal' && 'REPO SETUP PROPOSAL'}
+                        {item.type === 'ProposedAction' && 'AWAITING APPROVAL'}
+                        {item.type === 'ExecutionLogs' && `TASK CONSOLE`}
+                        {item.type === 'GitHistory' && `GIT STATUS: ${item.data.workspace}`}
+                        {item.type === 'DesktopApps' && `SYSTEM APP TELEMETRY`}
+                        {item.type === 'TerminalLogs' && 'TERMINAL SCAN'}
+                        {item.type === 'MemoryRecall' && 'MEMORY RECALL'}
+                        {item.type === 'ContentWorkflow' && 'GOVERNED CONTENT RUN'}
+                        {item.type === 'SoothsayerWorkbench' && 'SOOTHSAYER WORKBENCH'}
+                        {item.type === 'BrowserObservation' && 'BROWSER OBSERVATION'}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }} onClick={(e) => e.stopPropagation()}>
+                      {canOpenInWorkbench && (
+                        <Tooltip title="Open in Workbench">
+                          <IconButton
+                            size="small"
+                            onClick={() => onOpenInWorkbench?.(item)}
+                            sx={{ color: '#cbd5e1', p: 0.25 }}
+                          >
+                            <LaunchIcon sx={{ fontSize: 13 }} />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                      <Tooltip title={pinnedCards[item.id] ? "Unpin Card" : "Pin Card"}>
+                        <IconButton
+                          size="small"
+                          onClick={() => setPinnedCards(prev => ({ ...prev, [item.id]: !prev[item.id] }))}
+                          sx={{ color: pinnedCards[item.id] ? '#7f5af0' : '#a0aec0', p: 0.25 }}
+                        >
+                          <PushPinIcon sx={{ fontSize: 13 }} />
                         </IconButton>
                       </Tooltip>
-                    )}
-                    <IconButton size="small" onClick={() => onRemoveItem(item.id)} sx={{ color: '#a0aec0', p: 0.25 }}>
-                      <CloseIcon sx={{ fontSize: 13 }} />
-                    </IconButton>
+                      <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem', fontFamily: 'monospace' }}>
+                        {item.timestamp}
+                      </Typography>
+                      {item.type === 'CodePreview' && (
+                        <Tooltip title={copiedId === item.id ? "Copied!" : "Copy code"}>
+                          <IconButton size="small" onClick={() => handleCopy(item.data.content, item.id)} sx={{ color: '#a0aec0', p: 0.25 }}>
+                            <ContentCopyIcon sx={{ fontSize: 13 }} />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                      <IconButton size="small" onClick={() => onRemoveItem(item.id)} sx={{ color: '#a0aec0', p: 0.25 }}>
+                        <CloseIcon sx={{ fontSize: 13 }} />
+                      </IconButton>
+                    </Box>
                   </Box>
-                </Box>
 
                 {/* Card Content */}
                 <Collapse in={isExpanded}>
@@ -1252,6 +1289,26 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
                           </Typography>
                         )}
                       </Box>
+                    )}
+
+                    {item.type === 'SoothsayerWorkbench' && (
+                      <InteractiveComponent
+                        uiComponent={{ type: 'SoothsayerWorkbench', data: item.data }}
+                        onAction={onAction}
+                        onApproveAction={onApproveAction}
+                        onCancelAction={onRemoveItem}
+                        variant="feed"
+                      />
+                    )}
+
+                    {item.type === 'BrowserObservation' && (
+                      <InteractiveComponent
+                        uiComponent={{ type: 'BrowserObservation', data: item.data }}
+                        onAction={onAction}
+                        onApproveAction={onApproveAction}
+                        onCancelAction={onRemoveItem}
+                        variant="feed"
+                      />
                     )}
                   </Box>
                 </Collapse>

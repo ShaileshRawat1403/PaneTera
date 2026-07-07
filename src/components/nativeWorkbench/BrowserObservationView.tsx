@@ -20,9 +20,10 @@ interface BrowserObservationProps {
     screenshotDataUrl?: string;
     selectedText?: string;
   } | null;
+  variant?: 'feed' | 'main' | 'chat';
 }
 
-export const BrowserObservationView: React.FC<BrowserObservationProps> = ({ data }) => {
+export const BrowserObservationView: React.FC<BrowserObservationProps> = ({ data, variant = 'main' }) => {
   if (!data) {
     return (
       <Paper
@@ -51,6 +52,43 @@ export const BrowserObservationView: React.FC<BrowserObservationProps> = ({ data
     acc[role].push(item);
     return acc;
   }, {});
+
+  if (variant === 'feed' || variant === 'chat') {
+    return (
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+        <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
+          {screenshotDataUrl && (
+            <Box
+              component="img"
+              src={screenshotDataUrl}
+              alt="obs thumbnail"
+              sx={{
+                width: 60,
+                height: 45,
+                objectFit: 'cover',
+                borderRadius: '4px',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                flexShrink: 0
+              }}
+            />
+          )}
+          <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+            <Typography variant="body2" sx={{ color: '#cbd5e1', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {title || 'Observed Page'}
+            </Typography>
+            <Typography variant="caption" sx={{ color: '#71717a', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {url}
+            </Typography>
+          </Box>
+        </Box>
+        <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 0.5, flexWrap: 'wrap' }}>
+          <Chip label={`DOM: ${domOutline.length} items`} size="small" sx={{ height: 16, fontSize: '0.6rem', background: 'rgba(255,255,255,0.03)', color: '#cbd5e1' }} />
+          {groupedOutline.heading && <Chip label={`Headings: ${groupedOutline.heading.length}`} size="small" sx={{ height: 16, fontSize: '0.6rem', background: 'rgba(127, 85, 240, 0.08)', color: '#b794f4' }} />}
+          {groupedOutline.button && <Chip label={`Buttons: ${groupedOutline.button.length}`} size="small" sx={{ height: 16, fontSize: '0.6rem', background: 'rgba(34, 197, 94, 0.08)', color: '#22c55e' }} />}
+        </Stack>
+      </Box>
+    );
+  }
 
   return (
     <Paper

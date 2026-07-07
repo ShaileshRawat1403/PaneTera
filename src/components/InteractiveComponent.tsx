@@ -21,9 +21,10 @@ interface ComponentProps {
   onCancelAction?: (id: string) => void;
   onStartContentWorkflow?: (form: any) => void;
   activeLens?: string;
+  variant?: 'feed' | 'main' | 'chat';
 }
 
-export const InteractiveComponent: React.FC<ComponentProps> = ({ uiComponent, onAction, onApproveAction, onCancelAction, onStartContentWorkflow, activeLens }) => {
+export const InteractiveComponent: React.FC<ComponentProps> = ({ uiComponent, onAction, onApproveAction, onCancelAction, onStartContentWorkflow, activeLens, variant = 'main' }) => {
   const { type, data } = uiComponent;
   // Local only — the message log itself stays append-only/immutable, so
   // "did I already act on this" lives here rather than mutating history.
@@ -70,6 +71,23 @@ export const InteractiveComponent: React.FC<ComponentProps> = ({ uiComponent, on
 
   if (type === 'ProposedAction' && data) {
     const { workspaceName, command, procId, reason } = data;
+
+    if (variant === 'feed' || variant === 'chat') {
+      return (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          <Typography variant="body2" sx={{ color: '#cbd5e1', fontWeight: 600 }}>
+            Proposed Action ({workspaceName})
+          </Typography>
+          <Typography variant="caption" sx={{ fontFamily: 'monospace', color: '#fbbf24', wordBreak: 'break-all' }}>
+            {command}
+          </Typography>
+          <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 0.5, flexWrap: 'wrap' }}>
+            <Chip label={`Risk: ${data.riskLevel || 'safe'}`} size="small" sx={{ height: 16, fontSize: '0.6rem', background: 'rgba(255,255,255,0.03)', color: '#cbd5e1' }} />
+            {data.isDryRun && <Chip label="DRY RUN" size="small" sx={{ height: 16, fontSize: '0.6rem', background: 'rgba(127,85,240,0.1)', color: '#b794f4' }} />}
+          </Stack>
+        </Box>
+      );
+    }
 
     if (resolution === 'approved') {
       return (
@@ -485,10 +503,36 @@ export const InteractiveComponent: React.FC<ComponentProps> = ({ uiComponent, on
   }
 
   if (type === 'SoothsayerWorkbench' && data) {
-    const { url, manifestAvailable, environment, version, routes, features, workflows, health, workbench, workbenchError } = data;
+    const { url, manifestAvailable, environment, version, routes, features, workflows = [], health, workbench, workbenchError } = data;
     const view = workbench?.views?.[0] || null;
     const draft = view?.data || {};
     const healthStatus = typeof health?.status === 'string' ? health.status : 'unknown';
+
+    if (variant === 'feed' || variant === 'chat') {
+      return (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          <Typography variant="body2" sx={{ color: '#cbd5e1', fontWeight: 600 }}>
+            Soothsayer Workbench ({environment || 'production'})
+          </Typography>
+          <Typography variant="caption" sx={{ color: '#71717a', wordBreak: 'break-all' }}>
+            {url}
+          </Typography>
+          <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 0.5, flexWrap: 'wrap' }}>
+            <Chip 
+              label={manifestAvailable ? "Manifest Active" : "No Manifest"} 
+              size="small" 
+              sx={{ 
+                height: 16, 
+                fontSize: '0.6rem', 
+                background: manifestAvailable ? 'rgba(34, 197, 94, 0.08)' : 'rgba(239, 68, 68, 0.08)',
+                color: manifestAvailable ? '#22c55e' : '#ef4444'
+              }} 
+            />
+            <Chip label={`Workflows: ${workflows.length}`} size="small" sx={{ height: 16, fontSize: '0.6rem', background: 'rgba(255,255,255,0.03)', color: '#cbd5e1' }} />
+          </Stack>
+        </Box>
+      );
+    }
 
     return (
       <Paper
@@ -701,7 +745,7 @@ export const InteractiveComponent: React.FC<ComponentProps> = ({ uiComponent, on
     );
   }
   if (type === 'BrowserObservation') {
-    return <BrowserObservationView data={data} />;
+    return <BrowserObservationView data={data} variant={variant} />;
   }
 
   return null;

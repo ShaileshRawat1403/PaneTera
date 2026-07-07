@@ -22,6 +22,9 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import ViewSidebarIcon from '@mui/icons-material/ViewSidebar';
 import CodeIcon from '@mui/icons-material/Code';
+import ForumIcon from '@mui/icons-material/Forum';
+import { WorkbenchShell } from './components/workbench/WorkbenchShell';
+import { WorkbenchModeToggle, WorkbenchMode } from './components/workbench/WorkbenchModeToggle';
 
 // Codex developer-cockpit styling presets
 const codexTheme = createTheme({
@@ -98,6 +101,42 @@ const App: React.FC = () => {
     return window.innerWidth < 1280;
   });
   const [showAllHistory, setShowAllHistory] = useState<boolean>(false);
+
+  const [leftRailWidth, setLeftRailWidth] = useState<number>(() => {
+    const stored = localStorage.getItem('portal-left-width');
+    return stored ? parseInt(stored, 10) : 280;
+  });
+
+  const [rightFeedWidth, setRightFeedWidth] = useState<number>(() => {
+    const stored = localStorage.getItem('portal-right-width');
+    return stored ? parseInt(stored, 10) : 380;
+  });
+
+  const [workbenchMode, setWorkbenchMode] = useState<WorkbenchMode>(() => {
+    const stored = localStorage.getItem('portal-workbench-mode');
+    return (stored as WorkbenchMode) || 'conversation';
+  });
+
+  const handleLeftResize = (deltaX: number) => {
+    setLeftRailWidth(prev => {
+      const next = Math.max(240, Math.min(340, prev + deltaX));
+      localStorage.setItem('portal-left-width', String(next));
+      return next;
+    });
+  };
+
+  const handleRightResize = (deltaX: number) => {
+    setRightFeedWidth(prev => {
+      const next = Math.max(320, Math.min(620, prev + deltaX));
+      localStorage.setItem('portal-right-width', String(next));
+      return next;
+    });
+  };
+
+  const handleWorkbenchModeChange = (nextMode: WorkbenchMode) => {
+    setWorkbenchMode(nextMode);
+    localStorage.setItem('portal-workbench-mode', nextMode);
+  };
 
   const toggleLeftRail = () => {
     setIsLeftRailCollapsed(prev => {
@@ -307,6 +346,17 @@ const App: React.FC = () => {
       // Update active workbench card slot
       if (uiComponentWithId) {
         setActiveComponent(uiComponentWithId);
+        const MAIN_WORKBENCH_COMPONENTS = new Set([
+          "SoothsayerWorkbench",
+          "BrowserObservation",
+          "LiveAppWorkbench",
+          "ContentOpsStarter",
+          "ProposedAction",
+          "RepoSetupProposal"
+        ]);
+        if (MAIN_WORKBENCH_COMPONENTS.has(uiComponentWithId.type)) {
+          handleWorkbenchModeChange('native-focus');
+        }
       }
       setActiveReply(data.reply ?? null);
       setActiveQuery(text);
@@ -545,6 +595,97 @@ const App: React.FC = () => {
         data: { ...item.data, busy: false, error: err.message }
       } : item));
     }
+  };
+
+  const renderChatTranscript = () => {
+    return (
+      <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+        {/* Scrollable messages container */}
+        <Box 
+          sx={{ 
+            flexGrow: 1, 
+            overflowY: 'auto', 
+            p: 3, 
+            display: 'flex', 
+            flexDirection: 'column', 
+            gap: 2,
+            minHeight: 0
+          }}
+        >
+          {messages.length === 0 ? (
+            <Box sx={{ m: 'auto', textAlign: 'center', opacity: 0.35, py: 4 }}>
+              <ForumIcon sx={{ fontSize: 48, color: '#7f5af0', mb: 1 }} />
+              <Typography variant="body2" sx={{ color: '#cbd5e1' }}>
+                Start a governed conversation with MyAI Portal.
+              </Typography>
+            </Box>
+          ) : (
+            messages.map((msg, idx) => (
+              <Box 
+                key={idx} 
+                sx={{ 
+                  display: 'flex', 
+                  flexDirection: 'column', 
+                  alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                  maxWidth: '85%'
+                }}
+              >
+                <Paper 
+                  elevation={0}
+                  sx={{ 
+                    p: 2, 
+                    background: msg.role === 'user' ? 'rgba(127, 85, 240, 0.1)' : 'rgba(255, 255, 255, 0.02)', 
+                    border: msg.role === 'user' ? '1px solid rgba(127, 85, 240, 0.25)' : '1px solid rgba(255, 255, 255, 0.05)',
+                    borderRadius: msg.role === 'user' ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
+                  }}
+                >
+                  <Typography variant="caption" sx={{ color: msg.role === 'user' ? '#b794f4' : '#71717a', fontWeight: 800, display: 'block', mb: 0.5 }}>
+                    {msg.role === 'user' ? 'YOU' : 'PORTAL'}
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: '#f4f4f5', lineHeight: 1.5 }}>
+                    {msg.content}
+                  </Typography>
+                </Paper>
+              </Box>
+            ))
+          )}
+          {loading && (
+            <Box sx={{ display: 'flex', justifyContent: 'flex-start', p: 1 }}>
+              <CircularProgress size={12} sx={{ color: '#7f5af0', mr: 1.5 }} />
+              <Typography variant="caption" sx={{ color: '#71717a' }}>Thinking...</Typography>
+            </Box>
+          )}
+          <div ref={messagesEndRef} />
+        </Box>
+      </Box>
+    );
+  };
+
+  const renderActiveCard = () => {
+    if (!activeComponent) return null;
+    return (
+      <Box sx={{ height: '100%', overflowY: 'auto', p: 3 }}>
+        <InteractiveComponent
+          uiComponent={activeComponent}
+          onAction={handleSend}
+          onApproveAction={handleApproveAction}
+          onCancelAction={handleRemoveItem}
+          onStartContentWorkflow={handleStartContentWorkflow}
+          activeLens={activeLens}
+          variant="main"
+        />
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
+          <Button 
+            size="small" 
+            variant="outlined" 
+            onClick={() => { setActiveComponent(null); setActiveReply(null); setActiveQuery(null); }}
+            sx={{ borderColor: 'rgba(255,255,255,0.1)', color: '#71717a', borderRadius: '6px' }}
+          >
+            Clear Active Card
+          </Button>
+        </Box>
+      </Box>
+    );
   };
 
   return (
@@ -788,8 +929,6 @@ const App: React.FC = () => {
           </Paper>
         </Box>
       )}
-
-      {/* Main 3-Zone Flex Layout */}
       <Box sx={{ display: 'flex', height: '100vh', width: '100vw', overflow: 'hidden', position: 'relative' }}>
         
         {/* Token auth prompt centered over skeleton background if showTokenPrompt is true */}
@@ -871,199 +1010,226 @@ const App: React.FC = () => {
             transition: 'filter 0.3s, opacity 0.3s',
           }}
         >
-          {/* ZONE 1: Left Context Rail */}
-          <Box
-            sx={{
-              width: isLeftRailCollapsed ? 64 : 280,
-              minWidth: isLeftRailCollapsed ? 64 : 280,
-              borderRight: '1px solid rgba(255,255,255,0.08)',
-              display: { xs: 'none', md: 'flex' },
-              flexDirection: 'column',
-              background: 'rgba(9, 9, 11, 0.4)',
-              p: isLeftRailCollapsed ? 1.5 : 2.5,
-              overflowY: 'auto',
-              transition: 'width 0.2s cubic-bezier(0.16, 1, 0.3, 1), p 0.2s'
-            }}
-          >
-            {isLeftRailCollapsed ? (
-              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3.5, height: '100%' }}>
-                {/* 1. Gateway Indicator */}
-                <Tooltip title={`Express Gateway: ${token ? 'Connected' : 'Offline'}`} placement="right">
-                  <Box sx={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Box
-                      sx={{
-                        width: 10,
-                        height: 10,
-                        borderRadius: '50%',
-                        backgroundColor: token ? '#22c55e' : '#ef4444',
-                        boxShadow: token ? '0 0 8px #22c55e' : '0 0 8px #ef4444'
-                      }}
-                    />
-                  </Box>
-                </Tooltip>
-
-                {/* 2. Connected Systems Stack */}
-                <Stack spacing={1.8} alignItems="center">
-                  <Tooltip title="Postgres DB: Configured" placement="right">
-                    <DnsIcon sx={{ fontSize: 16, color: '#71717a' }} />
-                  </Tooltip>
-                  <Tooltip title="Redis DB: Configured" placement="right">
-                    <DnsIcon sx={{ fontSize: 16, color: '#71717a' }} />
-                  </Tooltip>
-                  <Tooltip title="DAX Control: No signal" placement="right">
-                    <DnsIcon sx={{ fontSize: 16, color: '#71717a', opacity: 0.3 }} />
-                  </Tooltip>
-                  <Tooltip title="Local Adapter: Dry Run" placement="right">
-                    <TerminalIcon sx={{ fontSize: 16, color: '#7f5af0' }} />
-                  </Tooltip>
-                  <Tooltip title={`Rook Memory: ${backendHealth?.memoryBridgeReady ? 'Connected' : 'No signal'}`} placement="right">
-                    <MemoryIcon sx={{ fontSize: 16, color: backendHealth?.memoryBridgeReady ? '#22c55e' : '#71717a' }} />
-                  </Tooltip>
-                </Stack>
-
-                <Divider sx={{ width: '60%', borderColor: 'rgba(255,255,255,0.06)' }} />
-
-                {/* 3. Workspaces shortcut */}
-                <Tooltip title={`Workspaces (${workspacesList.length} registered)`} placement="right">
-                  <IconButton onClick={() => handleSend('List workspaces')} size="small" sx={{ color: '#7f5af0', p: 0.5 }}>
-                    <FolderIcon sx={{ fontSize: 18 }} />
-                  </IconButton>
-                </Tooltip>
-
-                {/* 4. Live Deployed Apps */}
-                <Tooltip title={`Soothsayer Live: ${soothsayerStatus.toUpperCase()}`} placement="right">
-                  <IconButton onClick={() => handleSend('inspect soothsayer')} size="small" sx={{ color: soothsayerStatus === 'online' ? '#22c55e' : '#71717a', p: 0.5 }}>
-                    <LaptopMacIcon sx={{ fontSize: 18 }} />
-                  </IconButton>
-                </Tooltip>
-
-                <Divider sx={{ width: '60%', borderColor: 'rgba(255,255,255,0.06)' }} />
-
-                {/* 5. Persona Lenses */}
-                <Stack spacing={1.5} alignItems="center" sx={{ mt: 'auto', pb: 2 }}>
-                  {(['engineer', 'pm', 'ba', 'qa', 'exec'] as const).map(lens => (
-                    <Tooltip key={lens} title={`Lens: ${lens.toUpperCase()}`} placement="right">
-                      <Box
-                        onClick={() => setActiveLens(lens)}
-                        sx={{
-                          width: 24,
-                          height: 24,
-                          borderRadius: '50%',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          cursor: 'pointer',
-                          background: activeLens === lens ? 'rgba(127, 85, 240, 0.15)' : 'transparent',
-                          border: activeLens === lens ? '1px solid rgba(127, 85, 240, 0.3)' : '1px solid transparent',
-                          color: activeLens === lens ? '#b794f4' : '#71717a',
-                          fontSize: '0.65rem',
-                          fontWeight: 'bold',
-                          transition: 'all 0.2s',
-                          '&:hover': { background: 'rgba(255,255,255,0.02)' }
-                        }}
-                      >
-                        {lens[0].toUpperCase()}
+            <WorkbenchShell
+            leftRailWidth={leftRailWidth}
+            rightFeedWidth={rightFeedWidth}
+            isLeftRailCollapsed={isLeftRailCollapsed}
+            isRightFeedCollapsed={isRightFeedCollapsed}
+            onLeftResize={handleLeftResize}
+            onRightResize={handleRightResize}
+            leftRailContent={
+              <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto', p: isLeftRailCollapsed ? 1.5 : 2.5 }}>
+                {isLeftRailCollapsed ? (
+                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3.5, height: '100%' }}>
+                    {/* 1. Gateway Indicator */}
+                    <Tooltip title={`Express Gateway: ${token ? 'Connected' : 'Offline'}`} placement="right">
+                      <Box sx={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Box
+                          sx={{
+                            width: 10,
+                            height: 10,
+                            borderRadius: '50%',
+                            backgroundColor: token ? '#22c55e' : '#ef4444',
+                            boxShadow: token ? '0 0 8px #22c55e' : '0 0 8px #ef4444'
+                          }}
+                        />
                       </Box>
                     </Tooltip>
-                  ))}
-                </Stack>
-              </Box>
-            ) : (
-              <>
-                {/* Session status info */}
-                <Box sx={{ mb: 3 }}>
-                  <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, letterSpacing: '0.05em', display: 'block', mb: 1.5 }}>
-                    SESSION STATUS
-                  </Typography>
-                  <Paper variant="outlined" sx={{ p: 1.5, background: 'rgba(255,255,255,0.01)', borderColor: 'rgba(255,255,255,0.05)' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-                      <Typography variant="caption" sx={{ color: '#a1a1aa', fontWeight: 600 }}>Access Type</Typography>
-                      <Chip label="GOVERNED" size="small" sx={{ height: 16, fontSize: '0.55rem', fontWeight: 800, background: 'rgba(34, 197, 94, 0.08)', color: '#22c55e', border: '1px solid rgba(34, 197, 94, 0.15)' }} />
-                    </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <Typography variant="caption" sx={{ color: '#a1a1aa', fontWeight: 600 }}>Express Gateway</Typography>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                        <Box sx={{ width: 5, height: 5, borderRadius: '50%', backgroundColor: token ? '#22c55e' : '#ef4444' }} />
-                        <Typography variant="caption" sx={{ color: '#f4f4f5', fontWeight: 700, fontSize: '0.65rem' }}>
-                          {token ? 'Connected' : 'Offline'}
-                        </Typography>
-                      </Box>
-                    </Box>
-                  </Paper>
-                </Box>
 
-                {/* Connected systems section */}
-                <Box sx={{ mb: 3 }}>
-                  <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, letterSpacing: '0.05em', display: 'block', mb: 1.5 }}>
-                    CONNECTED SYSTEMS
-                  </Typography>
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                    {/* Redis */}
-                    <Box sx={{ display: 'flex', justifycontent: 'space-between', alignItems: 'center', p: 0.75, borderBottom: '1px solid rgba(255,255,255,0.03)', justifyContent: 'space-between' }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <DnsIcon sx={{ fontSize: 13, color: '#71717a' }} />
-                        <Typography variant="caption" sx={{ color: '#e2e8f0', fontWeight: 600 }}>Redis DB</Typography>
-                      </Box>
-                      <Chip label="Configured" size="small" sx={{ height: 16, fontSize: '0.55rem', background: 'rgba(255,255,255,0.03)', color: '#a1a1aa' }} />
-                    </Box>
-                    {/* Postgres */}
-                    <Box sx={{ display: 'flex', justifycontent: 'space-between', alignItems: 'center', p: 0.75, borderBottom: '1px solid rgba(255,255,255,0.03)', justifyContent: 'space-between' }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <DnsIcon sx={{ fontSize: 13, color: '#71717a' }} />
-                        <Typography variant="caption" sx={{ color: '#e2e8f0', fontWeight: 600 }}>Postgres DB</Typography>
-                      </Box>
-                      <Chip label="Configured" size="small" sx={{ height: 16, fontSize: '0.55rem', background: 'rgba(255,255,255,0.03)', color: '#a1a1aa' }} />
-                    </Box>
-                    {/* DAX */}
-                    <Box sx={{ display: 'flex', justifycontent: 'space-between', alignItems: 'center', p: 0.75, borderBottom: '1px solid rgba(255,255,255,0.03)', justifyContent: 'space-between' }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <DnsIcon sx={{ fontSize: 13, color: '#71717a' }} />
-                        <Typography variant="caption" sx={{ color: '#e2e8f0', fontWeight: 600 }}>DAX Control</Typography>
-                      </Box>
-                      <Chip label="No signal" size="small" sx={{ height: 16, fontSize: '0.55rem', background: 'rgba(255,255,255,0.03)', color: '#a1a1aa' }} />
-                    </Box>
-                    {/* Local Shell */}
-                    <Box sx={{ display: 'flex', justifycontent: 'space-between', alignItems: 'center', p: 0.75, borderBottom: '1px solid rgba(255,255,255,0.03)', justifyContent: 'space-between' }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <TerminalIcon sx={{ fontSize: 13, color: '#7f5af0' }} />
-                        <Typography variant="caption" sx={{ color: '#e2e8f0', fontWeight: 600 }}>Local Adapter</Typography>
-                      </Box>
-                      <Chip label="Dry Run" size="small" sx={{ height: 16, fontSize: '0.55rem', background: 'rgba(127, 85, 240, 0.1)', color: '#b794f4' }} />
-                    </Box>
-                    {/* Rook Memory Bridge */}
-                    <Box sx={{ display: 'flex', justifycontent: 'space-between', alignItems: 'center', p: 0.75, justifyContent: 'space-between' }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <MemoryIcon sx={{ fontSize: 13, color: backendHealth?.memoryBridgeReady ? '#22c55e' : '#71717a' }} />
-                        <Typography variant="caption" sx={{ color: '#e2e8f0', fontWeight: 600 }}>Rook Memory</Typography>
-                      </Box>
-                      <Chip 
-                        label={backendHealth?.memoryBridgeReady ? 'Connected' : 'No signal'} 
-                        size="small" 
-                        sx={{ 
-                          height: 16, 
-                          fontSize: '0.55rem', 
-                          background: backendHealth?.memoryBridgeReady ? 'rgba(34,197,94,0.08)' : 'rgba(255,255,255,0.03)', 
-                          color: backendHealth?.memoryBridgeReady ? '#22c55e' : '#a1a1aa' 
-                        }} 
-                      />
-                    </Box>
+                    {/* 2. Connected Systems Stack */}
+                    <Stack spacing={1.8} alignItems="center">
+                      <Tooltip title="Postgres DB: Configured" placement="right">
+                        <DnsIcon sx={{ fontSize: 16, color: '#71717a' }} />
+                      </Tooltip>
+                      <Tooltip title="Redis DB: Configured" placement="right">
+                        <DnsIcon sx={{ fontSize: 16, color: '#71717a' }} />
+                      </Tooltip>
+                      <Tooltip title="DAX Control: No signal" placement="right">
+                        <DnsIcon sx={{ fontSize: 16, color: '#71717a', opacity: 0.3 }} />
+                      </Tooltip>
+                      <Tooltip title="Local Adapter: Dry Run" placement="right">
+                        <TerminalIcon sx={{ fontSize: 16, color: '#7f5af0' }} />
+                      </Tooltip>
+                      <Tooltip title={`Rook Memory: ${backendHealth?.memoryBridgeReady ? 'Connected' : 'No signal'}`} placement="right">
+                        <MemoryIcon sx={{ fontSize: 16, color: backendHealth?.memoryBridgeReady ? '#22c55e' : '#71717a' }} />
+                      </Tooltip>
+                    </Stack>
+
+                    <Divider sx={{ width: '60%', borderColor: 'rgba(255,255,255,0.06)' }} />
+
+                    {/* 3. Workspaces shortcut */}
+                    <Tooltip title={`Workspaces (${workspacesList.length} registered)`} placement="right">
+                      <IconButton onClick={() => handleSend('List workspaces')} size="small" sx={{ color: '#7f5af0', p: 0.5 }}>
+                        <FolderIcon sx={{ fontSize: 18 }} />
+                      </IconButton>
+                    </Tooltip>
+
+                    {/* 4. Live Deployed Apps */}
+                    <Tooltip title={`Soothsayer Live: ${soothsayerStatus.toUpperCase()}`} placement="right">
+                      <IconButton onClick={() => handleSend('inspect soothsayer')} size="small" sx={{ color: soothsayerStatus === 'online' ? '#22c55e' : '#71717a', p: 0.5 }}>
+                        <LaptopMacIcon sx={{ fontSize: 18 }} />
+                      </IconButton>
+                    </Tooltip>
+
+                    <Divider sx={{ width: '60%', borderColor: 'rgba(255,255,255,0.06)' }} />
+
+                    {/* 5. Persona Lenses */}
+                    <Stack spacing={1.5} alignItems="center" sx={{ mt: 'auto', pb: 2 }}>
+                      {(['engineer', 'pm', 'ba', 'qa', 'exec'] as const).map(lens => (
+                        <Tooltip key={lens} title={`Lens: ${lens.toUpperCase()}`} placement="right">
+                          <Box
+                            onClick={() => setActiveLens(lens)}
+                            sx={{
+                              width: 24,
+                              height: 24,
+                              borderRadius: '50%',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                              background: activeLens === lens ? 'rgba(127, 85, 240, 0.15)' : 'transparent',
+                              border: activeLens === lens ? '1px solid rgba(127, 85, 240, 0.3)' : '1px solid transparent',
+                              color: activeLens === lens ? '#b794f4' : '#71717a',
+                              fontSize: '0.65rem',
+                              fontWeight: 'bold',
+                              transition: 'all 0.2s',
+                              '&:hover': { background: 'rgba(255,255,255,0.02)' }
+                            }}
+                          >
+                            {lens[0].toUpperCase()}
+                          </Box>
+                        </Tooltip>
+                      ))}
+                    </Stack>
                   </Box>
-                </Box>
+                ) : (
+                  <>
+                    {/* Session status info */}
+                    <Box sx={{ mb: 3 }}>
+                      <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, letterSpacing: '0.05em', display: 'block', mb: 1.5 }}>
+                        SESSION STATUS
+                      </Typography>
+                      <Paper variant="outlined" sx={{ p: 1.5, background: 'rgba(255,255,255,0.01)', borderColor: 'rgba(255,255,255,0.05)' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                          <Typography variant="caption" sx={{ color: '#a1a1aa', fontWeight: 600 }}>Access Type</Typography>
+                          <Chip label="GOVERNED" size="small" sx={{ height: 16, fontSize: '0.55rem', fontWeight: 800, background: 'rgba(34, 197, 94, 0.08)', color: '#22c55e', border: '1px solid rgba(34, 197, 94, 0.15)' }} />
+                        </Box>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <Typography variant="caption" sx={{ color: '#a1a1aa', fontWeight: 600 }}>Express Gateway</Typography>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <Box sx={{ width: 5, height: 5, borderRadius: '50%', backgroundColor: token ? '#22c55e' : '#ef4444' }} />
+                            <Typography variant="caption" sx={{ color: '#f4f4f5', fontWeight: 700, fontSize: '0.65rem' }}>
+                              {token ? 'Connected' : 'Offline'}
+                            </Typography>
+                          </Box>
+                        </Box>
+                      </Paper>
+                    </Box>
 
-                {/* Workspaces list */}
-                <Box sx={{ mb: 3 }}>
-                  <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, letterSpacing: '0.05em', display: 'block', mb: 1.5 }}>
-                    WORKSPACES / REPOS
-                  </Typography>
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                    {workspacesList.map(ws => (
+                    {/* Connected systems section */}
+                    <Box sx={{ mb: 3 }}>
+                      <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, letterSpacing: '0.05em', display: 'block', mb: 1.5 }}>
+                        CONNECTED SYSTEMS
+                      </Typography>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                        {/* Redis */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', p: 0.75, borderBottom: '1px solid rgba(255,255,255,0.03)', justifyContent: 'space-between' }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <DnsIcon sx={{ fontSize: 13, color: '#71717a' }} />
+                            <Typography variant="caption" sx={{ color: '#e2e8f0', fontWeight: 600 }}>Redis DB</Typography>
+                          </Box>
+                          <Chip label="Configured" size="small" sx={{ height: 16, fontSize: '0.55rem', background: 'rgba(255,255,255,0.03)', color: '#a1a1aa' }} />
+                        </Box>
+                        {/* Postgres */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', p: 0.75, borderBottom: '1px solid rgba(255,255,255,0.03)', justifyContent: 'space-between' }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <DnsIcon sx={{ fontSize: 13, color: '#71717a' }} />
+                            <Typography variant="caption" sx={{ color: '#e2e8f0', fontWeight: 600 }}>Postgres DB</Typography>
+                          </Box>
+                          <Chip label="Configured" size="small" sx={{ height: 16, fontSize: '0.55rem', background: 'rgba(255,255,255,0.03)', color: '#a1a1aa' }} />
+                        </Box>
+                        {/* DAX */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', p: 0.75, borderBottom: '1px solid rgba(255,255,255,0.03)', justifyContent: 'space-between' }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <DnsIcon sx={{ fontSize: 13, color: '#71717a' }} />
+                            <Typography variant="caption" sx={{ color: '#e2e8f0', fontWeight: 600 }}>DAX Control</Typography>
+                          </Box>
+                          <Chip label="No signal" size="small" sx={{ height: 16, fontSize: '0.55rem', background: 'rgba(255,255,255,0.03)', color: '#a1a1aa' }} />
+                        </Box>
+                        {/* Local Shell */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', p: 0.75, borderBottom: '1px solid rgba(255,255,255,0.03)', justifyContent: 'space-between' }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <TerminalIcon sx={{ fontSize: 13, color: '#7f5af0' }} />
+                            <Typography variant="caption" sx={{ color: '#e2e8f0', fontWeight: 600 }}>Local Adapter</Typography>
+                          </Box>
+                          <Chip label="Dry Run" size="small" sx={{ height: 16, fontSize: '0.55rem', background: 'rgba(127, 85, 240, 0.1)', color: '#b794f4' }} />
+                        </Box>
+                        {/* Rook Memory Bridge */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', p: 0.75, justifyContent: 'space-between' }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <MemoryIcon sx={{ fontSize: 13, color: backendHealth?.memoryBridgeReady ? '#22c55e' : '#71717a' }} />
+                            <Typography variant="caption" sx={{ color: '#e2e8f0', fontWeight: 600 }}>Rook Memory</Typography>
+                          </Box>
+                          <Chip 
+                            label={backendHealth?.memoryBridgeReady ? 'Connected' : 'No signal'} 
+                            size="small" 
+                            sx={{ 
+                              height: 16, 
+                              fontSize: '0.55rem', 
+                              background: backendHealth?.memoryBridgeReady ? 'rgba(34,197,94,0.08)' : 'rgba(255,255,255,0.03)', 
+                              color: backendHealth?.memoryBridgeReady ? '#22c55e' : '#a1a1aa' 
+                            }} 
+                          />
+                        </Box>
+                      </Box>
+                    </Box>
+
+                    {/* Workspaces list */}
+                    <Box sx={{ mb: 3 }}>
+                      <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, letterSpacing: '0.05em', display: 'block', mb: 1.5 }}>
+                        WORKSPACES / REPOS
+                      </Typography>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                        {workspacesList.map(ws => (
+                          <Box
+                            key={ws.name}
+                            onClick={() => handleSend(`List files in ${ws.name}`)}
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 1,
+                              p: 1,
+                              borderRadius: '6px',
+                              cursor: 'pointer',
+                              transition: 'background 0.2s',
+                              '&:hover': { background: 'rgba(255,255,255,0.03)' }
+                            }}
+                          >
+                            <FolderIcon sx={{ fontSize: 14, color: '#7f5af0' }} />
+                            <Typography variant="caption" sx={{ color: '#cbd5e1', fontWeight: 600 }}>
+                              {ws.name}
+                            </Typography>
+                          </Box>
+                        ))}
+                        {workspacesList.length === 0 && (
+                          <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic', pl: 1 }}>
+                            No workspaces configured.
+                          </Typography>
+                        )}
+                      </Box>
+                    </Box>
+
+                    {/* Live Apps status list */}
+                    <Box sx={{ mb: 3 }}>
+                      <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, letterSpacing: '0.05em', display: 'block', mb: 1.5 }}>
+                        LIVE DEPLOYED APPS
+                      </Typography>
                       <Box
-                        key={ws.name}
-                        onClick={() => handleSend(`List files in ${ws.name}`)}
+                        onClick={() => handleSend('inspect soothsayer')}
                         sx={{
                           display: 'flex',
                           alignItems: 'center',
-                          gap: 1,
+                          justifyContent: 'space-between',
                           p: 1,
                           borderRadius: '6px',
                           cursor: 'pointer',
@@ -1071,97 +1237,129 @@ const App: React.FC = () => {
                           '&:hover': { background: 'rgba(255,255,255,0.03)' }
                         }}
                       >
-                        <FolderIcon sx={{ fontSize: 14, color: '#7f5af0' }} />
-                        <Typography variant="caption" sx={{ color: '#cbd5e1', fontWeight: 600 }}>
-                          {ws.name}
-                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <LaptopMacIcon sx={{ fontSize: 14, color: soothsayerStatus === 'online' ? '#22c55e' : '#71717a' }} />
+                          <Typography variant="caption" sx={{ color: '#cbd5e1', fontWeight: 600 }}>
+                            Soothsayer
+                          </Typography>
+                        </Box>
+                        <Chip 
+                          label={soothsayerStatus.toUpperCase()} 
+                          size="small" 
+                          sx={{ 
+                            height: 16, 
+                            fontSize: '0.55rem', 
+                            fontWeight: 800, 
+                            background: soothsayerStatus === 'online' ? 'rgba(34,197,94,0.08)' : 'rgba(255,255,255,0.03)', 
+                            color: soothsayerStatus === 'online' ? '#22c55e' : '#a1a1aa' 
+                          }} 
+                        />
                       </Box>
-                    ))}
-                    {workspacesList.length === 0 && (
-                      <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic', pl: 1 }}>
-                        No workspaces configured.
-                      </Typography>
-                    )}
-                  </Box>
-                </Box>
+                    </Box>
 
-                {/* Live Apps status list */}
-                <Box sx={{ mb: 3 }}>
-                  <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, letterSpacing: '0.05em', display: 'block', mb: 1.5 }}>
-                    LIVE DEPLOYED APPS
-                  </Typography>
-                  <Box
-                    onClick={() => handleSend('inspect soothsayer')}
+                    {/* Persona lenses selectors */}
+                    <Box sx={{ mt: 'auto', pt: 2, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                      <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, letterSpacing: '0.05em', display: 'block', mb: 1.5 }}>
+                        PERSONA VIEW LENS
+                      </Typography>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                        {(['engineer', 'pm', 'ba', 'qa', 'exec'] as const).map(lens => (
+                          <Box
+                            key={lens}
+                            onClick={() => setActiveLens(lens)}
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 1,
+                              p: 0.75,
+                              px: 1.5,
+                              borderRadius: '6px',
+                              cursor: 'pointer',
+                              background: activeLens === lens ? 'rgba(127, 85, 240, 0.08)' : 'transparent',
+                              border: activeLens === lens ? '1px solid rgba(127, 85, 240, 0.2)' : '1px solid transparent',
+                              transition: 'all 0.2s',
+                              '&:hover': { background: activeLens === lens ? 'rgba(127, 85, 240, 0.12)' : 'rgba(255,255,255,0.02)' }
+                            }}
+                          >
+                            <PersonOutlineIcon sx={{ fontSize: 13, color: activeLens === lens ? '#b794f4' : '#71717a' }} />
+                            <Typography variant="caption" sx={{ color: activeLens === lens ? '#b794f4' : '#cbd5e1', fontWeight: activeLens === lens ? 700 : 500 }}>
+                              {lens.toUpperCase()}
+                            </Typography>
+                          </Box>
+                        ))}
+                      </Box>
+                    </Box>
+                  </>
+                )}
+              </Box>
+            }
+            rightFeedContent={
+              isRightFeedCollapsed ? (
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', pt: 2, gap: 2, height: '100%', overflowY: 'auto' }}>
+                  <IconButton
+                    onClick={toggleRightFeed}
+                    size="small"
                     sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      p: 1,
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                      transition: 'background 0.2s',
-                      '&:hover': { background: 'rgba(255,255,255,0.03)' }
+                      color: '#cbd5e1',
+                      border: '1px solid rgba(255, 255, 255, 0.06)',
+                      background: 'rgba(255, 255, 255, 0.02)',
                     }}
                   >
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <LaptopMacIcon sx={{ fontSize: 14, color: soothsayerStatus === 'online' ? '#22c55e' : '#71717a' }} />
-                      <Typography variant="caption" sx={{ color: '#cbd5e1', fontWeight: 600 }}>
-                        Soothsayer
-                      </Typography>
-                    </Box>
-                    <Chip 
-                      label={soothsayerStatus.toUpperCase()} 
-                      size="small" 
-                      sx={{ 
-                        height: 16, 
-                        fontSize: '0.55rem', 
-                        fontWeight: 800, 
-                        background: soothsayerStatus === 'online' ? 'rgba(34,197,94,0.08)' : 'rgba(255,255,255,0.03)', 
-                        color: soothsayerStatus === 'online' ? '#22c55e' : '#a1a1aa' 
-                      }} 
-                    />
-                  </Box>
-                </Box>
+                    <ViewSidebarIcon sx={{ fontSize: 16 }} />
+                  </IconButton>
+                  
+                  <Divider sx={{ width: '65%', borderColor: 'rgba(255,255,255,0.06)' }} />
 
-                {/* Persona lenses selectors */}
-                <Box sx={{ mt: 'auto', pt: 2, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                  <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, letterSpacing: '0.05em', display: 'block', mb: 1.5 }}>
-                    PERSONA VIEW LENS
-                  </Typography>
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                    {(['engineer', 'pm', 'ba', 'qa', 'exec'] as const).map(lens => (
-                      <Box
-                        key={lens}
-                        onClick={() => setActiveLens(lens)}
-                        sx={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 1,
-                          p: 0.75,
-                          px: 1.5,
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          background: activeLens === lens ? 'rgba(127, 85, 240, 0.08)' : 'transparent',
-                          border: activeLens === lens ? '1px solid rgba(127, 85, 240, 0.2)' : '1px solid transparent',
-                          transition: 'all 0.2s',
-                          '&:hover': { background: activeLens === lens ? 'rgba(127, 85, 240, 0.12)' : 'rgba(255,255,255,0.02)' }
-                        }}
-                      >
-                        <PersonOutlineIcon sx={{ fontSize: 13, color: activeLens === lens ? '#b794f4' : '#71717a' }} />
-                        <Typography variant="caption" sx={{ color: activeLens === lens ? '#b794f4' : '#cbd5e1', fontWeight: activeLens === lens ? 700 : 500 }}>
-                          {lens.toUpperCase()}
-                        </Typography>
-                      </Box>
+                  <Stack spacing={1.5} alignItems="center" sx={{ overflowY: 'auto', width: '100%', pb: 2 }}>
+                    {previewFeed.map((item) => (
+                      <Tooltip key={item.id} title={`${item.type.replace(/([A-Z])/g, ' $1').trim()} (${item.timestamp})`} placement="left">
+                        <IconButton
+                          onClick={toggleRightFeed}
+                          size="small"
+                          sx={{
+                            color: '#b794f4',
+                            background: 'rgba(127, 85, 240, 0.04)',
+                            '&:hover': { background: 'rgba(127, 85, 240, 0.1)' }
+                          }}
+                        >
+                          {item.type === 'WorkspaceList' && <FolderIcon sx={{ fontSize: 16 }} />}
+                          {item.type === 'FileList' && <FolderIcon sx={{ fontSize: 16 }} />}
+                          {item.type === 'CodePreview' && <CodeIcon sx={{ fontSize: 16 }} />}
+                          {item.type === 'SearchResults' && <SearchIcon sx={{ fontSize: 16 }} />}
+                          {item.type === 'WorkflowsList' && <FolderIcon sx={{ fontSize: 16 }} />}
+                          {item.type === 'ProposedAction' && <CheckCircleOutlineIcon sx={{ fontSize: 16 }} />}
+                          {item.type === 'ExecutionLogs' && <TerminalIcon sx={{ fontSize: 16 }} />}
+                          {item.type === 'TerminalLogs' && <TerminalIcon sx={{ fontSize: 16 }} />}
+                          {item.type === 'MemoryRecall' && <MemoryIcon sx={{ fontSize: 16 }} />}
+                          {item.type === 'ContentWorkflow' && <EditNoteIcon sx={{ fontSize: 16 }} />}
+                          {item.type === 'SoothsayerWorkbench' && <LaptopMacIcon sx={{ fontSize: 16 }} />}
+                          {item.type === 'BrowserObservation' && <LaptopMacIcon sx={{ fontSize: 16 }} />}
+                        </IconButton>
+                      </Tooltip>
                     ))}
-                  </Box>
+                  </Stack>
                 </Box>
-              </>
-            )}
-          </Box>
-
-          {/* ZONE 2 + ZONE 3: Main Dashboard Content Area */}
-          <Box sx={{ flexGrow: 1, minWidth: 0, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-            
+              ) : (
+                <PreviewPanel
+                  previewFeed={previewFeed}
+                  onClose={toggleRightFeed}
+                  onAction={handleSend}
+                  onRemoveItem={handleRemoveItem}
+                  onClearFeed={handleClearFeed}
+                  onApproveAction={handleApproveAction}
+                  onContentWorkflowReview={handleContentWorkflowReview}
+                  onOpenInWorkbench={(item) => {
+                    setActiveComponent({ type: item.type as any, data: item.data });
+                    setActiveReply(null);
+                    setActiveQuery(null);
+                    handleWorkbenchModeChange('native-focus');
+                  }}
+                  token={token}
+                  loading={loading}
+                />
+              )
+            }
+          >
             {/* Top Command Bar */}
             <Box
               sx={{
@@ -1213,7 +1411,7 @@ const App: React.FC = () => {
                 </IconButton>
 
                 {/* Right feed toggle */}
-                <IconButton onClick={toggleRightFeed} size="small" sx={{ color: '#cbd5e1', border: '1px solid rgba(255,255,255,0.06)', display: { xs: 'none', lg: 'inline-flex' } }}>
+                <IconButton onClick={toggleRightFeed} size="small" sx={{ color: '#cbd5e1', border: '1px solid rgba(255,255,255,0.06)' }}>
                   <ViewSidebarIcon sx={{ fontSize: 16 }} />
                 </IconButton>
 
@@ -1224,330 +1422,153 @@ const App: React.FC = () => {
               </Box>
             </Box>
 
-            {/* Split layout containing Main Workbench + Right Inspector Feed */}
-            <Box sx={{ flexGrow: 1, minWidth: 0, display: 'flex', overflow: 'hidden' }}>
-              
-              {/* ZONE 2: Middle Main Workbench */}
-              <Box
-                sx={{
-                  flex: 1,
-                  minWidth: 0,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  height: '100%',
-                  borderRight: '1px solid rgba(255,255,255,0.08)',
-                  position: 'relative',
-                  overflow: 'hidden'
-                }}
-              >
-                {/* Active workspace card display scroll zone */}
-                <Box className="scroll-container" sx={{ flexGrow: 1, overflowY: 'auto', p: 3 }}>
-                  
-                  {/* Console prompt representing active query & reply text details */}
-                  {activeQuery && activeReply && (
-                    <Paper 
-                      variant="outlined" 
-                      sx={{ 
-                        p: 2, 
-                        mb: 2.5, 
-                        background: 'rgba(0, 0, 0, 0.2)', 
-                        borderColor: 'rgba(127, 85, 240, 0.15)', 
-                        borderRadius: '8px' 
-                      }}
-                    >
-                      <Typography variant="caption" sx={{ fontFamily: 'monospace', color: '#b794f4', display: 'block', mb: 1 }}>
-                        &gt; {activeQuery}
-                      </Typography>
-                      <Typography variant="body2" sx={{ color: '#cbd5e1', lineHeight: 1.5 }}>
-                        {activeReply}
-                      </Typography>
-                    </Paper>
-                  )}
+            {/* Workbench Mode Select Toggle Bar */}
+            <WorkbenchModeToggle
+              mode={workbenchMode}
+              onModeChange={handleWorkbenchModeChange}
+              hasActiveComponent={!!activeComponent}
+            />
 
-                  {/* Render focused active card component */}
-                  {activeComponent ? (
-                    <Box sx={{ mb: 2 }}>
-                      <InteractiveComponent
-                        uiComponent={activeComponent}
-                        onAction={handleSend}
-                        onApproveAction={handleApproveAction}
-                        onCancelAction={handleRemoveItem}
-                        onStartContentWorkflow={handleStartContentWorkflow}
-                        activeLens={activeLens}
-                      />
-                      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
-                        <Button 
-                          size="small" 
-                          variant="outlined" 
-                          onClick={() => { setActiveComponent(null); setActiveReply(null); setActiveQuery(null); }}
-                          sx={{ borderColor: 'rgba(255,255,255,0.1)', color: '#71717a', borderRadius: '6px' }}
-                        >
-                          Clear Active Card
-                        </Button>
+            {/* Middle Main Content Dispatcher */}
+            <Box sx={{ flexGrow: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              {workbenchMode === 'native-focus' && activeComponent ? (
+                renderActiveCard()
+              ) : workbenchMode === 'split' && activeComponent ? (
+                <Grid container sx={{ flexGrow: 1, minHeight: 0, height: '100%' }}>
+                  <Grid item xs={6} sx={{ height: '100%', display: 'flex', flexDirection: 'column', borderRight: '1px solid rgba(255,255,255,0.08)', minHeight: 0, overflow: 'hidden' }}>
+                    {renderChatTranscript()}
+                  </Grid>
+                  <Grid item xs={6} sx={{ height: '100%', minHeight: 0, overflow: 'hidden' }}>
+                    {renderActiveCard()}
+                  </Grid>
+                </Grid>
+              ) : (
+                <Box sx={{ flexGrow: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                  {messages.length === 0 ? (
+                    <Box sx={{ flexGrow: 1, overflowY: 'auto', p: 3 }}>
+                      {activeComponent && (
+                        <Paper variant="outlined" sx={{ p: 1.5, mb: 3, background: 'rgba(127, 85, 240, 0.04)', borderColor: 'rgba(127, 85, 240, 0.25)', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Typography variant="body2" sx={{ color: '#cbd5e1' }}>
+                            An active UI component is loaded in the background: <strong>{activeComponent.type}</strong>
+                          </Typography>
+                          <Button size="small" variant="contained" onClick={() => handleWorkbenchModeChange('native-focus')} sx={{ background: '#7f5af0', textTransform: 'none', borderRadius: '6px', fontSize: '0.7rem' }}>
+                            Open Canvas
+                          </Button>
+                        </Paper>
+                      )}
+                      
+                      <Box sx={{ animation: 'appleSpringIn 0.3s ease' }}>
+                        <Box sx={{ mb: 3 }}>
+                          <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#f4f4f5', mb: 0.5 }}>
+                            Workbench Overview
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: '#71717a' }}>
+                            Select an app connection or trigger context commands to populate workspace telemetry cards.
+                          </Typography>
+                        </Box>
+
+                        <Grid container spacing={2.5} sx={{ mb: 4 }}>
+                          <Grid item xs={12} sm={4}>
+                            <Paper variant="outlined" sx={{ p: 2, background: 'rgba(255,255,255,0.01)', borderColor: 'rgba(255,255,255,0.05)', borderRadius: '10px' }}>
+                              <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, display: 'block', mb: 1 }}>SYSTEM STATUS</Typography>
+                              <Typography variant="h5" sx={{ fontWeight: 800, color: '#22c55e' }}>ONLINE</Typography>
+                            </Paper>
+                          </Grid>
+                          <Grid item xs={12} sm={4}>
+                            <Paper variant="outlined" sx={{ p: 2, background: 'rgba(255,255,255,0.01)', borderColor: 'rgba(255,255,255,0.05)', borderRadius: '10px' }}>
+                              <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, display: 'block', mb: 1 }}>WORKSPACES</Typography>
+                              <Typography variant="h5" sx={{ fontWeight: 800, color: '#b794f4' }}>{workspacesList.length}</Typography>
+                            </Paper>
+                          </Grid>
+                          <Grid item xs={12} sm={4}>
+                            <Paper variant="outlined" sx={{ p: 2, background: 'rgba(255,255,255,0.01)', borderColor: 'rgba(255,255,255,0.05)', borderRadius: '10px' }}>
+                              <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, display: 'block', mb: 1 }}>ACTIVE TASKS</Typography>
+                              <Typography variant="h5" sx={{ fontWeight: 800, color: '#38bdf8' }}>{previewFeed.filter(f => f.type === 'ExecutionLogs').length}</Typography>
+                            </Paper>
+                          </Grid>
+                        </Grid>
+
+                        <Box sx={{ mb: 4 }}>
+                          <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, display: 'block', mb: 2 }}>QUICK ACTION PROMPTS</Typography>
+                          <Stack spacing={1}>
+                            <Paper 
+                              onClick={() => handleSend('List workspaces')}
+                              variant="outlined" 
+                              sx={{ 
+                                p: 1.5, 
+                                background: 'rgba(255,255,255,0.01)', 
+                                borderColor: 'rgba(255,255,255,0.05)', 
+                                borderRadius: '8px', 
+                                cursor: 'pointer',
+                                transition: 'all 0.2s',
+                                '&:hover': { background: 'rgba(127, 85, 240, 0.04)', borderColor: 'rgba(127, 85, 240, 0.2)' }
+                              }}
+                            >
+                              <Typography variant="body2" sx={{ color: '#cbd5e1' }}>🔍 Check available workspaces and Git state</Typography>
+                            </Paper>
+                            <Paper 
+                              onClick={() => handleSend('inspect soothsayer')}
+                              variant="outlined" 
+                              sx={{ 
+                                p: 1.5, 
+                                background: 'rgba(255,255,255,0.01)', 
+                                borderColor: 'rgba(255,255,255,0.05)', 
+                                borderRadius: '8px', 
+                                cursor: 'pointer',
+                                transition: 'all 0.2s',
+                                '&:hover': { background: 'rgba(127, 85, 240, 0.04)', borderColor: 'rgba(127, 85, 240, 0.2)' }
+                              }}
+                            >
+                              <Typography variant="body2" sx={{ color: '#cbd5e1' }}>🚀 Inspect live Soothsayer deployed app workbench</Typography>
+                            </Paper>
+                          </Stack>
+                        </Box>
                       </Box>
                     </Box>
                   ) : (
-                    /* Default state: WorkbenchOverview dashboard */
-                    <Box sx={{ animation: 'appleSpringIn 0.3s ease' }}>
-                      <Box sx={{ mb: 3 }}>
-                        <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#f4f4f5', mb: 0.5 }}>
-                          Workbench Overview
-                        </Typography>
-                        <Typography variant="caption" sx={{ color: '#71717a' }}>
-                          Select an app connection or trigger context commands to populate workspace telemetry cards.
-                        </Typography>
-                      </Box>
-
-                      {/* Capabilities metric tiles grid */}
-                      <Grid container spacing={2} sx={{ mb: 3.5 }}>
-                        <Grid item xs={12} sm={4}>
-                          <Paper variant="outlined" sx={{ p: 2, background: 'rgba(255,255,255,0.01)', borderColor: 'rgba(255,255,255,0.05)' }}>
-                            <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 700 }}>WORKSPACES</Typography>
-                            <Typography variant="h5" sx={{ fontWeight: 800, color: '#f4f4f5', mt: 0.5 }}>
-                              {workspacesList.length} Allowed
-                            </Typography>
-                          </Paper>
-                        </Grid>
-                        <Grid item xs={12} sm={4}>
-                          <Paper variant="outlined" sx={{ p: 2, background: 'rgba(255,255,255,0.01)', borderColor: 'rgba(255,255,255,0.05)' }}>
-                            <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 700 }}>SOOTHSAYER CONNECTION</Typography>
-                            <Typography variant="h5" sx={{ fontWeight: 800, color: soothsayerStatus === 'online' ? '#22c55e' : '#a1a1aa', mt: 0.5 }}>
-                              {soothsayerStatus === 'online' ? 'Verified Live' : 'No Signal'}
-                            </Typography>
-                          </Paper>
-                        </Grid>
-                        <Grid item xs={12} sm={4}>
-                          <Paper variant="outlined" sx={{ p: 2, background: 'rgba(255,255,255,0.01)', borderColor: 'rgba(255,255,255,0.05)' }}>
-                            <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 700 }}>EXECUTION ADAPTER</Typography>
-                            <Typography variant="h5" sx={{ fontWeight: 800, color: '#b794f4', mt: 0.5 }}>
-                              Dry-Run Mode
-                            </Typography>
-                          </Paper>
-                        </Grid>
-                      </Grid>
-
-                      {/* Quick-Prompt suggestions */}
-                      <Paper variant="outlined" sx={{ p: 2.5, background: 'rgba(255,255,255,0.01)', borderColor: 'rgba(255,255,255,0.05)' }}>
-                        <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, display: 'block', mb: 1.5 }}>
-                          SUGGESTED WORKBENCH PROMPTS
-                        </Typography>
-                        <Stack direction="column" spacing={1.5}>
-                          {[
-                            { label: 'inspect soothsayer', desc: 'Inspect live app endpoints and health status configurations' },
-                            { label: 'List workspaces', desc: 'Lists registered directory folders configured' },
-                            { label: 'git status in flowright', desc: 'Scan repository status for unstaged changes' },
-                            { label: 'run npm run verify in flowright', desc: 'Validate flowright repository build logs' }
-                          ].map(prompt => (
-                            <Box
-                              key={prompt.label}
-                              onClick={() => handleSend(prompt.label)}
-                              sx={{
-                                p: 1.5,
-                                px: 2,
-                                borderRadius: '8px',
-                                background: 'rgba(255,255,255,0.02)',
-                                border: '1px solid rgba(255,255,255,0.04)',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s',
-                                '&:hover': {
-                                  background: 'rgba(127,85,240,0.05)',
-                                  borderColor: 'rgba(127, 85, 240, 0.2)'
-                                }
-                              }}
-                            >
-                              <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 700, color: '#f4f4f5' }}>
-                                {prompt.label}
-                              </Typography>
-                              <Typography variant="caption" color="text.secondary">
-                                {prompt.desc}
-                              </Typography>
-                            </Box>
-                          ))}
-                        </Stack>
-                      </Paper>
-                    </Box>
+                    renderChatTranscript()
                   )}
-
-                  {/* Compact chat log indicator display if active messages exist */}
-                  {messages.length > 0 && (
-                    <Box sx={{ mt: 4, pt: 3, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                      <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, display: 'block', mb: 2 }}>
-                        COMPACT CONVERSATION TRAIL ({messages.length})
-                      </Typography>
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                        {messages.slice(-4).map((msg, idx) => (
-                          <Paper 
-                            key={idx} 
-                            elevation={0}
-                            sx={{ 
-                              p: 1.5, 
-                              background: msg.role === 'user' ? 'rgba(127,85,240,0.05)' : 'rgba(255,255,255,0.01)', 
-                              borderColor: 'rgba(255,255,255,0.04)' 
-                            }}
-                          >
-                            <Typography variant="caption" sx={{ color: msg.role === 'user' ? '#b794f4' : '#71717a', fontWeight: 800, display: 'block', mb: 0.5 }}>
-                              {msg.role === 'user' ? 'YOU' : 'PORTAL'}
-                            </Typography>
-                            <Typography variant="body2" sx={{ color: '#cbd5e1', lineHeight: 1.4 }}>
-                              {msg.content}
-                            </Typography>
-                            
-                            {/* If card exists, display a compact chip linking to Main Workbench slot */}
-                            {msg.uiComponent && (
-                              <Box sx={{ mt: 1 }}>
-                                <Chip
-                                  label={`Open ${msg.uiComponent.type} Workbench Slot`}
-                                  onClick={() => {
-                                    if (msg.uiComponent) {
-                                      setActiveComponent(msg.uiComponent);
-                                      setActiveQuery(msg.content);
-                                      setActiveReply(msg.content);
-                                    }
-                                  }}
-                                  size="small"
-                                  color="primary"
-                                  variant="outlined"
-                                  sx={{ cursor: 'pointer', height: 20, fontSize: '0.65rem', borderRadius: '4px' }}
-                                />
-                              </Box>
-                            )}
-                          </Paper>
-                        ))}
-                      </Box>
-                    </Box>
-                  )}
-
-                  {loading && (
-                    <Box sx={{ display: 'flex', justifyContent: 'flex-start', mt: 3 }}>
-                      <Paper
-                        elevation={0}
-                        sx={{
-                          py: 1,
-                          px: 2,
-                          background: 'rgba(255, 255, 255, 0.01)',
-                          borderColor: 'rgba(255, 255, 255, 0.05)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 1.5
-                        }}
-                      >
-                        <CircularProgress size={12} sx={{ color: '#7f5af0' }} />
-                        <Typography variant="caption" sx={{ color: '#a1a1aa', fontWeight: 600 }}>
-                          Analyzing workspace...
-                        </Typography>
-                      </Paper>
-                    </Box>
-                  )}
-                  <div ref={messagesEndRef} />
                 </Box>
-
-                {/* Bottom Chat Input Dock with suggestions bar above it */}
-                <Box
-                  sx={{
-                    p: 2.5,
-                    borderTop: '1px solid rgba(255,255,255,0.08)',
-                    background: 'rgba(9, 9, 11, 0.3)'
-                  }}
-                >
-                  <Stack direction="row" spacing={1} sx={{ mb: 1.5, overflowX: 'auto', pb: 0.5 }}>
-                    <Chip 
-                      label="show flowright workflows" 
-                      onClick={() => handleSend('show flowright workflows')} 
-                      size="small" 
-                      sx={{ height: 22, fontSize: '0.65rem', background: 'rgba(255,255,255,0.03)', color: '#cbd5e1', cursor: 'pointer' }} 
-                    />
-                    <Chip 
-                      label="show soothsayer workflows" 
-                      onClick={() => handleSend('show soothsayer workflows')} 
-                      size="small" 
-                      sx={{ height: 22, fontSize: '0.65rem', background: 'rgba(255,255,255,0.03)', color: '#cbd5e1', cursor: 'pointer' }} 
-                    />
-                    <Chip 
-                      label="write a blog post" 
-                      onClick={() => handleSend('write a blog post')} 
-                      size="small" 
-                      sx={{ height: 22, fontSize: '0.65rem', background: 'rgba(255,255,255,0.03)', color: '#cbd5e1', cursor: 'pointer' }} 
-                    />
-                    <Chip 
-                      label="git status in flowright" 
-                      onClick={() => handleSend('git status in flowright')} 
-                      size="small" 
-                      sx={{ height: 22, fontSize: '0.65rem', background: 'rgba(255,255,255,0.03)', color: '#cbd5e1', cursor: 'pointer' }} 
-                    />
-                  </Stack>
-                  <ChatInput onSend={handleSend} />
-                </Box>
-              </Box>
-
-              {/* ZONE 3: Right Inspector / Intelligence Feed */}
-              <Box
-                sx={{
-                  width: isRightFeedCollapsed ? 48 : 380,
-                  minWidth: isRightFeedCollapsed ? 48 : 380,
-                  display: { xs: 'none', lg: 'flex' },
-                  flexDirection: 'column',
-                  height: '100%',
-                  background: 'rgba(9, 9, 11, 0.15)',
-                  borderLeft: '1px solid rgba(255, 255, 255, 0.08)',
-                  transition: 'width 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
-                  overflow: 'hidden'
-                }}
-              >
-                {isRightFeedCollapsed ? (
-                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', pt: 2, gap: 2, height: '100%' }}>
-                    <Tooltip title="Expand Activity Feed" placement="left">
-                      <IconButton onClick={toggleRightFeed} size="small" sx={{ color: '#cbd5e1', border: '1px solid rgba(255,255,255,0.06)' }}>
-                        <ChevronLeftIcon sx={{ fontSize: 16 }} />
-                      </IconButton>
-                    </Tooltip>
-                    
-                    <Divider sx={{ width: '65%', borderColor: 'rgba(255,255,255,0.06)' }} />
-
-                    <Stack spacing={1.5} alignItems="center" sx={{ overflowY: 'auto', width: '100%', pb: 2 }}>
-                      {previewFeed.map((item) => (
-                        <Tooltip key={item.id} title={`${item.type.replace(/([A-Z])/g, ' $1').trim()} (${item.timestamp})`} placement="left">
-                          <IconButton
-                            onClick={toggleRightFeed}
-                            size="small"
-                            sx={{
-                              color: '#b794f4',
-                              background: 'rgba(127, 85, 240, 0.04)',
-                              '&:hover': { background: 'rgba(127, 85, 240, 0.1)' }
-                            }}
-                          >
-                            {item.type === 'WorkspaceList' && <FolderIcon sx={{ fontSize: 16 }} />}
-                            {item.type === 'FileList' && <FolderIcon sx={{ fontSize: 16 }} />}
-                            {item.type === 'CodePreview' && <CodeIcon sx={{ fontSize: 16 }} />}
-                            {item.type === 'SearchResults' && <SearchIcon sx={{ fontSize: 16 }} />}
-                            {item.type === 'WorkflowsList' && <FolderIcon sx={{ fontSize: 16 }} />}
-                            {item.type === 'ProposedAction' && <CheckCircleOutlineIcon sx={{ fontSize: 16 }} />}
-                            {item.type === 'ExecutionLogs' && <TerminalIcon sx={{ fontSize: 16 }} />}
-                            {item.type === 'TerminalLogs' && <TerminalIcon sx={{ fontSize: 16 }} />}
-                            {item.type === 'MemoryRecall' && <MemoryIcon sx={{ fontSize: 16 }} />}
-                            {item.type === 'ContentWorkflow' && <EditNoteIcon sx={{ fontSize: 16 }} />}
-                          </IconButton>
-                        </Tooltip>
-                      ))}
-                    </Stack>
-                  </Box>
-                ) : (
-                  <PreviewPanel
-                    previewFeed={previewFeed}
-                    onClose={() => toggleRightFeed()}
-                    onAction={(query) => {
-                      handleSend(query);
-                    }}
-                    onRemoveItem={handleRemoveItem}
-                    onClearFeed={handleClearFeed}
-                    onApproveAction={handleApproveAction}
-                    onContentWorkflowReview={handleContentWorkflowReview}
-                    token={token}
-                    loading={loading}
-                  />
-                )}
-              </Box>
+              )}
             </Box>
-          </Box>
+
+            {/* Bottom Chat Input Dock with suggestions bar above it */}
+            <Box
+              sx={{
+                p: 2.5,
+                borderTop: '1px solid rgba(255,255,255,0.08)',
+                background: 'rgba(9, 9, 11, 0.3)'
+              }}
+            >
+              <Stack direction="row" spacing={1} sx={{ mb: 1.5, overflowX: 'auto', pb: 0.5 }}>
+                <Chip 
+                  label="show flowright workflows" 
+                  onClick={() => handleSend('show flowright workflows')} 
+                  size="small" 
+                  sx={{ height: 22, fontSize: '0.65rem', background: 'rgba(255,255,255,0.03)', color: '#cbd5e1', cursor: 'pointer' }} 
+                />
+                <Chip 
+                  label="show soothsayer workflows" 
+                  onClick={() => handleSend('show soothsayer workflows')} 
+                  size="small" 
+                  sx={{ height: 22, fontSize: '0.65rem', background: 'rgba(255,255,255,0.03)', color: '#cbd5e1', cursor: 'pointer' }} 
+                />
+                <Chip 
+                  label="write a blog post" 
+                  onClick={() => handleSend('write a blog post')} 
+                  size="small" 
+                  sx={{ height: 22, fontSize: '0.65rem', background: 'rgba(255,255,255,0.03)', color: '#cbd5e1', cursor: 'pointer' }} 
+                />
+                <Chip 
+                  label="git status in flowright" 
+                  onClick={() => handleSend('git status in flowright')} 
+                  size="small" 
+                  sx={{ height: 22, fontSize: '0.65rem', background: 'rgba(255,255,255,0.03)', color: '#cbd5e1', cursor: 'pointer' }} 
+                />
+              </Stack>
+              <ChatInput onSend={handleSend} />
+            </Box>
+          </WorkbenchShell>
         </Box>
       </Box>
     </ThemeProvider>
