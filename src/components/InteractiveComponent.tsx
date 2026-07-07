@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Box, Typography, Card, CardContent, CardActionArea, Grid, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Paper, Divider, TextField, Button, Chip, Stack } from '@mui/material';
+import { Box, Typography, Card, CardContent, CardActionArea, Grid, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Paper, Divider, TextField, Button, Chip, Stack, Tabs, Tab } from '@mui/material';
 import type { UiComponent } from '../../shared/uiComponent';
 import FolderIcon from '@mui/icons-material/Folder';
 import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
@@ -29,6 +29,15 @@ export const InteractiveComponent: React.FC<ComponentProps> = ({ uiComponent, on
   // Local only — the message log itself stays append-only/immutable, so
   // "did I already act on this" lives here rather than mutating history.
   const [resolution, setResolution] = useState<'pending' | 'approved' | 'cancelled'>('pending');
+  const [activeTab, setActiveTab] = useState<'native' | 'live'>('native');
+  const [activeRouteId, setActiveRouteId] = useState<string>('dashboard');
+  const [iframeSrc, setIframeSrc] = useState<string>('');
+
+  React.useEffect(() => {
+    if (data?.embedUrl) {
+      setIframeSrc(data.embedUrl);
+    }
+  }, [data?.embedUrl]);
 
   if (type === 'LiveAppWorkbench' && data) {
     if (resolution === 'cancelled') {
@@ -668,76 +677,132 @@ export const InteractiveComponent: React.FC<ComponentProps> = ({ uiComponent, on
                 ))}
               </Stack>
             </Box>
-
             <Box sx={{ mt: 'auto' }}>
-              <Typography variant="caption" sx={{ color: '#71717a', lineHeight: 1.4, display: 'block' }}>
-                Embedded live view is disabled until Soothsayer explicitly allows portal framing. Use the live link above for the real app.
-              </Typography>
+              {data.embed?.allowed && data.embedUrl ? (
+                <Paper variant="outlined" sx={{ p: 1.5, background: 'rgba(34, 197, 94, 0.03)', borderColor: 'rgba(34, 197, 94, 0.15)' }}>
+                  <Typography variant="caption" sx={{ color: '#22c55e', fontWeight: 600, display: 'block', mb: 0.5 }}>
+                    Embedded Live View Allowed
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: '#a1a1aa', lineHeight: 1.4, display: 'block' }}>
+                    Soothsayer allows portal framing. Switch to the "Live App" tab to browse.
+                  </Typography>
+                </Paper>
+              ) : (
+                <Typography variant="caption" sx={{ color: '#71717a', lineHeight: 1.4, display: 'block' }}>
+                  {!data.embedUrl ? 'Live embed not configured.' : 'Embedded live view is disabled until Soothsayer explicitly allows portal framing. Use the live link above for the real app.'}
+                </Typography>
+              )}
             </Box>
           </Grid>
 
           {/* Middle Workbench Area: Content Draft Preview & Run details */}
           <Grid item xs={12} md={8.5} sx={{ p: 3, display: 'flex', flexDirection: 'column' }}>
-            {workbench?.views && workbench.views.length > 0 ? (
-              <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 3 }}>
-                <NativeWorkbenchRenderer
-                  views={workbench.views}
-                  initialValues={data.initialValues}
+            {data.embed?.allowed && data.embedUrl ? (
+              <Box sx={{ borderBottom: 1, borderColor: 'rgba(255, 255, 255, 0.08)', mb: 2 }}>
+                <Tabs value={activeTab} onChange={(e, val) => setActiveTab(val)} textColor="primary" indicatorColor="primary">
+                  <Tab label="Native Workbench" value="native" sx={{ textTransform: 'none', minWidth: 100, fontSize: '0.8rem', fontWeight: 600 }} />
+                  <Tab label="Live App" value="live" sx={{ textTransform: 'none', minWidth: 100, fontSize: '0.8rem', fontWeight: 600 }} />
+                </Tabs>
+              </Box>
+            ) : null}
+
+            {activeTab === 'live' && data.embed?.allowed && data.embedUrl ? (
+              <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                {/* Safe route selector Chips */}
+                {Array.isArray(data.embed.routes) && data.embed.routes.length > 0 && (
+                  <Stack direction="row" spacing={1} sx={{ mb: 2, flexWrap: 'wrap' }} useFlexGap>
+                    {data.embed.routes.map((route: any) => {
+                      const isSelected = activeRouteId === route.id;
+                      return (
+                        <Chip
+                          key={route.id}
+                          label={route.label}
+                          onClick={() => {
+                            setActiveRouteId(route.id);
+                            if (route.embedUrl) {
+                              setIframeSrc(route.embedUrl);
+                            }
+                          }}
+                          variant={isSelected ? "filled" : "outlined"}
+                          size="small"
+                          color={isSelected ? "primary" : "default"}
+                          sx={{ cursor: 'pointer', fontSize: '0.75rem', height: 24 }}
+                        />
+                      );
+                    })}
+                  </Stack>
+                )}
+                {/* Embed Iframe */}
+                <iframe
+                  src={iframeSrc || data.embedUrl}
+                  title="Live Soothsayer"
+                  sandbox="allow-scripts allow-forms allow-same-origin allow-popups"
+                  referrerPolicy="no-referrer"
+                  style={{ width: '100%', height: '550px', border: 'none', borderRadius: '8px', background: '#09090b' }}
                 />
               </Box>
             ) : (
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, height: '100%' }}>
-                <Paper variant="outlined" sx={{ p: 3, background: 'rgba(245, 158, 11, 0.03)', borderColor: 'rgba(245, 158, 11, 0.16)', borderRadius: '12px' }}>
-                  <Typography variant="caption" sx={{ color: '#f59e0b', fontWeight: 800, display: 'block', mb: 1 }}>
-                    WORKBENCH SESSION NOT AVAILABLE
-                  </Typography>
-                  <Typography variant="body2" sx={{ color: '#cbd5e1', lineHeight: 1.6 }}>
-                    The live Soothsayer app responded, but it did not expose an app-native workbench view in its portal manifest or workbench session. Portal will not fabricate a draft, review gate, evidence state, or run link.
-                  </Typography>
-                  {workbenchError && (
-                    <Typography variant="caption" sx={{ color: '#a1a1aa', display: 'block', mt: 1.5, fontFamily: 'monospace' }}>
-                      {workbenchError}
-                    </Typography>
-                  )}
-                </Paper>
-
-                <Paper variant="outlined" sx={{ p: 2.5, background: 'rgba(255,255,255,0.01)', borderColor: 'rgba(255,255,255,0.05)', borderRadius: '12px' }}>
-                  <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, display: 'block', mb: 1.5 }}>
-                    AVAILABLE APP MANIFEST SUMMARY
-                  </Typography>
-                  <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                    {workflows.map((w: any) => (
-                      <Chip
-                        key={w.id}
-                        label={w.label || w.id}
-                        size="small"
-                        sx={{ background: 'rgba(127, 85, 240, 0.08)', color: '#b794f4', border: '1px solid rgba(127, 85, 240, 0.18)' }}
-                      />
-                    ))}
-                    {routes.map((r: any) => (
-                      <Chip
-                        key={r.path}
-                        label={`${r.label || 'GET'} ${r.path}`}
-                        size="small"
-                        sx={{ background: 'rgba(255,255,255,0.03)', color: '#cbd5e1' }}
-                      />
-                    ))}
-                  </Stack>
-                </Paper>
-
-                <Box sx={{ mt: 'auto', display: 'flex', justifyContent: 'flex-end' }}>
-                  <Button
-                    size="small"
-                    variant="contained"
-                    href={url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    sx={{ background: '#7f5af0', textTransform: 'none', fontWeight: 700, borderRadius: '6px', '&:hover': { background: '#6d47dd' } }}
-                  >
-                    Open live Soothsayer
-                  </Button>
+              workbench?.views && workbench.views.length > 0 ? (
+                <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 3 }}>
+                  <NativeWorkbenchRenderer
+                    views={workbench.views}
+                    initialValues={data.initialValues}
+                  />
                 </Box>
-              </Box>
+              ) : (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, height: '100%' }}>
+                  <Paper variant="outlined" sx={{ p: 3, background: 'rgba(245, 158, 11, 0.03)', borderColor: 'rgba(245, 158, 11, 0.16)', borderRadius: '12px' }}>
+                    <Typography variant="caption" sx={{ color: '#f59e0b', fontWeight: 800, display: 'block', mb: 1 }}>
+                      WORKBENCH SESSION NOT AVAILABLE
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: '#cbd5e1', lineHeight: 1.6 }}>
+                      The live Soothsayer app responded, but it did not expose an app-native workbench view in its portal manifest or workbench session. Portal will not fabricate a draft, review gate, evidence state, or run link.
+                    </Typography>
+                    {workbenchError && (
+                      <Typography variant="caption" sx={{ color: '#a1a1aa', display: 'block', mt: 1.5, fontFamily: 'monospace' }}>
+                        {workbenchError}
+                      </Typography>
+                    )}
+                  </Paper>
+
+                  <Paper variant="outlined" sx={{ p: 2.5, background: 'rgba(255,255,255,0.01)', borderColor: 'rgba(255,255,255,0.05)', borderRadius: '12px' }}>
+                    <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, display: 'block', mb: 1.5 }}>
+                      AVAILABLE APP MANIFEST SUMMARY
+                    </Typography>
+                    <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                      {workflows.map((w: any) => (
+                        <Chip
+                          key={w.id}
+                          label={w.label || w.id}
+                          size="small"
+                          sx={{ background: 'rgba(127, 85, 240, 0.08)', color: '#b794f4', border: '1px solid rgba(127, 85, 240, 0.18)' }}
+                        />
+                      ))}
+                      {routes.map((r: any) => (
+                        <Chip
+                          key={r.path}
+                          label={`${r.label || 'GET'} ${r.path}`}
+                          size="small"
+                          sx={{ background: 'rgba(255,255,255,0.03)', color: '#cbd5e1' }}
+                        />
+                      ))}
+                    </Stack>
+                  </Paper>
+
+                  <Box sx={{ mt: 'auto', display: 'flex', justifyContent: 'flex-end' }}>
+                    <Button
+                      size="small"
+                      variant="contained"
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      sx={{ background: '#7f5af0', textTransform: 'none', fontWeight: 700, borderRadius: '6px', '&:hover': { background: '#6d47dd' } }}
+                    >
+                      Open live Soothsayer
+                    </Button>
+                  </Box>
+                </Box>
+              )
             )}
           </Grid>
         </Grid>

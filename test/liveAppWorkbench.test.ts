@@ -80,6 +80,15 @@ async function runAsyncTests() {
         json: async () => ({
           app: 'soothsayer',
           environment: 'staging',
+          embed: {
+            allowed: true,
+            mode: 'iframe',
+            origin: 'http://127.0.0.1:3101',
+            defaultPath: '/flowright',
+            routes: [
+              { id: 'dashboard', label: 'Dashboard', path: '/' }
+            ]
+          },
           views: [
             { id: 'cms-form', type: 'schema-form', label: 'Start CMS Form', status: 'available' }
           ]
@@ -90,7 +99,25 @@ async function runAsyncTests() {
   };
 
   try {
+    // Test fail closed when secret is missing
+    const originalSecret = process.env.SOOTHSAYER_PORTAL_EMBED_SECRET;
+    delete process.env.SOOTHSAYER_PORTAL_EMBED_SECRET;
+    
+    const proposalUnsigned = await buildLiveAppWorkbench('soothsayer', 'http://127.0.0.1:3101/');
+    assert.strictEqual(proposalUnsigned.embedUrl, null, 'embedUrl must be null if secret is missing');
+    assert.strictEqual(proposalUnsigned.embed?.allowed, false, 'embed allowed must be false if secret is missing');
+
+    // Test successful signing when secret is present
+    process.env.SOOTHSAYER_PORTAL_EMBED_SECRET = 'test-secret';
     const proposal = await buildLiveAppWorkbench('soothsayer', 'http://127.0.0.1:3101/');
+    
+    // Restore secret
+    if (originalSecret) {
+      process.env.SOOTHSAYER_PORTAL_EMBED_SECRET = originalSecret;
+    } else {
+      delete process.env.SOOTHSAYER_PORTAL_EMBED_SECRET;
+    }
+
     assert.strictEqual(proposal.configured, true, 'Should be configured: true');
     assert.strictEqual(proposal.urlReachable, true, 'urlReachable should be true');
     assert.strictEqual(proposal.manifestReachable, true, 'manifestReachable should be true');
@@ -113,11 +140,76 @@ async function runAsyncTests() {
       proposal.sourceLabels.some((sl) => sl.source === 'workbench' && sl.status === 'available'),
       'Should expose workbench as an available app-native truth source',
     );
+    assert.strictEqual(proposal.embed?.allowed, true, 'embed allowed must be true if secret is set');
+    assert.ok(proposal.embedUrl && proposal.embedUrl.includes('/portal-embed?path=%2Fflowright&token='), 'embedUrl must contain signed path');
+    assert.ok(proposal.embed?.routes[0].embedUrl && proposal.embed.routes[0].embedUrl.includes('/portal-embed?path=%2F&token='), 'routes embedUrl must contain signed path');
   } finally {
     globalThis.fetch = originalFetch;
   }
 
-  // 4. Configured tests with invalid workbench payload
+  // 4. Configured tests with mismatched embed origin should fail closed
+  globalThis.fetch = async (url: string | URL | Request) => {
+    const urlStr = String(url);
+    if (urlStr === 'http://127.0.0.1:3103') {
+      return {
+        ok: true,
+      } as unknown as Response;
+    }
+    if (urlStr === 'http://127.0.0.1:3103/api/portal-manifest') {
+      return {
+        ok: true,
+        json: async () => ({
+          environment: 'staging',
+          version: '1.4.2-beta',
+          routes: [],
+          features: [],
+          workflows: [],
+          health: { status: 'healthy' },
+        }),
+      } as unknown as Response;
+    }
+    if (urlStr === 'http://127.0.0.1:3103/api/portal-workbench') {
+      return {
+        ok: true,
+        json: async () => ({
+          app: 'soothsayer',
+          environment: 'staging',
+          embed: {
+            allowed: true,
+            mode: 'iframe',
+            origin: 'http://evil.localhost',
+            defaultPath: '/',
+            routes: [{ id: 'dashboard', label: 'Dashboard', path: '/' }],
+          },
+          views: [
+            { id: 'cms-form', type: 'schema-form', label: 'Start CMS Form', status: 'available' },
+          ],
+        }),
+      } as unknown as Response;
+    }
+    throw new Error(`Unexpected fetch URL: ${urlStr}`);
+  };
+
+  try {
+    const originalSecret = process.env.SOOTHSAYER_PORTAL_EMBED_SECRET;
+    process.env.SOOTHSAYER_PORTAL_EMBED_SECRET = 'test-secret';
+    const mismatchedOrigin = await buildLiveAppWorkbench('soothsayer', 'http://127.0.0.1:3103');
+    if (originalSecret) {
+      process.env.SOOTHSAYER_PORTAL_EMBED_SECRET = originalSecret;
+    } else {
+      delete process.env.SOOTHSAYER_PORTAL_EMBED_SECRET;
+    }
+    assert.strictEqual(mismatchedOrigin.embedUrl, null, 'embedUrl must be null if embed origin is unexpected');
+    assert.strictEqual(mismatchedOrigin.embed?.allowed, false, 'embed must fail closed if origin is unexpected');
+    assert.ok(
+      mismatchedOrigin.warnings.some((w) => w.includes('embed origin does not match')),
+      'Should warn when embed origin does not match live app origin',
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  // 5. Configured tests with invalid workbench payload
   globalThis.fetch = async (url: string | URL | Request) => {
     const urlStr = String(url);
     if (urlStr === 'http://127.0.0.1:3102') {

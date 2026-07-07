@@ -3,6 +3,21 @@
 // Core processor for Live Deployed App Experience Cards (Soothsayer POC).
 // Strictly preview-only and read-only. Does not support mutation or scraping.
 
+import * as crypto from 'crypto';
+
+function signPath(path: string, secret: string, timestamp: number): string {
+  const payload = `${timestamp}.${path}`;
+  return crypto.createHmac('sha256', secret).update(payload).digest('base64url');
+}
+
+function sameOrigin(left: string, right: string): boolean {
+  try {
+    return new URL(left).origin === new URL(right).origin;
+  } catch {
+    return false;
+  }
+}
+
 export type LiveAppTruthSource =
   | 'manifest'
   | 'workbench'
@@ -72,6 +87,14 @@ export interface LiveAppWorkbenchData {
   workbenchReachable?: boolean;
   workbenchAvailable?: boolean;
   workbenchSource?: 'app-native-api' | 'fallback' | null;
+  embed?: {
+    allowed: boolean;
+    mode: 'iframe';
+    origin: string;
+    defaultPath: string;
+    routes: Array<{ id: string; label: string; path: string; embedUrl?: string }>;
+  } | null;
+  embedUrl?: string | null;
 }
 
 /**
@@ -261,6 +284,8 @@ export async function buildLiveAppWorkbench(
   let workbenchReachable = false;
   let workbenchAvailable = false;
   let workbenchSource: 'app-native-api' | 'fallback' | null = null;
+  let embed: any = null;
+  let embedUrl: string | null = null;
   const workbenchUrl = `${baseUrl}/api/portal-workbench`;
 
   try {
@@ -284,6 +309,47 @@ export async function buildLiveAppWorkbench(
           updatedAt: typeof body.updatedAt === 'string' ? body.updatedAt : new Date().toISOString(),
           views: body.views,
         };
+        if (body.embed && typeof body.embed === 'object') {
+          const rawEmbed = body.embed;
+          const secret = process.env.SOOTHSAYER_PORTAL_EMBED_SECRET || '';
+          const origin = typeof rawEmbed.origin === 'string' ? rawEmbed.origin : '';
+          const embedOriginAllowed = origin && sameOrigin(origin, baseUrl);
+          if (rawEmbed.allowed && secret && embedOriginAllowed) {
+            const timestamp = Date.now();
+            const defaultPath = rawEmbed.defaultPath || '/';
+            const signature = signPath(defaultPath, secret, timestamp);
+            embedUrl = `${origin}/portal-embed?path=${encodeURIComponent(defaultPath)}&token=${timestamp}.${signature}`;
+            const signedRoutes = Array.isArray(rawEmbed.routes)
+              ? rawEmbed.routes.map((r: any) => {
+                  const routePath = r.path || '/';
+                  const routeSig = signPath(routePath, secret, timestamp);
+                  const routeEmbedUrl = `${origin}/portal-embed?path=${encodeURIComponent(routePath)}&token=${timestamp}.${routeSig}`;
+                  return {
+                    ...r,
+                    embedUrl: routeEmbedUrl
+                  };
+                })
+              : [];
+            embed = {
+              allowed: true,
+              mode: rawEmbed.mode || 'iframe',
+              origin,
+              defaultPath,
+              routes: signedRoutes
+            };
+          } else {
+            if (rawEmbed.allowed && secret && !embedOriginAllowed) {
+              warnings.push('Workbench embed origin does not match configured live app origin.');
+            }
+            embed = {
+              allowed: false,
+              mode: 'iframe',
+              origin,
+              defaultPath: '/',
+              routes: []
+            };
+          }
+        }
         if (!workbenchAvailable) {
           warnings.push('Workbench endpoint returned no native views.');
         }
@@ -360,5 +426,7 @@ export async function buildLiveAppWorkbench(
     workbenchReachable,
     workbenchAvailable,
     workbenchSource,
+    embed,
+    embedUrl,
   };
 }

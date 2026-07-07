@@ -1235,6 +1235,8 @@ export async function resolveGatewayCardLocally(query: string): Promise<{ reply:
               workbenchReachable: data.workbenchReachable,
               workbenchAvailable: hasWorkbench,
               workbenchSource: data.workbenchSource,
+              embed: data.embed || null,
+              embedUrl: data.embedUrl || null,
             }
           }
         };
@@ -1319,6 +1321,8 @@ export async function resolveGatewayCardLocally(query: string): Promise<{ reply:
               workbenchReachable: data.workbenchReachable,
               workbenchAvailable: hasWorkbench,
               workbenchSource: data.workbenchSource,
+              embed: data.embed || null,
+              embedUrl: data.embedUrl || null,
               initialValues: {
                 topic: workflowIntent.contentBrief || ''
               }
