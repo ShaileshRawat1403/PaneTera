@@ -84,9 +84,9 @@ async function runAsyncTests() {
             allowed: true,
             mode: 'iframe',
             origin: 'http://127.0.0.1:3101',
-            defaultPath: '/flowright',
+            defaultPath: '/dashboard',
             routes: [
-              { id: 'dashboard', label: 'Dashboard', path: '/' }
+              { id: 'dashboard', label: 'Dashboard', path: '/dashboard' }
             ]
           },
           views: [
@@ -141,8 +141,8 @@ async function runAsyncTests() {
       'Should expose workbench as an available app-native truth source',
     );
     assert.strictEqual(proposal.embed?.allowed, true, 'embed allowed must be true if secret is set');
-    assert.ok(proposal.embedUrl && proposal.embedUrl.includes('/portal-embed?path=%2Fflowright&token='), 'embedUrl must contain signed path');
-    assert.ok(proposal.embed?.routes[0].embedUrl && proposal.embed.routes[0].embedUrl.includes('/portal-embed?path=%2F&token='), 'routes embedUrl must contain signed path');
+    assert.ok(proposal.embedUrl && proposal.embedUrl.includes('/portal-embed?path=%2Fdashboard&token='), 'embedUrl must contain signed dashboard path');
+    assert.ok(proposal.embed?.routes[0].embedUrl && proposal.embed.routes[0].embedUrl.includes('/portal-embed?path=%2Fdashboard&token='), 'routes embedUrl must contain signed dashboard path');
   } finally {
     globalThis.fetch = originalFetch;
   }
