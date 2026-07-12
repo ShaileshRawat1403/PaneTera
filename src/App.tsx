@@ -1486,7 +1486,7 @@ const App: React.FC = () => {
 
                     {/* Workspaces list */}
                     {/* Workspace Navigator */}
-                    <Box sx={{ mb: 3, flexGrow: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                    <Box sx={{ mb: 3 }}>
                       <WorkspaceNavigator
                         token={token}
                         activeWorkspace={activeWorkspace}

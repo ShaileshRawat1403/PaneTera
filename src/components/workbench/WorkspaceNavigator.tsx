@@ -253,7 +253,7 @@ export const WorkspaceNavigator: React.FC<NavigatorProps> = ({ token, activeWork
       )}
 
       {/* Logs/Security link at bottom of left panel */}
-      <Stack spacing={1} sx={{ mt: 'auto', pt: 2 }}>
+      <Stack spacing={1} sx={{ pt: 2 }}>
         {onTestingCockpitClick && (
           <Button
             size="small"
