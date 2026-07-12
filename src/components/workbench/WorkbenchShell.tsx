@@ -25,8 +25,8 @@ export const WorkbenchShell: React.FC<WorkbenchShellProps> = ({
   rightFeedContent,
   children
 }) => {
-  const leftWidth = isLeftRailCollapsed ? 64 : Math.max(240, leftRailWidth);
-  const rightWidth = isRightFeedCollapsed ? 48 : Math.max(320, rightFeedWidth);
+  const leftWidth = isLeftRailCollapsed ? 64 : Math.max(240, isNaN(leftRailWidth) ? 280 : leftRailWidth);
+  const rightWidth = isRightFeedCollapsed ? 48 : Math.max(320, isNaN(rightFeedWidth) ? 380 : rightFeedWidth);
 
   return (
     <Box
@@ -50,7 +50,9 @@ export const WorkbenchShell: React.FC<WorkbenchShellProps> = ({
           background: 'rgba(9, 9, 11, 0.4)',
           position: 'relative',
           transition: 'width 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
-          overflow: 'hidden'
+          overflow: 'hidden',
+          p: isLeftRailCollapsed ? 1.5 : 3,
+          boxSizing: 'border-box'
         }}
       >
         {leftRailContent}

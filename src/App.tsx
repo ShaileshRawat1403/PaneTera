@@ -113,12 +113,14 @@ const App: React.FC = () => {
 
   const [leftRailWidth, setLeftRailWidth] = useState<number>(() => {
     const stored = localStorage.getItem('portal-left-width');
-    return stored ? parseInt(stored, 10) : 280;
+    const val = stored ? parseInt(stored, 10) : 280;
+    return isNaN(val) ? 280 : val;
   });
 
   const [rightFeedWidth, setRightFeedWidth] = useState<number>(() => {
     const stored = localStorage.getItem('portal-right-width');
-    return stored ? parseInt(stored, 10) : 380;
+    const val = stored ? parseInt(stored, 10) : 380;
+    return isNaN(val) ? 380 : val;
   });
 
   const [workbenchMode, setWorkbenchMode] = useState<WorkbenchMode>(() => {
@@ -1318,7 +1320,7 @@ const App: React.FC = () => {
             onLeftResize={handleLeftResize}
             onRightResize={handleRightResize}
             leftRailContent={
-              <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto', px: isLeftRailCollapsed ? 1.5 : 3, py: isLeftRailCollapsed ? 1.5 : 3 }}>
+              <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%', overflowY: 'auto', overflowX: 'hidden' }}>
                 {isLeftRailCollapsed ? (
                   <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3.5, height: '100%' }}>
                     {/* 1. Gateway Indicator */}
