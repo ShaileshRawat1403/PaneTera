@@ -1318,7 +1318,7 @@ const App: React.FC = () => {
             onLeftResize={handleLeftResize}
             onRightResize={handleRightResize}
             leftRailContent={
-              <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto', p: isLeftRailCollapsed ? 1.5 : 2.5 }}>
+              <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto', px: isLeftRailCollapsed ? 1.5 : 3, py: isLeftRailCollapsed ? 1.5 : 3 }}>
                 {isLeftRailCollapsed ? (
                   <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3.5, height: '100%' }}>
                     {/* 1. Gateway Indicator */}
