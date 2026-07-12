@@ -1,6 +1,6 @@
 // src/App.tsx
 import React, { useState, useEffect, useRef } from 'react';
-import { Box, CssBaseline, ThemeProvider, createTheme, Paper, Typography, TextField, Button, CircularProgress, Chip, IconButton, Dialog, DialogTitle, DialogContent, DialogActions, Grid, Stack, Divider, Tooltip } from '@mui/material';
+import { Box, CssBaseline, ThemeProvider, createTheme, Paper, Typography, TextField, Button, CircularProgress, Chip, IconButton, Dialog, DialogTitle, DialogContent, DialogActions, Grid, Stack, Divider, Tooltip, Snackbar, Alert } from '@mui/material';
 import ChatMessage from './components/ChatMessage';
 import ChatInput from './components/ChatInput';
 import { PreviewPanel, FeedItem } from './components/PreviewPanel';
@@ -23,6 +23,7 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import ViewSidebarIcon from '@mui/icons-material/ViewSidebar';
 import CodeIcon from '@mui/icons-material/Code';
 import ForumIcon from '@mui/icons-material/Forum';
+import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import { WorkbenchShell } from './components/workbench/WorkbenchShell';
 import { WorkbenchModeToggle, WorkbenchMode } from './components/workbench/WorkbenchModeToggle';
 import { WorkspaceNavigator, Workspace } from './components/workbench/WorkspaceNavigator';
@@ -34,6 +35,9 @@ import { QuickActionsDeck } from './components/workbench/QuickActionsDeck';
 import { FilePreviewPanel } from './components/workbench/FilePreviewPanel';
 import { InspectionTracePanel } from './components/workbench/InspectionTracePanel';
 import { TestingCockpit } from './components/workbench/TestingCockpit';
+import { StaticStructureCard } from './components/workbench/StaticStructureCard';
+import { DependencyMapCard } from './components/workbench/DependencyMapCard';
+import DeviceHubIcon from '@mui/icons-material/DeviceHub';
 
 // Codex developer-cockpit styling presets
 const codexTheme = createTheme({
@@ -125,7 +129,7 @@ const App: React.FC = () => {
 
   const [workbenchMode, setWorkbenchMode] = useState<WorkbenchMode>(() => {
     const stored = localStorage.getItem('portal-workbench-mode');
-    return (stored as WorkbenchMode) || 'conversation';
+    return (stored as WorkbenchMode) || 'native-focus';
   });
 
   const [activeWorkspace, setActiveWorkspace] = useState<Workspace | null>(null);
@@ -139,11 +143,78 @@ const App: React.FC = () => {
   const [readingFile, setReadingFile] = useState<boolean>(false);
   const [traceRecords, setTraceRecords] = useState<any[]>([]);
 
+  // Static Structure Scan + Dependency Map states
+  const [structureData, setStructureData] = useState<any>(null);
+  const [loadingStructure, setLoadingStructure] = useState<boolean>(false);
+  const [dependencyData, setDependencyData] = useState<any>(null);
+  const [loadingDependencies, setLoadingDependencies] = useState<boolean>(false);
+
+  // Snackbar states for Option D transient alerts
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [snackbarSeverity, setSnackbarSeverity] = useState<'success' | 'warning' | 'error' | 'info'>('info');
+
+  const handleSelectDependencyNode = async (node: any) => {
+    if (node.status === 'resolved') {
+      await handleSelectFile(node.path);
+      setSnackbarMessage(`Opened dependency: ${node.path}`);
+      setSnackbarSeverity('success');
+      setSnackbarOpen(true);
+    } else {
+      let desc = '';
+      if (node.status === 'external') {
+        desc = 'External module package. Static scan mode resolves local files only.';
+      } else if (node.status === 'alias') {
+        desc = 'Alias import detected. Path mapping is not resolved in static scan mode.';
+      } else if (node.status === 'blocked') {
+        desc = 'Blocked by security policy rules defined in myai-policy.json.';
+      } else if (node.status === 'skipped') {
+        desc = `File was skipped: ${node.reason || 'unsupported extension'}.`;
+      } else if (node.status === 'missing') {
+        desc = 'Unresolved import path. The file could not be located in standard workspace routes.';
+      }
+      setSnackbarMessage(desc);
+      setSnackbarSeverity('warning');
+      setSnackbarOpen(true);
+    }
+  };
+
+  const handleMapDependencies = async (filePath: string) => {
+    if (!activeWorkspace) return;
+    setLoadingDependencies(true);
+    setDependencyData(null);
+    try {
+      const resp = await fetch('/api/myai-workspaces/query', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          workspaceId: activeWorkspace.id,
+          toolName: 'workspace.mapDependencies',
+          arguments: { entryPoint: filePath }
+        })
+      });
+      const data = await resp.json();
+      if (resp.ok) {
+        setDependencyData(data);
+      } else {
+        console.error('Dependency mapping failed:', data.error);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingDependencies(false);
+    }
+  };
+
   const handleSelectFile = async (relPath: string) => {
     setSelectedFile(relPath);
     setReadingFile(true);
     setFileContent('');
     setFileError('');
+    setStructureData(null); // Reset scan data
     try {
       const resp = await fetch('/api/myai-workspaces/query', {
         method: 'POST',
@@ -167,6 +238,34 @@ const App: React.FC = () => {
           tool: 'workspace.readFile',
           allowed: true
         }, ...prev]);
+
+        // Trigger Static Structure Scan if supported extension
+        const ext = '.' + relPath.split('.').pop()?.toLowerCase();
+        if (['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.py'].includes(ext)) {
+          setLoadingStructure(true);
+          try {
+            const structResp = await fetch('/api/myai-workspaces/query', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`
+              },
+              body: JSON.stringify({
+                workspaceId: activeWorkspace?.id,
+                toolName: 'workspace.analyzeStructure',
+                arguments: { relativePath: relPath }
+              })
+            });
+            const structData = await structResp.json();
+            if (structResp.ok) {
+              setStructureData(structData);
+            }
+          } catch (structErr) {
+            console.error('Structure scan failed:', structErr);
+          } finally {
+            setLoadingStructure(false);
+          }
+        }
       } else {
         setFileError(data.error || 'Access Denied by Host Policy.');
         setTraceRecords(prev => [{
@@ -435,10 +534,16 @@ const App: React.FC = () => {
   // Client-side direct connection ping to live deployed app
   useEffect(() => {
     setSoothsayerStatus('checking');
-    fetch('https://ops-soothsayer-web-production.up.railway.app/api/portal-manifest')
-      .then(r => {
-        if (r.ok) setSoothsayerStatus('online');
-        else setSoothsayerStatus('degraded');
+    fetch('https://ops-soothsayer-web-production.up.railway.app/', { mode: 'no-cors' })
+      .then(() => {
+        fetch('https://ops-soothsayer-web-production.up.railway.app/api/portal-manifest')
+          .then(r => {
+            if (r.ok) setSoothsayerStatus('online');
+            else setSoothsayerStatus('degraded');
+          })
+          .catch(() => {
+            setSoothsayerStatus('degraded');
+          });
       })
       .catch(() => setSoothsayerStatus('offline'));
   }, []);
@@ -899,13 +1004,6 @@ const App: React.FC = () => {
 
     return (
       <Box sx={{ flexGrow: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        {/* Read Only sandbox header banner */}
-        <ReadOnlyStatusBanner
-          gatewayConnected={backendHealth?.status === 'ok'}
-          activeWorkspaceName={activeWorkspace.name}
-          policyActive={true}
-        />
-
         <Grid container spacing={3} sx={{ flexGrow: 1, minHeight: 0, height: '100%', p: 3, overflow: 'hidden' }}>
           {/* Left panel: FileTree navigation only */}
           <Grid item xs={12} md={4} sx={{ height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0, borderRight: { md: '1px solid rgba(255,255,255,0.06)' }, pr: { md: 2 } }}>
@@ -952,6 +1050,49 @@ const App: React.FC = () => {
               />
             </Paper>
 
+            {/* Static Structure Analysis & Dependency Map Section */}
+            {selectedFile && (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+                <StaticStructureCard
+                  data={structureData}
+                  loading={loadingStructure}
+                  onNavigateToLine={(line) => {
+                    console.log(`Navigate to line: ${line}`);
+                    // Trigger scroll or action
+                  }}
+                />
+                
+                {structureData && (
+                  <Box sx={{ display: 'flex', justifyContent: 'flex-start' }}>
+                    <Button
+                      variant="contained"
+                      size="small"
+                      startIcon={<DeviceHubIcon />}
+                      onClick={() => handleMapDependencies(selectedFile)}
+                      disabled={loadingDependencies}
+                      sx={{
+                        background: 'rgba(127, 85, 240, 0.8)',
+                        '&:hover': { background: '#7f5af0' },
+                        borderRadius: '6px',
+                        textTransform: 'none',
+                        fontWeight: 600
+                      }}
+                    >
+                      {loadingDependencies ? 'Mapping dependencies...' : 'Map Dependency Routes'}
+                    </Button>
+                  </Box>
+                )}
+
+                {(dependencyData || loadingDependencies) && (
+                  <DependencyMapCard
+                    data={dependencyData}
+                    loading={loadingDependencies}
+                    onSelectNode={handleSelectDependencyNode}
+                  />
+                )}
+              </Box>
+            )}
+
             {/* Citations Log Trace */}
             <InspectionTracePanel
               records={traceRecords}
@@ -959,6 +1100,60 @@ const App: React.FC = () => {
             />
           </Grid>
         </Grid>
+      </Box>
+    );
+  };
+
+  const renderEmptyState = () => {
+    return (
+      <Box 
+        sx={{ 
+          display: 'flex', 
+          flexDirection: 'column', 
+          alignItems: 'center', 
+          justifyContent: 'center', 
+          height: '100%', 
+          p: 4, 
+          textAlign: 'center',
+          background: 'rgba(9, 9, 11, 0.2)',
+          borderRadius: '12px',
+          border: '1px dashed rgba(255, 255, 255, 0.08)',
+          m: 3
+        }}
+      >
+        <FolderOpenIcon sx={{ fontSize: 48, color: '#7f5af0', mb: 2, opacity: 0.8 }} />
+        <Typography variant="h6" sx={{ color: '#e4e4e7', fontWeight: 700, mb: 1, fontSize: '1rem' }}>
+          Select a workspace to begin
+        </Typography>
+        <Typography variant="caption" sx={{ color: '#ef4444', fontWeight: 800, mb: 3.5, textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '0.62rem' }}>
+          Read-only mode is active. No files will be changed.
+        </Typography>
+
+        <Box sx={{ maxWidth: '380px', textAlign: 'left' }}>
+          <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, display: 'block', mb: 1.5, letterSpacing: '0.05em' }}>
+            GETTING STARTED:
+          </Typography>
+          <Stack spacing={2}>
+            <Box sx={{ display: 'flex', gap: 1.5 }}>
+              <Chip label="1" size="small" sx={{ background: 'rgba(127, 85, 240, 0.1)', color: '#b794f4', fontWeight: 700, height: 20, width: 20, minWidth: 20 }} />
+              <Typography variant="body2" sx={{ color: '#cbd5e1', fontSize: '0.78rem', lineHeight: 1.4 }}>
+                Choose or enable a workspace folder from the catalog in the left rail.
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', gap: 1.5 }}>
+              <Chip label="2" size="small" sx={{ background: 'rgba(127, 85, 240, 0.1)', color: '#b794f4', fontWeight: 700, height: 20, width: 20, minWidth: 20 }} />
+              <Typography variant="body2" sx={{ color: '#cbd5e1', fontSize: '0.78rem', lineHeight: 1.4 }}>
+                Inspect directories and safe code files recursively inside the sandbox canvas.
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', gap: 1.5 }}>
+              <Chip label="3" size="small" sx={{ background: 'rgba(127, 85, 240, 0.1)', color: '#b794f4', fontWeight: 700, height: 20, width: 20, minWidth: 20 }} />
+              <Typography variant="body2" sx={{ color: '#cbd5e1', fontSize: '0.78rem', lineHeight: 1.4 }}>
+                Run Static Structure Scans or Map Dependency Routes to explore the code context.
+              </Typography>
+            </Box>
+          </Stack>
+        </Box>
       </Box>
     );
   };
@@ -1349,7 +1544,7 @@ const App: React.FC = () => {
                       <Tooltip title="DAX Control: No signal" placement="right">
                         <DnsIcon sx={{ fontSize: 16, color: '#71717a', opacity: 0.3 }} />
                       </Tooltip>
-                      <Tooltip title="Local Adapter: Dry Run" placement="right">
+                      <Tooltip title="Local Adapter: Sandboxed" placement="right">
                         <TerminalIcon sx={{ fontSize: 16, color: '#7f5af0' }} />
                       </Tooltip>
                       <Tooltip title={`Rook Memory: ${backendHealth?.memoryBridgeReady ? 'Connected' : 'No signal'}`} placement="right">
@@ -1464,7 +1659,7 @@ const App: React.FC = () => {
                             <TerminalIcon sx={{ fontSize: 13, color: '#7f5af0' }} />
                             <Typography variant="caption" sx={{ color: '#e2e8f0', fontWeight: 600 }}>Local Adapter</Typography>
                           </Box>
-                          <Chip label="Dry Run" size="small" sx={{ height: 16, fontSize: '0.55rem', background: 'rgba(127, 85, 240, 0.1)', color: '#b794f4' }} />
+                          <Chip label="Sandboxed" size="small" sx={{ height: 16, fontSize: '0.55rem', background: 'rgba(127, 85, 240, 0.1)', color: '#b794f4' }} />
                         </Box>
                         {/* Rook Memory Bridge */}
                         <Box sx={{ display: 'flex', alignItems: 'center', p: 0.75, justifyContent: 'space-between' }}>
@@ -1522,20 +1717,20 @@ const App: React.FC = () => {
                         }}
                       >
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <LaptopMacIcon sx={{ fontSize: 14, color: soothsayerStatus === 'online' ? '#22c55e' : '#71717a' }} />
+                          <LaptopMacIcon sx={{ fontSize: 14, color: soothsayerStatus === 'online' ? '#22c55e' : soothsayerStatus === 'degraded' ? '#fbbf24' : '#71717a' }} />
                           <Typography variant="caption" sx={{ color: '#cbd5e1', fontWeight: 600 }}>
                             Soothsayer
                           </Typography>
                         </Box>
                         <Chip 
-                          label={soothsayerStatus.toUpperCase()} 
+                          label={soothsayerStatus === 'degraded' ? 'NO MANIFEST' : soothsayerStatus.toUpperCase()} 
                           size="small" 
                           sx={{ 
                             height: 16, 
                             fontSize: '0.55rem', 
                             fontWeight: 800, 
-                            background: soothsayerStatus === 'online' ? 'rgba(34,197,94,0.08)' : 'rgba(255,255,255,0.03)', 
-                            color: soothsayerStatus === 'online' ? '#22c55e' : '#a1a1aa' 
+                            background: soothsayerStatus === 'online' ? 'rgba(34,197,94,0.08)' : soothsayerStatus === 'degraded' ? 'rgba(251, 191, 36, 0.08)' : 'rgba(255,255,255,0.03)', 
+                            color: soothsayerStatus === 'online' ? '#22c55e' : soothsayerStatus === 'degraded' ? '#fbbf24' : '#a1a1aa' 
                           }} 
                         />
                       </Box>
@@ -1725,6 +1920,19 @@ const App: React.FC = () => {
 
             {/* Middle Main Content Dispatcher */}
             <Box sx={{ flexGrow: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              {(workbenchMode === 'native-focus' || workbenchMode === 'split') && (
+                <ReadOnlyStatusBanner
+                  gatewayConnected={backendHealth?.status === 'ok'}
+                  activeWorkspaceName={activeWorkspace?.name || null}
+                  policyActive={true}
+                  onOpenAuditLogs={() => setIsAuditLogsOpen(true)}
+                  portalAuthValid={!!token}
+                  workspaceCatalogCount={workspacesList.length}
+                  localAdapterActive={backendHealth?.status === 'ok'}
+                  liveAppUrlReachable={soothsayerStatus === 'online' || soothsayerStatus === 'degraded'}
+                  liveAppManifestAvailable={soothsayerStatus === 'online'}
+                />
+              )}
               {activeWorkspace ? (
                 workbenchMode === 'native-focus' ? (
                   renderActiveWorkspaceWorkbench()
@@ -1742,8 +1950,8 @@ const App: React.FC = () => {
                     {renderChatTranscript()}
                   </Box>
                 )
-              ) : workbenchMode === 'native-focus' && activeComponent ? (
-                renderActiveCard()
+              ) : workbenchMode === 'native-focus' ? (
+                activeComponent ? renderActiveCard() : renderEmptyState()
               ) : workbenchMode === 'split' && activeComponent ? (
                 <Grid container sx={{ flexGrow: 1, minHeight: 0, height: '100%' }}>
                   <Grid item xs={6} sx={{ height: '100%', display: 'flex', flexDirection: 'column', borderRight: '1px solid rgba(255,255,255,0.08)', minHeight: 0, overflow: 'hidden' }}>
@@ -1917,6 +2125,28 @@ const App: React.FC = () => {
           />
         </Box>
       </Dialog>
+      {/* Transient Alert Snackbar */}
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={6000}
+        onClose={() => setSnackbarOpen(false)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert 
+          onClose={() => setSnackbarOpen(false)} 
+          severity={snackbarSeverity} 
+          variant="filled"
+          sx={{ 
+            width: '100%', 
+            fontSize: '0.75rem', 
+            background: snackbarSeverity === 'success' ? '#7f5af0' : '#f59e0b',
+            color: '#fff',
+            fontFamily: 'monospace'
+          }}
+        >
+          {snackbarMessage}
+        </Alert>
+      </Snackbar>
     </ThemeProvider>
   );
 };

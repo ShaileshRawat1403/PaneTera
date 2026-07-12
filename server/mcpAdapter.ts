@@ -120,15 +120,19 @@ export class McpWorkspaceAdapter {
       console.error('[POLICY WARNING] Failed to read myai-policy.json, using defaults.');
     }
 
-    if (toolName === 'workspace.readFile') {
-      const relPath = String(args.relativePath || '').trim();
+    if (toolName === 'workspace.readFile' || toolName === 'workspace.analyzeStructure' || toolName === 'workspace.mapDependencies') {
+      const relPath = String(
+        toolName === 'workspace.mapDependencies' 
+          ? (args.entryPoint || '') 
+          : (args.relativePath || '')
+      ).trim();
       
       // 1. Check for denied extensions
       const ext = path.extname(relPath).toLowerCase();
       const baseName = path.basename(relPath).toLowerCase();
       if (policy.denyExtensions.includes(ext) || policy.denyExtensions.includes(baseName) || baseName.startsWith('.env')) {
         logAudit('file read denied', { workspaceId: this.workspaceId, path: relPath, reason: 'Denied file extension/name' });
-        throw new Error(`Access Denied: Reading of file '${relPath}' is forbidden by host policy rules.`);
+        throw new Error(`Access Denied: Reading or scanning of file '${relPath}' is forbidden by host policy rules.`);
       }
 
       // 2. Check for denied directories / traversal

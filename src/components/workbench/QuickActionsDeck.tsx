@@ -116,17 +116,15 @@ export const QuickActionsDeck: React.FC<DeckProps> = ({ onTriggerAction }) => {
       >
         <DialogTitle sx={{ color: '#ef4444', fontWeight: 800, fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: 1 }}>
           <SecurityIcon sx={{ fontSize: 18 }} />
-          Authoritative Security Policy test
+          Simulated Safety Check
         </DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ color: '#a1a1aa', fontSize: '0.78rem', lineHeight: 1.5 }}>
-            This action will intentionally attempt to fetch a forbidden configuration file (<strong>.env</strong>) from the active workspace path. 
-            <br /><br />
-            This is a safe test to verify that the Host Policy Engine validates and rejects forbidden access before queries reach adapter processes. The file contents will not be read or exposed.
+            This is a simulated safety check. The portal will request a forbidden file to verify that the Host Policy Engine blocks unauthorized reads. No file contents will be exposed. A denied event will be added to the audit log.
           </DialogContentText>
         </DialogContent>
         <DialogActions sx={{ p: 2, pt: 0 }}>
-          <Button size="small" onClick={() => setIsDemoConfirmOpen(false)} sx={{ color: '#a1a1aa' }}>
+          <Button size="small" onClick={() => setIsDemoConfirmOpen(false)} sx={{ color: '#a1a1aa', textTransform: 'none' }}>
             Cancel
           </Button>
           <Button
@@ -136,10 +134,12 @@ export const QuickActionsDeck: React.FC<DeckProps> = ({ onTriggerAction }) => {
             sx={{
               background: '#ef4444',
               color: '#fff',
+              textTransform: 'none',
+              fontWeight: 600,
               '&:hover': { background: '#dc2626' }
             }}
           >
-            Proceed Test
+            Run safety check
           </Button>
         </DialogActions>
       </Dialog>

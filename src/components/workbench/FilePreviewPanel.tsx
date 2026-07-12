@@ -22,6 +22,7 @@ export const FilePreviewPanel: React.FC<PreviewProps> = ({
   onExplainCode
 }) => {
   const [copied, setCopied] = useState(false);
+  const [wrapLines, setWrapLines] = useState(false);
 
   const handleCopy = () => {
     if (!content) return;
@@ -47,7 +48,15 @@ export const FilePreviewPanel: React.FC<PreviewProps> = ({
           ))}
         </Box>
         {/* Code Column */}
-        <Box sx={{ pl: 1.5, color: '#e4e4e7', whiteSpace: 'pre', flexGrow: 1 }}>
+        <Box 
+          sx={{ 
+            pl: 1.5, 
+            color: '#e4e4e7', 
+            whiteSpace: wrapLines ? 'pre-wrap' : 'pre', 
+            wordBreak: wrapLines ? 'break-word' : 'normal',
+            flexGrow: 1 
+          }}
+        >
           {lines.map((line, idx) => (
             <div key={idx}>{line || ' '}</div>
           ))}
@@ -99,6 +108,25 @@ export const FilePreviewPanel: React.FC<PreviewProps> = ({
           )}
 
           {!error && !reading && (
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => setWrapLines(!wrapLines)}
+              sx={{
+                height: 20,
+                fontSize: '0.62rem',
+                textTransform: 'none',
+                borderColor: 'rgba(255,255,255,0.1)',
+                color: wrapLines ? '#b794f4' : '#a1a1aa',
+                background: wrapLines ? 'rgba(127, 85, 240, 0.05)' : 'transparent',
+                '&:hover': { borderColor: 'rgba(255,255,255,0.2)' }
+              }}
+            >
+              {wrapLines ? 'Unwrap' : 'Wrap'}
+            </Button>
+          )}
+
+          {!error && !reading && (
             <IconButton onClick={handleCopy} size="small" sx={{ color: '#cbd5e1' }} title="Copy file contents">
               <ContentCopyIcon sx={{ fontSize: 12 }} />
             </IconButton>
@@ -106,7 +134,7 @@ export const FilePreviewPanel: React.FC<PreviewProps> = ({
           {copied && <Typography variant="caption" sx={{ color: '#22c55e', fontSize: '0.6rem' }}>Copied!</Typography>}
         </Stack>
       </Box>
-
+ 
       {/* Code Text Content */}
       <Box sx={{ flexGrow: 1, overflowY: 'auto', minHeight: 0 }}>
         {reading ? (

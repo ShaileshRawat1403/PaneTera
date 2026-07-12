@@ -9,6 +9,9 @@ Version **0.1.0 (Codename: Read-Only Mission Control)** freezes a safe, read-onl
 * **Authoritative Policy Wrapping**: Every file listing or read request is vetted by the host policy engine before hitting workspace processes.
 * **Append-Only Audit Trail**: Structured event tracking (allowed/denied operations, lifecycle starts, policy violations) logged to `server/audit.log`.
 * **Standardized stdio MCP Adapters**: Spawns isolated subprocesses per enabled workspace root to answer queries safely.
+* **Static Structure Scan & Dependency Map**: Statically parses imports, exports, classes, and function symbols (for JS, TS, JSX, TSX, Python) and traces import paths recursively up to depth 3 with loop prevention.
+  > [!NOTE]
+  > This is a static structure scan, not a compiler-grade AST. It is useful for navigation, dependency intuition, and onboarding, but not a substitute for language-server analysis.
 * **Unified UI Canvas**: A clean sidebar browser, file navigator tree, safety blocks overlay, and a live audit log viewer drawer.
 
 ## Quick Start

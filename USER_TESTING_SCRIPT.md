@@ -38,7 +38,7 @@ This script provides testers with a step-by-step walkthrough to evaluate the MyA
 ### Step 7: Test the Security Block (Demo)
 1. Click the red **"Security boundary demo"** button in the actions deck.
 2. Observe the warning confirmation dialog box that pops open.
-3. Click **"Proceed Test"**.
+3. Click **"Run safety check"**.
 4. Confirm that the file is **NOT** loaded and the red access block warning is shown instead.
 5. Check task **"6. Attempt blocked .env read"** off.
 

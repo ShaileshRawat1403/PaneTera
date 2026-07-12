@@ -1077,7 +1077,7 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
                         {item.type === 'CodePreview' && `CODE: ${item.data.workspace}/${item.data.path}`}
                         {item.type === 'SearchResults' && `SEARCH: "${item.data.keyword}"`}
                         {item.type === 'WorkflowsList' && `PIPELINES: ${item.data.workspace}`}
-                        {item.type === 'LiveAppWorkbench' && 'LIVE APP WORKBENCH'}
+                        {item.type === 'LiveAppWorkbench' && 'LIVE APP WORKBENCH (EXPERIMENTAL)'}
                         {item.type === 'RepoSetupProposal' && 'REPO SETUP PROPOSAL'}
                         {item.type === 'ProposedAction' && 'AWAITING APPROVAL'}
                         {item.type === 'ExecutionLogs' && `TASK CONSOLE`}

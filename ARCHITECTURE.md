@@ -29,6 +29,9 @@ Runs locally as a Node.js process. It manages:
 A lightweight, dependency-free script launched in the workspace context. It communicates solely over standard input/output (`stdin`/`stdout`).
 * **Stdout Isolation**: Any diagnostic logs inside the server are piped to `stderr` so they do not contaminate the JSON-RPC stream on `stdout`.
 * **Read-Only Capability**: Hardcoded to only support five safe query tools. It lacks file-write or shell execution logic.
+* **Static structure mapping (approximate)**: Supports `workspace.analyzeStructure` and `workspace.mapDependencies` to statically query symbols and routes without compiling or executing codes.
+  > [!NOTE]
+  > This is a static structure scan, not a compiler-grade AST. It is useful for navigation, dependency intuition, and onboarding, but not a substitute for language-server analysis.
 
 ### 3. Feature Flags Config (`server/features.ts`)
 V1 locks down any writing or command execution capabilities using strict Boolean features:

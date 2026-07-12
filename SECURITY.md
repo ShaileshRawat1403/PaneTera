@@ -27,8 +27,14 @@ The workspace child process is locked to its `cwd` folder. The standard `workspa
 
 ### 3. File Size Guardrails
 Reading extremely large files (e.g. log dumps, package locks) could exhaust server memory or degrade UI rendering. 
-* We check file status size via `fs.statSync(fullPath).size` prior to loading.
 * File reads larger than **500KB** are rejected immediately with an explicit limit warning.
+
+### 4. Static Scan & Dependency Routing Limits
+To ensure that structure scans and dependency routing do not exhaust resources or leak sensitive paths:
+* **Host Policy Bound**: All recursive checks are subject to the same `myai-policy.json` checks and traversal guards as standard file reading.
+* **Max Depth & Files**: We hard-cap mapping depth at **3** levels and the total number of mapped node files at **50**.
+* **Cycle Prevention**: We maintain a visited path tracking set to terminate loop traversals immediately.
+* **No Runtime Execution**: The analysis is purely static and regex-driven; no runtime code or workspace code is executed.
 
 ### 4. Local-Only Assumption
 The portal is designed to run exclusively on the developer's localhost loops. All network ports (Vite 5173, Express 4000) bind strictly to `127.0.0.1` or `localhost`, preventing external network connections.

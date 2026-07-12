@@ -42,6 +42,12 @@ export const LiveAppWorkbenchCard: React.FC<LiveAppWorkbenchCardProps> = ({
   const highlightHealth = activeLens === 'qa' || activeLens === 'exec';
   const highlightTruth = activeLens === 'exec';
 
+  const filteredWarnings = warnings ? warnings.filter(w => 
+    !(!manifestAvailable && urlReachable && (
+      w.includes("404") || w.includes("manifest endpoint unavailable")
+    ))
+  ) : [];
+
   const getSourceStatusColor = (status: string) => {
     switch (status) {
       case 'available':
@@ -73,7 +79,7 @@ export const LiveAppWorkbenchCard: React.FC<LiveAppWorkbenchCardProps> = ({
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Typography variant="caption" sx={{ color: '#7f5af0', fontWeight: 800, letterSpacing: '0.06em' }}>
-            LIVE APP WORKBENCH
+            LIVE APP WORKBENCH (EXPERIMENTAL)
           </Typography>
           {health && (
             <Chip
@@ -310,11 +316,20 @@ export const LiveAppWorkbenchCard: React.FC<LiveAppWorkbenchCardProps> = ({
         </>
       )}
 
-      {/* Warnings block (only show if warnings exist) */}
-      {warnings && warnings.length > 0 && (
+      {/* Friendly message if manifest is missing but app is reachable */}
+      {!manifestAvailable && urlReachable && (
+        <Box sx={{ p: 1.8, mb: 2, background: 'rgba(127, 85, 240, 0.05)', border: '1px solid rgba(127, 85, 240, 0.25)', borderRadius: '8px' }}>
+          <Typography variant="body2" sx={{ color: '#cbd5e1', fontSize: '0.78rem', lineHeight: 1.4 }}>
+            Live app is reachable, but it does not expose a MyAI Portal manifest yet. Local workspace inspection is still available.
+          </Typography>
+        </Box>
+      )}
+
+      {/* Warnings block (only show if filtered warnings exist) */}
+      {filteredWarnings.length > 0 && (
         <Box sx={{ p: 1.5, mb: 2, background: 'rgba(251, 191, 36, 0.05)', border: '1px solid rgba(251, 191, 36, 0.2)', borderRadius: '8px' }}>
           <Stack spacing={0.5}>
-            {warnings.map((warning, idx) => (
+            {filteredWarnings.map((warning, idx) => (
               <Typography key={idx} variant="caption" sx={{ color: '#fbbf24', display: 'block' }}>
                 ⚠️ {warning}
               </Typography>
