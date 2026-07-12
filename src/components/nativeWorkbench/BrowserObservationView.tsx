@@ -108,7 +108,7 @@ export const BrowserObservationView: React.FC<BrowserObservationProps> = ({ data
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Box>
           <Typography variant="caption" sx={{ color: '#7f5af0', fontWeight: 800, display: 'block', mb: 0.5, letterSpacing: '0.05em' }}>
-            TELEMETRY VIEW
+            INSPECTION TRACE
           </Typography>
           <Typography variant="h6" sx={{ color: '#f4f4f5', fontWeight: 800 }}>
             Observed in Chrome

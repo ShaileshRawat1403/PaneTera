@@ -38,7 +38,7 @@ export const WorkspacesCatalog: React.FC<CatalogProps> = ({ data }) => {
         Workspaces Catalog Status
       </Typography>
       <Typography variant="caption" sx={{ color: '#71717a', display: 'block', mb: 3.5 }}>
-        Telemetry catalog of all manually registered or auto-discovered workspaces.
+        Local catalog of all manually registered or auto-discovered workspaces.
       </Typography>
 
       <Grid container spacing={2.5}>

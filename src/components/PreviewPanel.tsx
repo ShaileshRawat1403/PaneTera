@@ -337,7 +337,7 @@ const FileListFeedCard: React.FC<{ data: any; onAction: (q: string) => void }> =
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
               <InfoIcon sx={{ color: '#7f5af0', fontSize: 16 }} />
               <Typography variant="caption" sx={{ fontWeight: 600, color: '#cbd5e1' }}>
-                Workspace Telemetry
+                Local Session Record
               </Typography>
             </Box>
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5, lineHeight: 1.5 }}>
@@ -1009,12 +1009,12 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
               )}
             </Box>
             <Typography variant="caption" sx={{ color: '#f4f4f5', fontWeight: 700, display: 'block', mb: 0.5 }}>
-              {loading ? 'WAITING FOR TELEMETRY' : 'INTELLIGENCE FEED'}
+              {loading ? 'WAITING FOR INSPECTION TRACE' : 'INTELLIGENCE FEED'}
             </Typography>
             <Typography variant="caption" color="text.secondary" sx={{ maxWidth: 220, fontSize: '0.75rem', lineHeight: 1.4, display: 'block' }}>
               {loading
                 ? "Waiting for backend response logs..."
-                : 'Interactive files, telemetry statistics, and search components will stream here as you explore.'}
+                : 'Interactive files, inspection statistics, and search components will stream here as you explore.'}
             </Typography>
           </Box>
         ) : (
@@ -1082,7 +1082,7 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
                         {item.type === 'ProposedAction' && 'AWAITING APPROVAL'}
                         {item.type === 'ExecutionLogs' && `TASK CONSOLE`}
                         {item.type === 'GitHistory' && `GIT STATUS: ${item.data.workspace}`}
-                        {item.type === 'DesktopApps' && `SYSTEM APP TELEMETRY`}
+                        {item.type === 'DesktopApps' && `SYSTEM APP AUDIT LOG`}
                         {item.type === 'TerminalLogs' && 'TERMINAL SCAN'}
                         {item.type === 'MemoryRecall' && 'MEMORY RECALL'}
                         {item.type === 'ContentWorkflow' && 'GOVERNED CONTENT RUN'}

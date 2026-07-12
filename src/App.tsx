@@ -918,7 +918,7 @@ const App: React.FC = () => {
           <Typography variant="caption" sx={{ color: '#cbd5e1', fontWeight: 700, letterSpacing: '0.05em' }}>
             ORCHESTRATOR MODE: <span style={{ color: '#a78bfa' }}>READ-ONLY</span>
           </Typography>
-          <Chip label="Grounded Workspace Telemetry" size="small" sx={{ height: 16, fontSize: '0.55rem', background: 'rgba(255,255,255,0.04)', color: '#a1a1aa', border: '1px solid rgba(255,255,255,0.05)' }} />
+          <Chip label="Grounded Inspection Trace" size="small" sx={{ height: 16, fontSize: '0.55rem', background: 'rgba(255,255,255,0.04)', color: '#a1a1aa', border: '1px solid rgba(255,255,255,0.05)' }} />
         </Box>
 
         {/* Scrollable messages container */}
@@ -2068,7 +2068,7 @@ const App: React.FC = () => {
                             Workbench Overview
                           </Typography>
                           <Typography variant="caption" sx={{ color: '#71717a' }}>
-                            Select an app connection or trigger context commands to populate workspace telemetry cards.
+                            Select an app connection or trigger context commands to populate workspace inspection trace cards.
                           </Typography>
                         </Box>
 
