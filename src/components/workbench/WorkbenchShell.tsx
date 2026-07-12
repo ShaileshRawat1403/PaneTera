@@ -25,8 +25,8 @@ export const WorkbenchShell: React.FC<WorkbenchShellProps> = ({
   rightFeedContent,
   children
 }) => {
-  const leftWidth = isLeftRailCollapsed ? 64 : leftRailWidth;
-  const rightWidth = isRightFeedCollapsed ? 48 : rightFeedWidth;
+  const leftWidth = isLeftRailCollapsed ? 64 : Math.max(240, leftRailWidth);
+  const rightWidth = isRightFeedCollapsed ? 48 : Math.max(320, rightFeedWidth);
 
   return (
     <Box

@@ -20,8 +20,9 @@ interface IntelligenceProps {
 
 export const WorkspaceIntelligenceCard: React.FC<IntelligenceProps> = ({ files, workspaceName }) => {
   const analysis = useMemo(() => {
-    const fileNames = new Set(files.map(f => f.name));
-    const paths = new Set(files.map(f => f.path));
+    const safeFiles = files || [];
+    const fileNames = new Set(safeFiles.map(f => f.name));
+    const paths = new Set(safeFiles.map(f => f.path));
 
     // 1. Tech Stack Detection
     const stack: Array<{ name: string; confidence: 'detected' | 'likely' | 'unknown' }> = [];
@@ -43,7 +44,7 @@ export const WorkspaceIntelligenceCard: React.FC<IntelligenceProps> = ({ files, 
     // Python detection
     if (fileNames.has('requirements.txt') || fileNames.has('Pipfile') || fileNames.has('pyproject.toml')) {
       stack.push({ name: 'Python Repository', confidence: 'detected' });
-    } else if (files.some(f => f.name.endsWith('.py'))) {
+    } else if (safeFiles.some(f => f.name.endsWith('.py'))) {
       stack.push({ name: 'Python Scripts', confidence: 'likely' });
     }
     // Rust detection
