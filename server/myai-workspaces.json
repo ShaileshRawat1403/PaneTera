@@ -1,0 +1,12 @@
+{
+  "workspaces": [
+    {
+      "id": "soothsayer-workspace",
+      "name": "Soothsayer Core Workspace",
+      "path": "/Users/Shailesh/MYAIAGENTS/soothsayer",
+      "type": "repo",
+      "enabled": true,
+      "status": "online"
+    }
+  ]
+}

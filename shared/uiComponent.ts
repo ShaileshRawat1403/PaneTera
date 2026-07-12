@@ -27,6 +27,7 @@ export const UI_COMPONENT_TYPES = [
   'ContentOpsStarter',
   'SoothsayerWorkbench',
   'BrowserObservation',
+  'WorkspacesCatalog',
 ] as const;
 
 export type UiComponentType = (typeof UI_COMPONENT_TYPES)[number];

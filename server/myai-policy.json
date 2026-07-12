@@ -1,0 +1,27 @@
+{
+  "denyPaths": [
+    "**/node_modules/**",
+    "**/.git/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/out/**",
+    "**/.next/**",
+    "**/.turbo/**",
+    "**/.cache/**"
+  ],
+  "denyExtensions": [
+    ".env",
+    ".env.local",
+    ".pem",
+    ".key",
+    ".db",
+    ".sqlite"
+  ],
+  "defaultRiskPolicy": {
+    "workspace.readFile": "prompt",
+    "workspace.listFiles": "allow",
+    "workspace.info": "allow",
+    "workspace.searchFiles": "allow",
+    "workspace.getGitStatus": "allow"
+  }
+}

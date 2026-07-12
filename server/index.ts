@@ -10,6 +10,10 @@ import { executeCommand, type ExecutionMode, validateCommand, buildProposedActio
 import { buildRepoSetupProposal } from './repoSetup';
 import { parseLiveAppIntent, buildLiveAppWorkbench } from './liveApp';
 import { parseWorkflowIntent } from './workflowIntents';
+import { getWorkspaceAdapter, stopWorkspaceAdapter, stopAllWorkspaceAdapters } from './mcpAdapter';
+import { logAudit } from './audit';
+import * as fs from 'fs';
+import { FEATURES } from './features';
 
 dotenv.config();
 
@@ -385,6 +389,10 @@ app.get('/api/git/history', async (req, res) => {
 
 // Execute task whitelisted command
 app.post('/api/execute', async (req, res) => {
+  if (!FEATURES.commandExecution) {
+    return res.status(403).json({ error: "Access Denied: Command execution feature is disabled in MyAI Portal V1." });
+  }
+
   const { workspaceName, command, procId } = req.body as { workspaceName: string; command: string; procId: string };
   if (!workspaceName || !command || !procId) {
     return res.status(400).json({ error: 'workspaceName, command, and procId required' });
@@ -1126,6 +1134,18 @@ async function askOllama(query: string): Promise<{ reply: string; uiComponent?: 
 export async function resolveGatewayCardLocally(query: string): Promise<{ reply: string; uiComponent?: any } | null> {
   const q = query.toLowerCase().trim();
 
+  if (q === 'inspect workspaces' || q === 'show workspaces' || q === 'workspaces status' || q === 'show workspaces catalog') {
+    const catalogPath = path.resolve(__dirname, 'myai-workspaces.json');
+    const catalog = JSON.parse(fs.readFileSync(catalogPath, 'utf8'));
+    return {
+      reply: `I loaded the local workspaces catalog. You can enable/disable, monitor, and switch between your registered workspaces.`,
+      uiComponent: {
+        type: 'WorkspacesCatalog',
+        data: catalog
+      }
+    };
+  }
+
   // Route workflow intents before provider chat
   const workflowIntent = parseWorkflowIntent(query);
   if (workflowIntent) {
@@ -1621,6 +1641,10 @@ function isSuspicious(val: any): boolean {
 }
 
 app.post('/api/browser-observation', (req, res) => {
+  if (!FEATURES.browserObservation) {
+    return res.status(403).json({ error: "Access Denied: Browser observation feature is disabled in MyAI Portal V1." });
+  }
+
   const body = req.body;
   if (!body || typeof body !== 'object') {
     return res.status(400).json({ error: 'Body must be an object' });
@@ -1706,6 +1730,175 @@ app.post('/api/browser-observation', (req, res) => {
     type: 'BrowserObservation',
     data: sanitizedObs
   });
+});
+
+// --- MYAI WORKSPACE MISSION CONTROL ENDPOINTS ---
+
+// 1. Get workspaces catalog
+app.get('/api/myai-workspaces', (req: Request, res: Response) => {
+  const catalogPath = path.resolve(__dirname, 'myai-workspaces.json');
+  try {
+    const data = JSON.parse(fs.readFileSync(catalogPath, 'utf8'));
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to read workspace catalog: ' + err.message });
+  }
+});
+
+// 2. Register manual workspace
+app.post('/api/myai-workspaces/register', (req: Request, res: Response) => {
+  const { id, name, path: wsPath, type } = req.body as { id: string; name: string; path: string; type: string };
+  if (!id || !name || !wsPath) {
+    return res.status(400).json({ error: 'Missing required parameters (id, name, path).' });
+  }
+
+  const catalogPath = path.resolve(__dirname, 'myai-workspaces.json');
+  try {
+    const catalog = JSON.parse(fs.readFileSync(catalogPath, 'utf8'));
+    
+    // Check if path or id already exists
+    const exists = catalog.workspaces.find((w: any) => w.id === id || w.path === wsPath);
+    if (exists) {
+      return res.status(400).json({ error: 'Workspace ID or path is already registered.' });
+    }
+
+    const newWs = {
+      id,
+      name,
+      path: wsPath,
+      type: type || 'repo',
+      enabled: false,
+      status: 'offline'
+    };
+
+    catalog.workspaces.push(newWs);
+    fs.writeFileSync(catalogPath, JSON.stringify(catalog, null, 2), 'utf8');
+
+    logAudit('workspace enabled', { workspaceId: id, details: 'Manually registered workspace' });
+    res.json({ success: true, workspace: newWs });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to register workspace: ' + err.message });
+  }
+});
+
+// 3. Toggle workspace enabled state
+app.post('/api/myai-workspaces/toggle', (req: Request, res: Response) => {
+  const { id, enabled } = req.body as { id: string; enabled: boolean };
+  if (!id) {
+    return res.status(400).json({ error: 'Missing workspace id.' });
+  }
+
+  const catalogPath = path.resolve(__dirname, 'myai-workspaces.json');
+  try {
+    const catalog = JSON.parse(fs.readFileSync(catalogPath, 'utf8'));
+    const ws = catalog.workspaces.find((w: any) => w.id === id);
+    if (!ws) {
+      return res.status(404).json({ error: 'Workspace not found.' });
+    }
+
+    ws.enabled = enabled;
+    ws.status = enabled ? 'online' : 'offline';
+
+    fs.writeFileSync(catalogPath, JSON.stringify(catalog, null, 2), 'utf8');
+
+    if (enabled) {
+      logAudit('workspace enabled', { workspaceId: id });
+    } else {
+      stopWorkspaceAdapter(id);
+      logAudit('workspace disabled', { workspaceId: id });
+    }
+
+    res.json({ success: true, workspace: ws });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to toggle workspace: ' + err.message });
+  }
+});
+
+// 4. Scan for workspace suggestions in approved roots
+app.get('/api/myai-workspaces/scan', (req: Request, res: Response) => {
+  const catalogPath = path.resolve(__dirname, 'myai-workspaces.json');
+  try {
+    const catalog = JSON.parse(fs.readFileSync(catalogPath, 'utf8'));
+    
+    // Approved parent root directory: we scan /Users/Shailesh/MYAIAGENTS
+    const parentRoot = '/Users/Shailesh/MYAIAGENTS';
+    const suggestions: any[] = [];
+
+    if (fs.existsSync(parentRoot)) {
+      const subdirs = fs.readdirSync(parentRoot, { withFileTypes: true });
+      for (const dir of subdirs) {
+        if (dir.isDirectory() && !dir.name.startsWith('.')) {
+          const wsPath = path.join(parentRoot, dir.name);
+          
+          // Check if already registered
+          const registered = catalog.workspaces.some((w: any) => w.path === wsPath);
+          if (!registered) {
+            // Check for manifest/config indicators
+            const hasManifest = fs.existsSync(path.join(wsPath, 'myai-manifest.json'));
+            const hasMcp = fs.existsSync(path.join(wsPath, '.mcp-config'));
+            const hasPkgJson = fs.existsSync(path.join(wsPath, 'package.json'));
+
+            if (hasManifest || hasMcp || hasPkgJson) {
+              suggestions.push({
+                id: `suggested-${dir.name.toLowerCase()}`,
+                name: `${dir.name} (Suggested)`,
+                path: wsPath,
+                type: 'repo',
+                enabled: false,
+                status: 'offline',
+                suggested: true
+              });
+            }
+          }
+        }
+      }
+    }
+
+    res.json({ suggestions });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Scan failed: ' + err.message });
+  }
+});
+
+// 5. Query workspace tool (authorized & policy-wrapped)
+app.post('/api/myai-workspaces/query', async (req: Request, res: Response) => {
+  const { workspaceId, toolName, arguments: toolArgs } = req.body as { workspaceId: string; toolName: string; arguments?: any };
+  if (!workspaceId || !toolName) {
+    return res.status(400).json({ error: 'Missing required parameters (workspaceId, toolName).' });
+  }
+
+  try {
+    const adapter = await getWorkspaceAdapter(workspaceId);
+    const result = await adapter.call(toolName, toolArgs || {});
+    res.json(result);
+  } catch (err: any) {
+    res.status(403).json({ error: err.message || 'Tool execution failed' });
+  }
+});
+
+// 6. Retrieve recent audit logs (latest 50 records)
+app.get('/api/myai-workspaces/audit', (req: Request, res: Response) => {
+  const logPath = path.resolve(__dirname, 'audit.log');
+  try {
+    if (!fs.existsSync(logPath)) {
+      return res.json({ logs: [] });
+    }
+    const content = fs.readFileSync(logPath, 'utf8').trim();
+    if (!content) {
+      return res.json({ logs: [] });
+    }
+    const lines = content.split('\n').map(line => {
+      try {
+        return JSON.parse(line);
+      } catch {
+        return { raw: line };
+      }
+    });
+    // Return latest 50 logs (reversed)
+    res.json({ logs: lines.slice(-50).reverse() });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to read audit logs: ' + err.message });
+  }
 });
 
 // Post chat endpoint - routes queries to natural language engine
@@ -1800,3 +1993,13 @@ if (process.env.NODE_ENV !== 'test') {
     console.log(`🚀 Portal backend listening on http://127.0.0.1:${PORT}`);
   });
 }
+
+process.on('SIGINT', () => {
+  stopAllWorkspaceAdapters();
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  stopAllWorkspaceAdapters();
+  process.exit(0);
+});

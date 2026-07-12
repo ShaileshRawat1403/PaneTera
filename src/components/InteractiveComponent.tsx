@@ -14,6 +14,7 @@ import InfoIcon from '@mui/icons-material/Info';
 import LaptopMacIcon from '@mui/icons-material/LaptopMac';
 import { NativeWorkbenchRenderer } from './nativeWorkbench/NativeWorkbenchRenderer';
 import { BrowserObservationView } from './nativeWorkbench/BrowserObservationView';
+import { WorkspacesCatalog } from './nativeWorkbench/WorkspacesCatalog';
 interface ComponentProps {
   uiComponent: UiComponent;
   onAction: (query: string) => void;
@@ -290,6 +291,10 @@ export const InteractiveComponent: React.FC<ComponentProps> = ({ uiComponent, on
         </List>
       </Box>
     );
+  }
+
+  if (type === 'WorkspacesCatalog' && data) {
+    return <WorkspacesCatalog data={data} />;
   }
 
   if (type === 'WorkflowsList' && data) {

@@ -25,6 +25,9 @@ import CodeIcon from '@mui/icons-material/Code';
 import ForumIcon from '@mui/icons-material/Forum';
 import { WorkbenchShell } from './components/workbench/WorkbenchShell';
 import { WorkbenchModeToggle, WorkbenchMode } from './components/workbench/WorkbenchModeToggle';
+import { WorkspaceNavigator, Workspace } from './components/workbench/WorkspaceNavigator';
+import { WorkspaceFileTree } from './components/workbench/WorkspaceFileTree';
+import { AuditLogsView } from './components/workbench/AuditLogsView';
 
 // Codex developer-cockpit styling presets
 const codexTheme = createTheme({
@@ -116,6 +119,9 @@ const App: React.FC = () => {
     const stored = localStorage.getItem('portal-workbench-mode');
     return (stored as WorkbenchMode) || 'conversation';
   });
+
+  const [activeWorkspace, setActiveWorkspace] = useState<Workspace | null>(null);
+  const [isAuditLogsOpen, setIsAuditLogsOpen] = useState(false);
 
   const handleLeftResize = (deltaX: number) => {
     setLeftRailWidth(prev => {
@@ -1202,38 +1208,19 @@ const App: React.FC = () => {
                     </Box>
 
                     {/* Workspaces list */}
-                    <Box sx={{ mb: 3 }}>
-                      <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, letterSpacing: '0.05em', display: 'block', mb: 1.5 }}>
-                        WORKSPACES / REPOS
-                      </Typography>
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                        {workspacesList.map(ws => (
-                          <Box
-                            key={ws.name}
-                            onClick={() => handleSend(`List files in ${ws.name}`)}
-                            sx={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 1,
-                              p: 1,
-                              borderRadius: '6px',
-                              cursor: 'pointer',
-                              transition: 'background 0.2s',
-                              '&:hover': { background: 'rgba(255,255,255,0.03)' }
-                            }}
-                          >
-                            <FolderIcon sx={{ fontSize: 14, color: '#7f5af0' }} />
-                            <Typography variant="caption" sx={{ color: '#cbd5e1', fontWeight: 600 }}>
-                              {ws.name}
-                            </Typography>
-                          </Box>
-                        ))}
-                        {workspacesList.length === 0 && (
-                          <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic', pl: 1 }}>
-                            No workspaces configured.
-                          </Typography>
-                        )}
-                      </Box>
+                    {/* Workspace Navigator */}
+                    <Box sx={{ mb: 3, flexGrow: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                      <WorkspaceNavigator
+                        token={token}
+                        activeWorkspace={activeWorkspace}
+                        onSelectWorkspace={(ws) => {
+                          setActiveWorkspace(ws);
+                          if (ws) {
+                            handleWorkbenchModeChange('native-focus');
+                          }
+                        }}
+                        onAuditLogsClick={() => setIsAuditLogsOpen(true)}
+                      />
                     </Box>
 
                     {/* Live Apps status list */}
@@ -1458,7 +1445,26 @@ const App: React.FC = () => {
 
             {/* Middle Main Content Dispatcher */}
             <Box sx={{ flexGrow: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-              {workbenchMode === 'native-focus' && activeComponent ? (
+              {activeWorkspace ? (
+                workbenchMode === 'native-focus' ? (
+                  <Box sx={{ flexGrow: 1, minHeight: 0, p: 3, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                    <WorkspaceFileTree token={token} workspace={activeWorkspace} />
+                  </Box>
+                ) : workbenchMode === 'split' ? (
+                  <Grid container sx={{ flexGrow: 1, minHeight: 0, height: '100%' }}>
+                    <Grid item xs={6} sx={{ height: '100%', display: 'flex', flexDirection: 'column', borderRight: '1px solid rgba(255,255,255,0.08)', minHeight: 0, overflow: 'hidden' }}>
+                      {renderChatTranscript()}
+                    </Grid>
+                    <Grid item xs={6} sx={{ height: '100%', minHeight: 0, overflow: 'hidden', p: 3, display: 'flex', flexDirection: 'column' }}>
+                      <WorkspaceFileTree token={token} workspace={activeWorkspace} />
+                    </Grid>
+                  </Grid>
+                ) : (
+                  <Box sx={{ flexGrow: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                    {renderChatTranscript()}
+                  </Box>
+                )
+              ) : workbenchMode === 'native-focus' && activeComponent ? (
                 renderActiveCard()
               ) : workbenchMode === 'split' && activeComponent ? (
                 <Grid container sx={{ flexGrow: 1, minHeight: 0, height: '100%' }}>
@@ -1598,6 +1604,12 @@ const App: React.FC = () => {
           </WorkbenchShell>
         </Box>
       </Box>
+      {/* System Access Audit Logs Viewer Dialog */}
+      <AuditLogsView
+        token={token}
+        open={isAuditLogsOpen}
+        onClose={() => setIsAuditLogsOpen(false)}
+      />
     </ThemeProvider>
   );
 };
