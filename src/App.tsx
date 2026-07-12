@@ -28,6 +28,12 @@ import { WorkbenchModeToggle, WorkbenchMode } from './components/workbench/Workb
 import { WorkspaceNavigator, Workspace } from './components/workbench/WorkspaceNavigator';
 import { WorkspaceFileTree } from './components/workbench/WorkspaceFileTree';
 import { AuditLogsView } from './components/workbench/AuditLogsView';
+import { ReadOnlyStatusBanner } from './components/workbench/ReadOnlyStatusBanner';
+import { WorkspaceIntelligenceCard } from './components/workbench/WorkspaceIntelligenceCard';
+import { QuickActionsDeck } from './components/workbench/QuickActionsDeck';
+import { FilePreviewPanel } from './components/workbench/FilePreviewPanel';
+import { InspectionTracePanel } from './components/workbench/InspectionTracePanel';
+import { TestingCockpit } from './components/workbench/TestingCockpit';
 
 // Codex developer-cockpit styling presets
 const codexTheme = createTheme({
@@ -122,6 +128,208 @@ const App: React.FC = () => {
 
   const [activeWorkspace, setActiveWorkspace] = useState<Workspace | null>(null);
   const [isAuditLogsOpen, setIsAuditLogsOpen] = useState(false);
+  const [isTestingCockpitOpen, setIsTestingCockpitOpen] = useState(false);
+
+  const [workspaceFiles, setWorkspaceFiles] = useState<any[]>([]);
+  const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [fileContent, setFileContent] = useState<string>('');
+  const [fileError, setFileError] = useState<string>('');
+  const [readingFile, setReadingFile] = useState<boolean>(false);
+  const [traceRecords, setTraceRecords] = useState<any[]>([]);
+
+  const handleSelectFile = async (relPath: string) => {
+    setSelectedFile(relPath);
+    setReadingFile(true);
+    setFileContent('');
+    setFileError('');
+    try {
+      const resp = await fetch('/api/myai-workspaces/query', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          workspaceId: activeWorkspace?.id,
+          toolName: 'workspace.readFile',
+          arguments: { relativePath: relPath }
+        })
+      });
+      const data = await resp.json();
+      const timestamp = new Date().toISOString();
+      if (resp.ok) {
+        setFileContent(data.content[0].text);
+        setTraceRecords(prev => [{
+          timestamp,
+          relativePath: relPath,
+          tool: 'workspace.readFile',
+          allowed: true
+        }, ...prev]);
+      } else {
+        setFileError(data.error || 'Access Denied by Host Policy.');
+        setTraceRecords(prev => [{
+          timestamp,
+          relativePath: relPath,
+          tool: 'workspace.readFile',
+          allowed: false,
+          reason: data.error || 'Access Denied'
+        }, ...prev]);
+      }
+    } catch (err: any) {
+      setFileError(err.message || 'Error loading file.');
+    } finally {
+      setReadingFile(false);
+    }
+  };
+
+  const handleTriggerAction = async (actionId: string) => {
+    if (!activeWorkspace) return;
+    setReadingFile(true);
+    setSelectedFile(actionId.toUpperCase().replace('-', ' '));
+    setFileContent('');
+    setFileError('');
+    const timestamp = new Date().toISOString();
+
+    try {
+      if (actionId === 'explain-repo') {
+        const resp = await fetch('/api/myai-workspaces/query', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            workspaceId: activeWorkspace.id,
+            toolName: 'workspace.info'
+          })
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+          setFileContent(data.content[0].text);
+          setTraceRecords(prev => [{
+            timestamp,
+            relativePath: 'workspace.info',
+            tool: 'workspace.info',
+            allowed: true
+          }, ...prev]);
+        } else {
+          setFileError(data.error || 'Failed to explain repo.');
+        }
+      }
+
+      if (actionId === 'show-configs') {
+        const resp = await fetch('/api/myai-workspaces/query', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            workspaceId: activeWorkspace.id,
+            toolName: 'workspace.searchFiles',
+            arguments: { query: 'config' }
+          })
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+          setFileContent(data.content[0].text);
+          setTraceRecords(prev => [{
+            timestamp,
+            relativePath: 'search:config',
+            tool: 'workspace.searchFiles',
+            allowed: true
+          }, ...prev]);
+        } else {
+          setFileError(data.error || 'Failed to find configs.');
+        }
+      }
+
+      if (actionId === 'find-todos') {
+        const resp = await fetch('/api/myai-workspaces/query', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            workspaceId: activeWorkspace.id,
+            toolName: 'workspace.searchFiles',
+            arguments: { query: 'TODO' }
+          })
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+          setFileContent(data.content[0].text);
+          setTraceRecords(prev => [{
+            timestamp,
+            relativePath: 'search:TODO',
+            tool: 'workspace.searchFiles',
+            allowed: true
+          }, ...prev]);
+        } else {
+          setFileError(data.error || 'Failed to find TODOs.');
+        }
+      }
+
+      if (actionId === 'git-status') {
+        const resp = await fetch('/api/myai-workspaces/query', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            workspaceId: activeWorkspace.id,
+            toolName: 'workspace.getGitStatus'
+          })
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+          setFileContent(data.content[0].text);
+          setTraceRecords(prev => [{
+            timestamp,
+            relativePath: 'git status',
+            tool: 'workspace.getGitStatus',
+            allowed: true
+          }, ...prev]);
+        } else {
+          setFileError(data.error || 'Failed to query git status.');
+        }
+      }
+
+      if (actionId === 'security-demo') {
+        const resp = await fetch('/api/myai-workspaces/query', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            workspaceId: activeWorkspace.id,
+            toolName: 'workspace.readFile',
+            arguments: { relativePath: 'apps/api/.env' }
+          })
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+          setFileContent(data.content[0].text);
+        } else {
+          setFileError(data.error || 'Blocked by host policy.');
+          setTraceRecords(prev => [{
+            timestamp,
+            relativePath: 'apps/api/.env',
+            tool: 'workspace.readFile',
+            allowed: false,
+            reason: data.error || 'Access Denied'
+          }, ...prev]);
+        }
+      }
+    } catch (err: any) {
+      setFileError(err.message || 'Action execution error.');
+    } finally {
+      setReadingFile(false);
+    }
+  };
 
   const handleLeftResize = (deltaX: number) => {
     setLeftRailWidth(prev => {
@@ -684,6 +892,75 @@ const App: React.FC = () => {
     );
   };
 
+  const renderActiveWorkspaceWorkbench = () => {
+    if (!activeWorkspace) return null;
+
+    return (
+      <Box sx={{ flexGrow: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        {/* Read Only sandbox header banner */}
+        <ReadOnlyStatusBanner
+          gatewayConnected={backendHealth?.status === 'ok'}
+          activeWorkspaceName={activeWorkspace.name}
+          policyActive={true}
+        />
+
+        <Grid container spacing={3} sx={{ flexGrow: 1, minHeight: 0, height: '100%', p: 3, overflow: 'hidden' }}>
+          {/* Left panel: FileTree navigation only */}
+          <Grid item xs={12} md={4} sx={{ height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0, borderRight: { md: '1px solid rgba(255,255,255,0.06)' }, pr: { md: 2 } }}>
+            <WorkspaceFileTree
+              token={token}
+              workspace={activeWorkspace}
+              selectedFile={selectedFile}
+              onSelectFile={handleSelectFile}
+              onFilesLoaded={(files) => setWorkspaceFiles(files)}
+            />
+          </Grid>
+
+          {/* Right panel: dashboard cards, actions, preview panel, citations trace */}
+          <Grid item xs={12} md={8} sx={{ height: '100%', display: 'flex', flexDirection: 'column', gap: 2.5, minHeight: 0, overflowY: 'auto', pl: { md: 2 } }}>
+            {/* Workspace Intelligence Stack card */}
+            <WorkspaceIntelligenceCard
+              files={workspaceFiles}
+              workspaceName={activeWorkspace.name}
+            />
+
+            {/* Guided Actions Deck */}
+            <QuickActionsDeck onTriggerAction={handleTriggerAction} />
+
+            {/* Safe Code File Viewer */}
+            <Paper
+              variant="outlined"
+              sx={{
+                p: 2.5,
+                background: 'rgba(9, 9, 11, 0.25)',
+                borderColor: 'rgba(255,255,255,0.06)',
+                borderRadius: '10px',
+                display: 'flex',
+                flexDirection: 'column',
+                flexShrink: 0,
+                minHeight: '280px'
+              }}
+            >
+              <FilePreviewPanel
+                filePath={selectedFile}
+                content={fileContent}
+                error={fileError}
+                reading={readingFile}
+                onExplainCode={(fileName) => handleSend(`Explain the file: ${fileName}`)}
+              />
+            </Paper>
+
+            {/* Citations Log Trace */}
+            <InspectionTracePanel
+              records={traceRecords}
+              onSelectFile={handleSelectFile}
+            />
+          </Grid>
+        </Grid>
+      </Box>
+    );
+  };
+
   const renderActiveCard = () => {
     if (!activeComponent) return null;
     return (
@@ -1220,6 +1497,7 @@ const App: React.FC = () => {
                           }
                         }}
                         onAuditLogsClick={() => setIsAuditLogsOpen(true)}
+                        onTestingCockpitClick={() => setIsTestingCockpitOpen(true)}
                       />
                     </Box>
 
@@ -1447,16 +1725,14 @@ const App: React.FC = () => {
             <Box sx={{ flexGrow: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
               {activeWorkspace ? (
                 workbenchMode === 'native-focus' ? (
-                  <Box sx={{ flexGrow: 1, minHeight: 0, p: 3, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                    <WorkspaceFileTree token={token} workspace={activeWorkspace} />
-                  </Box>
+                  renderActiveWorkspaceWorkbench()
                 ) : workbenchMode === 'split' ? (
                   <Grid container sx={{ flexGrow: 1, minHeight: 0, height: '100%' }}>
                     <Grid item xs={6} sx={{ height: '100%', display: 'flex', flexDirection: 'column', borderRight: '1px solid rgba(255,255,255,0.08)', minHeight: 0, overflow: 'hidden' }}>
                       {renderChatTranscript()}
                     </Grid>
-                    <Grid item xs={6} sx={{ height: '100%', minHeight: 0, overflow: 'hidden', p: 3, display: 'flex', flexDirection: 'column' }}>
-                      <WorkspaceFileTree token={token} workspace={activeWorkspace} />
+                    <Grid item xs={6} sx={{ height: '100%', minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                      {renderActiveWorkspaceWorkbench()}
                     </Grid>
                   </Grid>
                 ) : (
@@ -1610,6 +1886,35 @@ const App: React.FC = () => {
         open={isAuditLogsOpen}
         onClose={() => setIsAuditLogsOpen(false)}
       />
+
+      {/* User Testing Cockpit Drawer Dialog */}
+      <Dialog
+        open={isTestingCockpitOpen}
+        onClose={() => setIsTestingCockpitOpen(false)}
+        PaperProps={{
+          sx: {
+            background: '#0e0f12',
+            border: '1px solid rgba(255,255,255,0.08)',
+            borderRadius: '12px',
+            maxWidth: '520px',
+            width: '100%'
+          }
+        }}
+      >
+        <Box sx={{ p: 1, position: 'relative' }}>
+          <IconButton
+            onClick={() => setIsTestingCockpitOpen(false)}
+            sx={{ position: 'absolute', right: 8, top: 8, color: '#71717a' }}
+            size="small"
+          >
+            <CloseIcon fontSize="small" />
+          </IconButton>
+          <TestingCockpit
+            gatewayConnected={backendHealth?.status === 'ok'}
+            activeWorkspaceId={activeWorkspace?.id || null}
+          />
+        </Box>
+      </Dialog>
     </ThemeProvider>
   );
 };

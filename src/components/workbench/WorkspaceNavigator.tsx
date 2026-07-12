@@ -28,9 +28,10 @@ interface NavigatorProps {
   activeWorkspace: Workspace | null;
   onSelectWorkspace: (ws: Workspace | null) => void;
   onAuditLogsClick?: () => void;
+  onTestingCockpitClick?: () => void;
 }
 
-export const WorkspaceNavigator: React.FC<NavigatorProps> = ({ token, activeWorkspace, onSelectWorkspace, onAuditLogsClick }) => {
+export const WorkspaceNavigator: React.FC<NavigatorProps> = ({ token, activeWorkspace, onSelectWorkspace, onAuditLogsClick, onTestingCockpitClick }) => {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [suggestions, setSuggestions] = useState<Workspace[]>([]);
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -252,25 +253,45 @@ export const WorkspaceNavigator: React.FC<NavigatorProps> = ({ token, activeWork
       )}
 
       {/* Logs/Security link at bottom of left panel */}
-      {onAuditLogsClick && (
-        <Button
-          size="small"
-          variant="outlined"
-          startIcon={<SecurityIcon sx={{ fontSize: 13 }} />}
-          onClick={onAuditLogsClick}
-          sx={{
-            mt: 'auto',
-            textTransform: 'none',
-            fontSize: '0.7rem',
-            borderColor: 'rgba(255,255,255,0.08)',
-            color: '#a1a1aa',
-            borderRadius: '6px',
-            '&:hover': { borderColor: 'rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.02)' }
-          }}
-        >
-          Inspect System Audit Logs
-        </Button>
-      )}
+      <Stack spacing={1} sx={{ mt: 'auto', pt: 2 }}>
+        {onTestingCockpitClick && (
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<ListAltIcon sx={{ fontSize: 13 }} />}
+            onClick={onTestingCockpitClick}
+            sx={{
+              textTransform: 'none',
+              fontSize: '0.7rem',
+              borderColor: 'rgba(127, 85, 240, 0.25)',
+              color: '#b794f4',
+              borderRadius: '6px',
+              '&:hover': { borderColor: '#7f5af0', background: 'rgba(127, 85, 240, 0.04)' }
+            }}
+          >
+            User Testing Cockpit
+          </Button>
+        )}
+
+        {onAuditLogsClick && (
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<SecurityIcon sx={{ fontSize: 13 }} />}
+            onClick={onAuditLogsClick}
+            sx={{
+              textTransform: 'none',
+              fontSize: '0.7rem',
+              borderColor: 'rgba(255,255,255,0.08)',
+              color: '#a1a1aa',
+              borderRadius: '6px',
+              '&:hover': { borderColor: 'rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.02)' }
+            }}
+          >
+            Inspect System Audit Logs
+          </Button>
+        )}
+      </Stack>
 
       {/* Manual Registration Dialog */}
       <Dialog open={isAddOpen} onClose={() => setIsAddOpen(false)} PaperProps={{ sx: { background: '#0e0f12', border: '1px solid rgba(255,255,255,0.1)' } }}>
