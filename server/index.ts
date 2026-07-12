@@ -14,6 +14,7 @@ import { getWorkspaceAdapter, stopWorkspaceAdapter, stopAllWorkspaceAdapters } f
 import { logAudit } from './audit';
 import * as fs from 'fs';
 import { FEATURES } from './features';
+import { handleOrchestratorQuery } from './orchestrator';
 
 dotenv.config();
 
@@ -1898,6 +1899,41 @@ app.get('/api/myai-workspaces/audit', (req: Request, res: Response) => {
     res.json({ logs: lines.slice(-50).reverse() });
   } catch (err: any) {
     res.status(500).json({ error: 'Failed to read audit logs: ' + err.message });
+  }
+});
+
+// Orchestrator Chat V0 endpoint (strictly read-only)
+app.post('/api/orchestrator/chat', async (req: Request, res: Response) => {
+  const { message, workspaceId, selectedFile, persona } = req.body as {
+    message: string;
+    workspaceId: string | null;
+    selectedFile: string | null;
+    persona: 'engineer' | 'pm' | 'ba' | 'qa' | 'exec';
+  };
+
+  if (!message) {
+    return res.status(400).json({ error: 'Missing required field: message' });
+  }
+
+  const resolveWorkspacePath = async (wId: string) => {
+    const catalogPath = path.resolve(__dirname, 'myai-workspaces.json');
+    const catalog = JSON.parse(fs.readFileSync(catalogPath, 'utf8')) as { workspaces: any[] };
+    const found = catalog.workspaces.find(w => w.id === wId);
+    if (!found) throw new Error(`Workspace with ID '${wId}' not found.`);
+    return { name: found.name, path: found.path };
+  };
+
+  try {
+    const response = await handleOrchestratorQuery(
+      message,
+      workspaceId,
+      selectedFile,
+      persona || 'engineer',
+      resolveWorkspacePath
+    );
+    res.json(response);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Error processing query.' });
   }
 });
 

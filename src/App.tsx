@@ -82,6 +82,12 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   uiComponent?: UiComponent;
+  intent?: string;
+  toolsUsed?: { tool: string; status: 'success' | 'denied' | 'failed'; reason?: string }[];
+  filesInspected?: { path: string; purpose: string }[];
+  citations?: { path: string; label: string }[];
+  suggestedActions?: { label: string; message: string }[];
+  warnings?: string[];
 }
 
 const App: React.FC = () => {
@@ -644,18 +650,18 @@ const App: React.FC = () => {
     const loadingId = Math.random().toString(36).substr(2, 9);
     const currentTimestamp = new Date().toLocaleTimeString();
 
-    const historyPayload = messages.map(m => ({
-      role: m.role === 'user' ? 'user' : 'model',
-      parts: [{ text: m.content }]
-    }));
-
-    const apiPromise = fetch('/api/chat', {
+    const apiPromise = fetch('/api/orchestrator/chat', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ query: text, history: historyPayload }),
+      body: JSON.stringify({
+        message: text,
+        workspaceId: activeWorkspace ? activeWorkspace.id : null,
+        selectedFile: selectedFile,
+        persona: activeLens
+      }),
     }).then(async (resp) => {
       if (resp.status === 401) {
         throw new Error('Unauthorized');
@@ -666,50 +672,19 @@ const App: React.FC = () => {
     try {
       const data = await apiPromise;
 
-      const uiComponentWithId = data.uiComponent
-        ? {
-            ...data.uiComponent,
-            data: data.uiComponent.type === 'ProposedAction'
-              ? { ...data.uiComponent.data, procId: loadingId }
-              : data.uiComponent.data
-          }
-        : undefined;
-
       addMessage({
         role: 'assistant',
-        content: data.reply ?? 'No response',
-        uiComponent: uiComponentWithId
+        content: data.answer ?? 'No response',
+        intent: data.intent,
+        toolsUsed: data.toolsUsed,
+        filesInspected: data.filesInspected,
+        citations: data.citations,
+        suggestedActions: data.suggestedActions,
+        warnings: data.warnings
       });
 
-      // Update active workbench card slot
-      if (uiComponentWithId) {
-        setActiveComponent(uiComponentWithId);
-        const MAIN_WORKBENCH_COMPONENTS = new Set([
-          "SoothsayerWorkbench",
-          "BrowserObservation",
-          "LiveAppWorkbench",
-          "ContentOpsStarter",
-          "ProposedAction",
-          "RepoSetupProposal"
-        ]);
-        if (MAIN_WORKBENCH_COMPONENTS.has(uiComponentWithId.type)) {
-          handleWorkbenchModeChange('native-focus');
-        }
-      }
-      setActiveReply(data.reply ?? null);
+      setActiveReply(data.answer ?? null);
       setActiveQuery(text);
-
-      if (uiComponentWithId) {
-        setPreviewFeed(prev => [
-          ...prev,
-          {
-            id: loadingId,
-            type: uiComponentWithId.type,
-            data: uiComponentWithId.data,
-            timestamp: currentTimestamp
-          }
-        ]);
-      }
     } catch (err: any) {
       if (err.message === 'Unauthorized') {
         addMessage({ role: 'assistant', content: 'Unauthorized. Please check your token settings.' });
@@ -938,6 +913,14 @@ const App: React.FC = () => {
   const renderChatTranscript = () => {
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+        {/* Orchestrator Header Banner */}
+        <Box sx={{ p: 1.5, background: 'rgba(127, 85, 240, 0.04)', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+          <Typography variant="caption" sx={{ color: '#cbd5e1', fontWeight: 700, letterSpacing: '0.05em' }}>
+            ORCHESTRATOR MODE: <span style={{ color: '#a78bfa' }}>READ-ONLY</span>
+          </Typography>
+          <Chip label="Grounded Workspace Telemetry" size="small" sx={{ height: 16, fontSize: '0.55rem', background: 'rgba(255,255,255,0.04)', color: '#a1a1aa', border: '1px solid rgba(255,255,255,0.05)' }} />
+        </Box>
+
         {/* Scrollable messages container */}
         <Box 
           sx={{ 
@@ -946,17 +929,29 @@ const App: React.FC = () => {
             p: 3, 
             display: 'flex', 
             flexDirection: 'column', 
-            gap: 2,
+            gap: 2.5,
             minHeight: 0
           }}
         >
           {messages.length === 0 ? (
-            <Box sx={{ m: 'auto', textAlign: 'center', opacity: 0.35, py: 4 }}>
-              <ForumIcon sx={{ fontSize: 48, color: '#7f5af0', mb: 1 }} />
-              <Typography variant="body2" sx={{ color: '#cbd5e1' }}>
-                Start a governed conversation with MyAI Portal.
-              </Typography>
-            </Box>
+            !activeWorkspace ? (
+              <Box sx={{ m: 'auto', textAlign: 'center', opacity: 0.8, py: 4, maxWidth: '280px' }}>
+                <FolderOpenIcon sx={{ fontSize: 44, color: '#fbbf24', mb: 1.5, opacity: 0.8 }} />
+                <Typography variant="subtitle2" sx={{ color: '#e4e4e7', fontWeight: 700, mb: 0.5, fontSize: '0.85rem' }}>
+                  Select a Workspace
+                </Typography>
+                <Typography variant="caption" sx={{ color: '#71717a', display: 'block', lineHeight: 1.4, fontSize: '0.72rem' }}>
+                  Select a workspace folder from the catalog in the left rail to let the orchestrator inspect files safely.
+                </Typography>
+              </Box>
+            ) : (
+              <Box sx={{ m: 'auto', textAlign: 'center', opacity: 0.35, py: 4 }}>
+                <ForumIcon sx={{ fontSize: 48, color: '#7f5af0', mb: 1 }} />
+                <Typography variant="body2" sx={{ color: '#cbd5e1', fontSize: '0.8rem' }}>
+                  Start a governed conversation with Tessera Workbench.
+                </Typography>
+              </Box>
+            )
           ) : (
             messages.map((msg, idx) => (
               <Box 
@@ -965,7 +960,8 @@ const App: React.FC = () => {
                   display: 'flex', 
                   flexDirection: 'column', 
                   alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
-                  maxWidth: '85%'
+                  maxWidth: '85%',
+                  alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start'
                 }}
               >
                 <Paper 
@@ -978,19 +974,109 @@ const App: React.FC = () => {
                   }}
                 >
                   <Typography variant="caption" sx={{ color: msg.role === 'user' ? '#b794f4' : '#71717a', fontWeight: 800, display: 'block', mb: 0.5 }}>
-                    {msg.role === 'user' ? 'YOU' : 'PORTAL'}
+                    {msg.role === 'user' ? 'YOU' : `PORTAL ORCHESTRATOR${msg.intent ? ` (${msg.intent.toUpperCase()})` : ''}`}
                   </Typography>
-                  <Typography variant="body2" sx={{ color: '#f4f4f5', lineHeight: 1.5 }}>
+                  <Typography variant="body2" sx={{ color: '#f4f4f5', lineHeight: 1.5, whiteSpace: 'pre-wrap', fontSize: '0.78rem' }}>
                     {msg.content}
                   </Typography>
+
+                  {/* Collapsible inspected files log */}
+                  {msg.filesInspected && msg.filesInspected.length > 0 && (
+                    <Box sx={{ mt: 1.5 }}>
+                      <details style={{ cursor: 'pointer', outline: 'none' }}>
+                        <summary style={{ fontSize: '11px', color: '#a78bfa', fontWeight: 600, userSelect: 'none' }}>
+                          What I inspected ({msg.filesInspected.length} files)
+                        </summary>
+                        <Box sx={{ pl: 1.5, mt: 0.5, borderLeft: '1px solid rgba(255,255,255,0.06)' }}>
+                          {msg.filesInspected.map((f, fi) => (
+                            <Typography key={fi} variant="caption" sx={{ color: '#cbd5e1', display: 'block', fontFamily: 'monospace', fontSize: '10px' }}>
+                              🔍 {f.path} ({f.purpose})
+                            </Typography>
+                          ))}
+                        </Box>
+                      </details>
+                    </Box>
+                  )}
+
+                  {/* Collapsible tool execution trace */}
+                  {msg.toolsUsed && msg.toolsUsed.length > 0 && (
+                    <Box sx={{ mt: 1 }}>
+                      <details style={{ cursor: 'pointer', outline: 'none' }}>
+                        <summary style={{ fontSize: '11px', color: '#a78bfa', fontWeight: 600, userSelect: 'none' }}>
+                          Tool execution trace ({msg.toolsUsed.length} calls)
+                        </summary>
+                        <Box sx={{ pl: 1.5, mt: 0.5, borderLeft: '1px solid rgba(255,255,255,0.06)' }}>
+                          {msg.toolsUsed.map((t, ti) => (
+                            <Typography key={ti} variant="caption" sx={{ color: t.status === 'success' ? '#22c55e' : t.status === 'denied' ? '#ef4444' : '#fbbf24', display: 'block', fontFamily: 'monospace', fontSize: '10px' }}>
+                              🛠️ {t.tool} : {t.status.toUpperCase()} {t.reason ? `(${t.reason})` : ''}
+                            </Typography>
+                          ))}
+                        </Box>
+                      </details>
+                    </Box>
+                  )}
+
+                  {/* Citations list */}
+                  {msg.citations && msg.citations.length > 0 && (
+                    <Box sx={{ mt: 1.5, pt: 1, borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+                      <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 700, display: 'block', mb: 0.5 }}>
+                        CITATIONS:
+                      </Typography>
+                      <Stack direction="row" spacing={0.8} flexWrap="wrap" useFlexGap>
+                        {msg.citations.map((c, ci) => (
+                          <Chip
+                            key={ci}
+                            label={c.label}
+                            onClick={() => handleSelectFile(c.path)}
+                            size="small"
+                            sx={{ height: 16, fontSize: '9px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', color: '#cbd5e1', cursor: 'pointer' }}
+                          />
+                        ))}
+                      </Stack>
+                    </Box>
+                  )}
+
+                  {/* Policy Warnings list */}
+                  {msg.warnings && msg.warnings.length > 0 && (
+                    <Box sx={{ mt: 1.5, p: 1, background: 'rgba(239, 68, 68, 0.05)', border: '1px solid rgba(239, 68, 68, 0.15)', borderRadius: '6px' }}>
+                      {msg.warnings.map((w, wi) => (
+                        <Typography key={wi} variant="caption" sx={{ color: '#f87171', display: 'block', fontSize: '10px' }}>
+                          ⚠️ {w}
+                        </Typography>
+                      ))}
+                    </Box>
+                  )}
                 </Paper>
+
+                {/* Suggested actions list */}
+                {msg.suggestedActions && msg.suggestedActions.length > 0 && (
+                  <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: 'wrap', gap: 0.8, alignSelf: 'flex-start' }}>
+                    {msg.suggestedActions.map((act, ai) => (
+                      <Chip
+                        key={ai}
+                        label={act.label}
+                        onClick={() => handleSend(act.message)}
+                        size="small"
+                        sx={{
+                          height: 20,
+                          fontSize: '10px',
+                          background: 'rgba(127, 85, 240, 0.08)',
+                          color: '#b794f4',
+                          border: '1px solid rgba(127, 85, 240, 0.25)',
+                          cursor: 'pointer',
+                          '&:hover': { background: 'rgba(127, 85, 240, 0.15)' }
+                        }}
+                      />
+                    ))}
+                  </Stack>
+                )}
               </Box>
             ))
           )}
           {loading && (
             <Box sx={{ display: 'flex', justifyContent: 'flex-start', p: 1 }}>
               <CircularProgress size={12} sx={{ color: '#7f5af0', mr: 1.5 }} />
-              <Typography variant="caption" sx={{ color: '#71717a' }}>Thinking...</Typography>
+              <Typography variant="caption" sx={{ color: '#71717a' }}>Inspecting and summarizing...</Typography>
             </Box>
           )}
           <div ref={messagesEndRef} />
@@ -2061,28 +2147,56 @@ const App: React.FC = () => {
             >
               <Stack direction="row" spacing={1} sx={{ mb: 1.5, overflowX: 'auto', pb: 0.5 }}>
                 <Chip 
-                  label="show flowright workflows" 
-                  onClick={() => handleSend('show flowright workflows')} 
+                  label="Explain this repo" 
+                  onClick={() => handleSend('Explain this repo')} 
                   size="small" 
                   sx={{ height: 22, fontSize: '0.65rem', background: 'rgba(255,255,255,0.03)', color: '#cbd5e1', cursor: 'pointer' }} 
                 />
                 <Chip 
-                  label="show soothsayer workflows" 
-                  onClick={() => handleSend('show soothsayer workflows')} 
+                  label="Show important files" 
+                  onClick={() => handleSend('Show important files')} 
                   size="small" 
                   sx={{ height: 22, fontSize: '0.65rem', background: 'rgba(255,255,255,0.03)', color: '#cbd5e1', cursor: 'pointer' }} 
                 />
                 <Chip 
-                  label="write a blog post" 
-                  onClick={() => handleSend('write a blog post')} 
+                  label="Find entry points" 
+                  onClick={() => handleSend('Find entry points')} 
                   size="small" 
                   sx={{ height: 22, fontSize: '0.65rem', background: 'rgba(255,255,255,0.03)', color: '#cbd5e1', cursor: 'pointer' }} 
                 />
                 <Chip 
-                  label="git status in flowright" 
-                  onClick={() => handleSend('git status in flowright')} 
+                  label="Find TODOs" 
+                  onClick={() => handleSend('Find TODOs')} 
                   size="small" 
                   sx={{ height: 22, fontSize: '0.65rem', background: 'rgba(255,255,255,0.03)', color: '#cbd5e1', cursor: 'pointer' }} 
+                />
+                <Chip 
+                  label="Show git status" 
+                  onClick={() => handleSend('Show git status')} 
+                  size="small" 
+                  sx={{ height: 22, fontSize: '0.65rem', background: 'rgba(255,255,255,0.03)', color: '#cbd5e1', cursor: 'pointer' }} 
+                />
+                {selectedFile && (
+                  <>
+                    <Chip 
+                      label={`Map dependencies from ${selectedFile.split('/').pop()}`} 
+                      onClick={() => handleSend(`Map dependencies from ${selectedFile}`)} 
+                      size="small" 
+                      sx={{ height: 22, fontSize: '0.65rem', background: 'rgba(127, 85, 240, 0.06)', border: '1px solid rgba(127, 85, 240, 0.15)', color: '#b794f4', cursor: 'pointer' }} 
+                    />
+                    <Chip 
+                      label={`Explain ${selectedFile.split('/').pop()}`} 
+                      onClick={() => handleSend(`Explain ${selectedFile}`)} 
+                      size="small" 
+                      sx={{ height: 22, fontSize: '0.65rem', background: 'rgba(127, 85, 240, 0.06)', border: '1px solid rgba(127, 85, 240, 0.15)', color: '#b794f4', cursor: 'pointer' }} 
+                    />
+                  </>
+                )}
+                <Chip 
+                  label="Why was access blocked?" 
+                  onClick={() => handleSend('Why was access blocked?')} 
+                  size="small" 
+                  sx={{ height: 22, fontSize: '0.65rem', background: 'rgba(239, 68, 68, 0.05)', border: '1px solid rgba(239, 68, 68, 0.15)', color: '#f87171', cursor: 'pointer' }} 
                 />
               </Stack>
               <ChatInput onSend={handleSend} />
