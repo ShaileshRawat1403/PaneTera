@@ -33,6 +33,7 @@ let failedAttempts = 0;
 const sessions = new Map<string, BrowserSession>();
 const refreshTokens = new Map<string, BrowserSession>(); // Maps refreshToken string to session
 export const observations: ObservationItem[] = [];
+const processedIdempotencyKeys = new Set<string>();
 
 // Helper to sanitize input strings
 function sanitizeText(text: any): string {
@@ -131,8 +132,11 @@ browserRouter.post('/pairing/exchange', (req: Request, res: Response) => {
   pairingCodeExpires = null;
 
   logAudit('browser.pair', {
-    runtimeId,
+    actor: `extension:${runtimeId}`,
     installationId,
+    capability: 'browser.pair',
+    policyDecision: 'allowed',
+    status: 'success',
     details: 'Browser extension paired successfully.'
   });
 
@@ -186,7 +190,11 @@ browserRouter.delete('/session', requireExtensionToken, (req: Request, res: Resp
   refreshTokens.delete(session.refreshToken);
 
   logAudit('browser.disconnect', {
-    runtimeId: session.runtimeId,
+    actor: `extension:${session.runtimeId}`,
+    installationId: session.installationId,
+    capability: 'browser.disconnect',
+    policyDecision: 'allowed',
+    status: 'success',
     details: 'Browser extension disconnected.'
   });
 
@@ -207,6 +215,18 @@ browserRouter.post('/observations', requireExtensionToken, (req: Request, res: R
     return res.status(400).json({ error: 'Missing URL or Title parameters' });
   }
 
+  const { idempotencyKey } = envelope;
+  if (idempotencyKey) {
+    if (processedIdempotencyKeys.has(idempotencyKey)) {
+      return res.status(400).json({ error: 'Duplicate transaction key (idempotency enforcement)' });
+    }
+    processedIdempotencyKeys.add(idempotencyKey);
+    if (processedIdempotencyKeys.size > 1000) {
+      const first = processedIdempotencyKeys.values().next().value;
+      if (first) processedIdempotencyKeys.delete(first);
+    }
+  }
+
   // Enforce origin verification bounds
   let derivedOrigin = '';
   try {
@@ -219,14 +239,22 @@ browserRouter.post('/observations', requireExtensionToken, (req: Request, res: R
     return res.status(400).json({ error: 'Security Exception: expected target origin mismatch' });
   }
 
-  // Payload constraints checks
   const maxBytes = envelope.constraints?.maxOutputBytes || 10000;
-  const contentBytes = new Blob([selectedText || '']).size;
+  const contentBytes = typeof Blob !== 'undefined' ? new Blob([selectedText || '']).size : Buffer.byteLength(selectedText || '', 'utf8');
   if (contentBytes > maxBytes) {
     return res.status(400).json({ error: 'Payload size limit exceeded constraints bounds' });
   }
+  if (contentBytes > 100000) {
+    return res.status(400).json({ error: 'Payload size limit exceeded maximum bounds (100KB)' });
+  }
 
   const session = (req as any).browserSession as BrowserSession;
+
+  // Retention duration constraint: remove observations older than 1 hour
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  while (observations.length > 0 && observations[0].capturedAt < oneHourAgo) {
+    observations.shift();
+  }
 
   const captureId = 'capture-' + Math.random().toString(36).substring(2) + '-' + Date.now();
   const newObs: ObservationItem = {
@@ -249,11 +277,14 @@ browserRouter.post('/observations', requireExtensionToken, (req: Request, res: R
   observations.push(newObs);
 
   logAudit('browser.observe', {
-    runtimeId: session.runtimeId,
-    title: newObs.title,
-    url: newObs.url,
-    bytes: contentBytes,
-    details: 'Observed browser page context selection.'
+    actor: `extension:${session.runtimeId}`,
+    installationId: session.installationId,
+    capability: envelope.capability,
+    targetUrl: newObs.url,
+    captureId,
+    policyDecision: 'allowed',
+    status: 'success',
+    details: `Observed context: "${newObs.title}"`
   });
 
   // Return normalized response envelope
