@@ -1,5 +1,5 @@
-import React from 'react';
-import { Box, Typography, Card, CardContent, Chip, Divider, List, ListItem, ListItemIcon, ListItemText } from '@mui/material';
+import React, { useState } from 'react';
+import { Box, Typography, Card, CardContent, Chip, Divider, List, ListItem, ListItemIcon, ListItemText, FormControlLabel, Switch } from '@mui/material';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
@@ -36,6 +36,7 @@ interface DependencyMapCardProps {
 }
 
 export const DependencyMapCard: React.FC<DependencyMapCardProps> = ({ data, loading, onSelectNode }) => {
+  const [localOnly, setLocalOnly] = useState(false);
   if (loading) {
     return (
       <Card sx={{ background: 'rgba(20, 20, 25, 0.4)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '12px' }}>
@@ -61,6 +62,18 @@ export const DependencyMapCard: React.FC<DependencyMapCardProps> = ({ data, load
       </Card>
     );
   }
+
+  const filteredNodes = localOnly
+    ? data.nodes.filter(n => n.status !== 'external')
+    : data.nodes;
+
+  const filteredEdges = localOnly
+    ? data.edges.filter(edge => {
+        const toNode = data.nodes.find(n => n.path === edge.to);
+        const fromNode = data.nodes.find(n => n.path === edge.from);
+        return (!toNode || toNode.status !== 'external') && (!fromNode || fromNode.status !== 'external');
+      })
+    : data.edges;
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -137,11 +150,26 @@ export const DependencyMapCard: React.FC<DependencyMapCardProps> = ({ data, load
         <Chip label="static scan, approximate" size="small" sx={{ height: '18px', fontSize: '10px', background: 'rgba(127, 85, 240, 0.15)', color: '#b794f4', border: '1px solid rgba(127, 85, 240, 0.3)', fontWeight: 600 }} />
       </Box>
 
-      {/* Helper text block */}
-      <Box sx={{ px: 2, py: 1, background: 'rgba(255, 255, 255, 0.02)', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+      {/* Helper text block & Filter Switch */}
+      <Box sx={{ px: 2, py: 1, background: 'rgba(255, 255, 255, 0.02)', borderBottom: '1px solid rgba(255,255,255,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
         <Typography variant="caption" sx={{ color: '#71717a', fontStyle: 'italic', fontSize: '10px' }}>
           Static dependency map. Approximate. No code execution.
         </Typography>
+        <FormControlLabel
+          control={
+            <Switch
+              checked={localOnly}
+              onChange={(e) => setLocalOnly(e.target.checked)}
+              size="small"
+              sx={{
+                '& .MuiSwitch-switchBase.Mui-checked': { color: '#a78bfa' },
+                '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { backgroundColor: '#a78bfa' }
+              }}
+            />
+          }
+          label={<span style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>Show local files only</span>}
+          sx={{ m: 0 }}
+        />
       </Box>
 
       <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
@@ -155,11 +183,11 @@ export const DependencyMapCard: React.FC<DependencyMapCardProps> = ({ data, load
         {/* Nodes List */}
         <Box sx={{ mb: 3 }}>
           <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', mb: 1.5 }}>
-            Resolved Files & Targets ({data.nodes.length})
+            Resolved Files & Targets ({filteredNodes.length})
           </Typography>
           <Box sx={scrollbarStyles}>
             <List dense sx={{ p: 0 }}>
-              {data.nodes.map((node, i) => (
+              {filteredNodes.map((node, i) => (
                 <ListItem 
                   key={i} 
                   onClick={() => onSelectNode?.(node)} 
@@ -191,16 +219,16 @@ export const DependencyMapCard: React.FC<DependencyMapCardProps> = ({ data, load
         {/* Edges / Routes List */}
         <Box>
           <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', mb: 1.5 }}>
-            Dependency Routing Paths ({data.edges.length})
+            Dependency Routing Paths ({filteredEdges.length})
           </Typography>
-          {data.edges.length === 0 ? (
+          {filteredEdges.length === 0 ? (
             <Typography variant="body2" sx={{ color: '#71717a', fontStyle: 'italic' }}>
               No child imports or dependencies detected.
             </Typography>
           ) : (
             <Box sx={scrollbarStyles}>
               <List dense sx={{ p: 0 }}>
-                {data.edges.map((edge, i) => (
+                {filteredEdges.map((edge, i) => (
                   <ListItem key={i} sx={{ px: 1, py: 0.5 }}>
                     <ListItemText
                       primary={

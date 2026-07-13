@@ -169,14 +169,20 @@ export const WorkspaceFileTree: React.FC<FileTreeProps> = ({
             {workspace.path}
           </Typography>
         </Box>
-        <Button size="small" variant="outlined" onClick={fetchFiles} startIcon={<RefreshIconView />} sx={{ textTransform: 'none', fontSize: '0.7rem', borderColor: 'rgba(255,255,255,0.05)' }}>
+        <Button size="small" variant="outlined" onClick={fetchFiles} disabled={loading} startIcon={<RefreshIconView />} sx={{ textTransform: 'none', fontSize: '0.7rem', borderColor: 'rgba(255,255,255,0.05)' }}>
           Refresh
         </Button>
       </Box>
 
       {loading ? (
-        <Box sx={{ display: 'flex', flexGrow: 1, alignItems: 'center', justifyContent: 'center' }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1, alignItems: 'center', justifyContent: 'center', p: 3, textAlign: 'center', gap: 2 }}>
           <CircularProgress size={24} sx={{ color: '#7f5af0' }} />
+          <Typography variant="body2" sx={{ color: '#cbd5e1', fontWeight: 600 }}>
+            Indexing safe workspace files…
+          </Typography>
+          <Typography variant="caption" sx={{ color: '#71717a', maxWidth: '240px', lineHeight: 1.4 }}>
+            Large workspaces may take a few seconds. Hidden, dependency, and blocked folders are skipped.
+          </Typography>
         </Box>
       ) : (
         <Box sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1, minHeight: 0 }}>

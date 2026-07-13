@@ -120,6 +120,21 @@ export const LiveAppWorkbenchCard: React.FC<LiveAppWorkbenchCardProps> = ({
         </Typography>
       </Box>
 
+      {/* Experimental Helper Copy */}
+      <Box sx={{ mb: 2, p: 1.5, background: 'rgba(127, 85, 240, 0.03)', border: '1px solid rgba(127, 85, 240, 0.15)', borderRadius: '6px' }}>
+        <Typography variant="caption" sx={{ color: '#cbd5e1', display: 'block', lineHeight: 1.4 }}>
+          ℹ️ <strong>Experimental:</strong> live app manifest integration. Not required for local workspace inspection.
+        </Typography>
+      </Box>
+
+      {!manifestAvailable && (
+        <Box sx={{ mb: 2, p: 1.5, background: 'rgba(251, 191, 36, 0.05)', border: '1px solid rgba(251, 191, 36, 0.2)', borderRadius: '6px' }}>
+          <Typography variant="caption" sx={{ color: '#fbbf24', display: 'block', lineHeight: 1.4 }}>
+            ⚠️ This deployed app does not expose a Tessera manifest yet. Use Workspace Mission Control for local repo inspection.
+          </Typography>
+        </Box>
+      )}
+
       {/* Main Status Indicators */}
       <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 3 }}>
         <Chip

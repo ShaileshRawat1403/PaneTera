@@ -1,6 +1,6 @@
 // src/components/workbench/FilePreviewPanel.tsx
 import React, { useState } from 'react';
-import { Box, Typography, Paper, IconButton, Chip, Button, Stack } from '@mui/material';
+import { Box, Typography, Paper, IconButton, Chip, Button, Stack, Tooltip } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
@@ -85,6 +85,21 @@ export const FilePreviewPanel: React.FC<PreviewProps> = ({
           {getFileSizeLabel() && (
             <Chip label={getFileSizeLabel()} size="small" sx={{ height: 16, fontSize: '0.55rem', background: 'rgba(255,255,255,0.03)', color: '#a1a1aa' }} />
           )}
+          <Tooltip title="This panel cannot edit files. Tessera only reads safe workspace files in Alpha." arrow>
+            <Chip 
+              icon={<LockOutlinedIcon style={{ fontSize: 10, color: '#f87171' }} />}
+              label="Read-only preview" 
+              size="small" 
+              sx={{ 
+                height: 18, 
+                fontSize: '0.55rem', 
+                fontWeight: 800, 
+                background: 'rgba(239, 68, 68, 0.05)', 
+                color: '#f87171', 
+                border: '1px solid rgba(239, 68, 68, 0.15)' 
+              }} 
+            />
+          </Tooltip>
         </Stack>
         
         <Stack direction="row" spacing={1} alignItems="center">

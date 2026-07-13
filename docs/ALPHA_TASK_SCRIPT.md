@@ -9,6 +9,7 @@ This script walks you through a 15–20 minute testing session to evaluate MyAI 
 ### 1. Open the Portal & Confirm Sandbox State
 * **Action**: Launch the app and open `http://localhost:5173`.
 * **Verification**: Verify that the top banner shows `GOVERNED READ-ONLY SANDBOX MODE` and `GATEWAY: ONLINE`. Verify that the bottom rail shows the status `Sandboxed`.
+* **Note**: The Live App Workbench is experimental and not part of the main test session. The default provider is 'none', meaning the central chat returns concise, deterministic summaries from local tool executions.
 
 ### 2. Set Up Tester Info
 * **Action**: Click the purple **"User Testing Cockpit"** button in the bottom left rail.
@@ -25,6 +26,7 @@ This script walks you through a 15–20 minute testing session to evaluate MyAI 
 ### 5. Inspect a Safe Source File
 * **Action**: Navigate the file tree on the left and select `README.md` or a source file.
 * **Verification**: Verify the code loads cleanly in the preview panel with line numbers. Click **"Wrap"** and **"Unwrap"** to test line wrapping readability.
+* **Note**: The preview panel is read-only. It displays a "Read-only preview" lock badge indicating it cannot edit files.
 
 ### 6. Run Static Structure Scan
 * **Action**: Select a `.ts`, `.tsx`, or `.py` file from the explorer tree.
@@ -33,6 +35,7 @@ This script walks you through a 15–20 minute testing session to evaluate MyAI 
 ### 7. Map Dependency Routes
 * **Action**: Click the **"Map Dependency Routes"** button beneath the symbol card.
 * **Verification**: Wait for the loader (`Mapping dependencies...`) to resolve. Check that duplicates clicks are blocked while loading. Confirm the dependency routing tree renders.
+* **Note**: You can toggle "Show local files only" to filter out external libraries (like React or MUI packages) from the dependency tree view.
 
 ### 8. Navigate Interactively
 * **Action**: Locate a resolved module in the dependency node list, and **click it**.
