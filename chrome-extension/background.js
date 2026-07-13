@@ -95,11 +95,12 @@ async function handleMessage(message, sendResponse) {
 
         const captureData = results[0].result;
 
-        // 3. Verify actual tab origin against derived script origin to prevent spoofing
-        const actualUrl = activeTab.url;
+        // 3. Verify actual tab origin dynamically right before sending to prevent spoofing
+        const freshTab = await chrome.tabs.get(activeTab.id);
+        const actualUrl = freshTab.url || '';
         const expectedOrigin = captureData.origin;
         if (!validateOrigin(expectedOrigin, actualUrl)) {
-          sendResponse({ success: false, error: 'Origin verification failed' });
+          sendResponse({ success: false, error: 'Origin verification mismatch: Target navigated' });
           return;
         }
 
@@ -114,7 +115,7 @@ async function handleMessage(message, sendResponse) {
           idempotencyKey,
           issuedAt: new Date().toISOString(),
           expiresAt: new Date(Date.now() + 30000).toISOString(),
-          capability: "browser.page.observe",
+          capability: captureData.selectedText ? "browser.selection.observe" : "browser.page.observe",
           riskLevel: "inspect",
           target: {
             tabId: activeTab.id,
