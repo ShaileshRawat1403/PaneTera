@@ -43,15 +43,15 @@ export const BrowserObservationView: React.FC<BrowserObservationProps> = ({ data
     );
   }
 
-  const { url, title, observedAt, domOutline = [], screenshotDataUrl, selectedText } = data;
+  const { url, title, observedAt, domOutline = [], screenshotDataUrl, selectedText, capturedAt } = data as any;
 
   // Group DOM outline by role
-  const groupedOutline = domOutline.reduce<Record<string, DomOutlineItem[]>>((acc, item) => {
+  const groupedOutline: Record<string, DomOutlineItem[]> = {};
+  (domOutline || []).forEach((item: any) => {
     const role = item.role || 'text';
-    if (!acc[role]) acc[role] = [];
-    acc[role].push(item);
-    return acc;
-  }, {});
+    if (!groupedOutline[role]) groupedOutline[role] = [];
+    groupedOutline[role].push(item);
+  });
 
   if (variant === 'feed' || variant === 'chat') {
     return (
@@ -146,7 +146,7 @@ export const BrowserObservationView: React.FC<BrowserObservationProps> = ({ data
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <CalendarTodayIcon sx={{ color: '#71717a', fontSize: 16 }} />
             <Typography variant="caption" sx={{ color: '#a0aec0' }}>
-              Observed At: {new Date(observedAt).toLocaleString()}
+              Observed At: {new Date(observedAt || capturedAt || new Date()).toLocaleString()}
             </Typography>
           </Box>
         </Stack>
@@ -181,7 +181,7 @@ export const BrowserObservationView: React.FC<BrowserObservationProps> = ({ data
                 </Typography>
                 <Paper variant="outlined" sx={{ p: 1, background: 'rgba(0,0,0,0.1)', borderColor: 'rgba(255,255,255,0.03)' }}>
                   <List dense sx={{ p: 0 }}>
-                    {groupedOutline[role].map((item, idx) => (
+                    {groupedOutline[role].map((item: DomOutlineItem, idx: number) => (
                       <ListItem key={idx} sx={{ p: 0, py: 0.25 }}>
                         <ListItemText
                           primary={item.text}

@@ -15,6 +15,7 @@ import { logAudit } from './audit';
 import * as fs from 'fs';
 import { FEATURES } from './features';
 import { handleOrchestratorQuery } from './orchestrator';
+import { browserRouter } from './browserGateway';
 
 dotenv.config();
 
@@ -30,12 +31,12 @@ if (TOKEN === 'changeme-12345' || !TOKEN) {
 
 app.use(express.json({ limit: '2mb' }));
 
-// CORS – restrict to localhost origins only
+// CORS – restrict to localhost and extension origins only
 app.use((req: Request, res: Response, next: NextFunction) => {
   const origin = req.headers.origin;
-  if (origin && origin.startsWith('http://localhost')) {
+  if (origin && (origin.startsWith('http://localhost') || origin.startsWith('chrome-extension://'))) {
     res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS,DELETE');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
     if (req.method === 'OPTIONS') {
       return res.sendStatus(204);
@@ -43,6 +44,9 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   }
   next();
 });
+
+// Mount browser gateway router BEFORE global master token check middleware
+app.use('/api/browser', browserRouter);
 
 // Token authentication middleware (supports Authorization header and query parameter token for EventSource)
 app.use((req: Request, res: Response, next: NextFunction) => {
@@ -1904,11 +1908,12 @@ app.get('/api/myai-workspaces/audit', (req: Request, res: Response) => {
 
 // Orchestrator Chat V0 endpoint (strictly read-only)
 app.post('/api/orchestrator/chat', async (req: Request, res: Response) => {
-  const { message, workspaceId, selectedFile, persona } = req.body as {
+  const { message, workspaceId, selectedFile, persona, captureId } = req.body as {
     message: string;
     workspaceId: string | null;
     selectedFile: string | null;
     persona: 'engineer' | 'pm' | 'ba' | 'qa' | 'exec';
+    captureId?: string;
   };
 
   if (!message) {
@@ -1929,7 +1934,8 @@ app.post('/api/orchestrator/chat', async (req: Request, res: Response) => {
       workspaceId,
       selectedFile,
       persona || 'engineer',
-      resolveWorkspacePath
+      resolveWorkspacePath,
+      captureId
     );
     res.json(response);
   } catch (err: any) {

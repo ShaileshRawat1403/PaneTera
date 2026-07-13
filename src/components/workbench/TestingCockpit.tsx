@@ -7,13 +7,18 @@ import AssignmentIcon from '@mui/icons-material/Assignment';
 interface CockpitProps {
   gatewayConnected: boolean;
   activeWorkspaceId: string | null;
+  token: string;
 }
 
-export const TestingCockpit: React.FC<CockpitProps> = ({ gatewayConnected, activeWorkspaceId }) => {
+export const TestingCockpit: React.FC<CockpitProps> = ({ gatewayConnected, activeWorkspaceId, token }) => {
   const [testerName, setTesterName] = useState('');
   const [notes, setNotes] = useState('');
   const [frictionScore, setFrictionScore] = useState('3');
   
+  // Pairing Code states
+  const [pairingCode, setPairingCode] = useState<string | null>(null);
+  const [pairingCodeLoading, setPairingCodeLoading] = useState(false);
+
   // Checklist tasks
   const [tasks, setTasks] = useState({
     viewCatalog: false,
@@ -29,9 +34,34 @@ export const TestingCockpit: React.FC<CockpitProps> = ({ gatewayConnected, activ
     setTasks(prev => ({ ...prev, [taskKey]: checked }));
   };
 
+  const generatePairingCode = async () => {
+    setPairingCodeLoading(true);
+    setPairingCode(null);
+    try {
+      const resp = await fetch('/api/browser/pairing/start', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        setPairingCode(data.code);
+      } else {
+        alert('Failed to generate pairing code. Make sure server is reachable.');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Error connecting to local browser pairing endpoint.');
+    } finally {
+      setPairingCodeLoading(false);
+    }
+  };
+
   const handleExport = () => {
     const summary = {
-      version: '0.1.0-alpha',
+      version: '0.2.0-alpha',
       timestamp: new Date().toISOString(),
       tester: testerName || 'Anonymous Tester',
       gatewayConnected,
@@ -73,6 +103,49 @@ export const TestingCockpit: React.FC<CockpitProps> = ({ gatewayConnected, activ
           Local Alpha User Testing Cockpit
         </Typography>
       </Box>
+
+      {/* Browser Extension Pairing Area */}
+      <Box sx={{ mb: 2, p: 1.5, background: 'rgba(127, 85, 240, 0.05)', border: '1px solid rgba(127, 85, 240, 0.15)', borderRadius: '8px' }}>
+        <Typography variant="caption" sx={{ color: '#a78bfa', fontWeight: 800, display: 'block', mb: 0.5 }}>
+          BROWSER OPERATOR CONNECTION
+        </Typography>
+        <Typography variant="caption" sx={{ color: '#71717a', display: 'block', mb: 1.5, lineHeight: 1.3 }}>
+          Pair your local Chrome Extension. No master token is exposed. Generates an 8-character single-session code.
+        </Typography>
+        
+        {pairingCode ? (
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', p: 1.5, background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '6px', mb: 1.5 }}>
+            <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 600, mb: 0.5 }}>
+              Pairing Code (Expires in 2 mins)
+            </Typography>
+            <Typography variant="h5" sx={{ fontFamily: 'monospace', fontWeight: 800, color: '#f4f4f5', letterSpacing: '2px' }}>
+              {pairingCode}
+            </Typography>
+          </Box>
+        ) : null}
+
+        <Button
+          size="small"
+          variant="outlined"
+          fullWidth
+          disabled={pairingCodeLoading}
+          onClick={generatePairingCode}
+          sx={{
+            borderColor: 'rgba(127, 85, 240, 0.3)',
+            color: '#b794f4',
+            fontSize: '0.68rem',
+            textTransform: 'none',
+            '&:hover': {
+              borderColor: 'rgba(127, 85, 240, 0.6)',
+              background: 'rgba(127, 85, 240, 0.02)'
+            }
+          }}
+        >
+          {pairingCodeLoading ? 'Generating Code...' : pairingCode ? 'Regenerate Pairing Code' : 'Generate Pairing Code'}
+        </Button>
+      </Box>
+
+      <Divider sx={{ borderColor: 'rgba(255,255,255,0.04)', my: 2 }} />
 
       {/* Tester info */}
       <Stack spacing={2} sx={{ mb: 2.5 }}>

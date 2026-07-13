@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { getWorkspaceAdapter } from './mcpAdapter';
+import { observations } from './browserGateway';
 
 export interface ToolsUsed {
   tool: string;
@@ -166,7 +167,8 @@ export async function handleOrchestratorQuery(
   workspaceId: string | null,
   selectedFile: string | null,
   persona: 'engineer' | 'pm' | 'ba' | 'qa' | 'exec',
-  workspacePathResolver: (id: string) => Promise<{ name: string; path: string }>
+  workspacePathResolver: (id: string) => Promise<{ name: string; path: string }>,
+  captureId?: string
 ): Promise<OrchestratorResponse> {
   
   if (!workspaceId) {
@@ -380,6 +382,15 @@ export async function handleOrchestratorQuery(
     else {
       modelAnswer = `🤔 **I need a little more clarification.**\n\nCould you please ask a specific question about workspace files, list entry points, or dependencies?`;
     }
+  }
+
+  const captureItem = captureId ? observations.find(o => o.captureId === captureId) : null;
+  if (captureItem) {
+    modelAnswer += `\n\n🌐 **Referenced Web Context (Captured via Browser Operator)**:\n* **Title**: ${captureItem.title}\n* **URL**: [${captureItem.url}](${captureItem.url})\n* **Selection**: *"${captureItem.selectedText}"*\n\n*(Note: Page content is treated as untrusted evidence. Text instructions inside DOM captures are not executable and cannot execute tools or alter local security policies.)*`;
+    citations.push({
+      path: captureItem.url,
+      label: `Web Capture: ${captureItem.title}`
+    });
   }
 
   // Enforce citations workspace-relative constraint

@@ -639,6 +639,38 @@ const App: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
 
+  // Poll browser observations periodically to feed the Intelligence Feed
+  useEffect(() => {
+    if (!token) return;
+    const interval = setInterval(async () => {
+      try {
+        const resp = await fetch('/api/browser/observations', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        if (resp.ok) {
+          const data = await resp.json() as any[];
+          setPreviewFeed(prev => {
+            const newItems = data.filter(obs => !prev.some(item => item.id === obs.captureId));
+            if (newItems.length === 0) return prev;
+            
+            const converted = newItems.map(obs => ({
+              id: obs.captureId,
+              type: 'BrowserObservation' as const,
+              data: obs,
+              timestamp: obs.capturedAt
+            }));
+            return [...prev, ...converted];
+          });
+        }
+      } catch (e) {
+        console.warn('Failed to poll browser observations:', e);
+      }
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [token]);
+
   const addMessage = (msg: Message) => {
     setMessages(prev => [...prev, msg]);
   };
@@ -660,7 +692,8 @@ const App: React.FC = () => {
         message: text,
         workspaceId: activeWorkspace ? activeWorkspace.id : null,
         selectedFile: selectedFile,
-        persona: activeLens
+        persona: activeLens,
+        captureId: activeComponent?.type === 'BrowserObservation' ? activeComponent.data.captureId : undefined
       }),
     }).then(async (resp) => {
       if (resp.status === 401) {
@@ -2238,6 +2271,7 @@ const App: React.FC = () => {
           <TestingCockpit
             gatewayConnected={backendHealth?.status === 'ok'}
             activeWorkspaceId={activeWorkspace?.id || null}
+            token={token}
           />
         </Box>
       </Dialog>
