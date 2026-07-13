@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Button, Stack, Typography } from '@mui/material';
+import { Box, Button, Stack, Typography, Tooltip } from '@mui/material';
 import ForumIcon from '@mui/icons-material/Forum';
 import SplitScreenIcon from '@mui/icons-material/VerticalSplit';
 import VisibilityIcon from '@mui/icons-material/Visibility';
@@ -9,14 +9,21 @@ export type WorkbenchMode = 'conversation' | 'native-focus' | 'split';
 interface WorkbenchModeToggleProps {
   mode: WorkbenchMode;
   onModeChange: (mode: WorkbenchMode) => void;
+  hasActiveWorkspace: boolean;
+  hasFeedItems: boolean;
   hasActiveComponent: boolean;
 }
 
 export const WorkbenchModeToggle: React.FC<WorkbenchModeToggleProps> = ({
   mode,
   onModeChange,
+  hasActiveWorkspace,
+  hasFeedItems,
   hasActiveComponent
 }) => {
+  const splitDisabled = !hasActiveWorkspace && !hasFeedItems;
+  const focusDisabled = !hasActiveComponent;
+
   return (
     <Box
       sx={{
@@ -34,70 +41,82 @@ export const WorkbenchModeToggle: React.FC<WorkbenchModeToggleProps> = ({
       </Typography>
 
       <Stack direction="row" spacing={1}>
-        <Button
-          size="small"
-          variant={mode === 'conversation' ? 'contained' : 'outlined'}
-          onClick={() => onModeChange('conversation')}
-          startIcon={<ForumIcon sx={{ fontSize: 14 }} />}
-          sx={{
-            fontSize: '0.65rem',
-            py: 0.25,
-            px: 1.5,
-            borderRadius: '6px',
-            background: mode === 'conversation' ? '#7f5af0' : 'transparent',
-            borderColor: 'rgba(255,255,255,0.08)',
-            color: mode === 'conversation' ? '#fff' : '#cbd5e1',
-            '&:hover': {
-              background: mode === 'conversation' ? '#6d47dd' : 'rgba(255,255,255,0.02)'
-            }
-          }}
-        >
-          Chat
-        </Button>
+        <Tooltip title="Shows orchestrator chat as the primary center view." arrow>
+          <span>
+            <Button
+              size="small"
+              variant={mode === 'conversation' ? 'contained' : 'outlined'}
+              onClick={() => onModeChange('conversation')}
+              startIcon={<ForumIcon sx={{ fontSize: 14 }} />}
+              sx={{
+                fontSize: '0.65rem',
+                py: 0.25,
+                px: 1.5,
+                borderRadius: '6px',
+                background: mode === 'conversation' ? '#7f5af0' : 'transparent',
+                borderColor: 'rgba(255,255,255,0.08)',
+                color: mode === 'conversation' ? '#fff' : '#cbd5e1',
+                '&:hover': {
+                  background: mode === 'conversation' ? '#6d47dd' : 'rgba(255,255,255,0.02)'
+                }
+              }}
+            >
+              Chat
+            </Button>
+          </span>
+        </Tooltip>
         
-        <Button
-          size="small"
-          variant={mode === 'split' ? 'contained' : 'outlined'}
-          onClick={() => onModeChange('split')}
-          disabled={!hasActiveComponent}
-          startIcon={<SplitScreenIcon sx={{ fontSize: 14 }} />}
-          sx={{
-            fontSize: '0.65rem',
-            py: 0.25,
-            px: 1.5,
-            borderRadius: '6px',
-            background: mode === 'split' ? '#7f5af0' : 'transparent',
-            borderColor: 'rgba(255,255,255,0.08)',
-            color: mode === 'split' ? '#fff' : '#cbd5e1',
-            '&:hover': {
-              background: mode === 'split' ? '#6d47dd' : 'rgba(255,255,255,0.02)'
-            }
-          }}
-        >
-          Split
-        </Button>
+        <Tooltip title={splitDisabled ? "No active workspace or feed items available." : "Show chat and the selected Intelligence Feed component side by side."} arrow>
+          <span>
+            <Button
+              size="small"
+              variant={mode === 'split' ? 'contained' : 'outlined'}
+              onClick={() => onModeChange('split')}
+              disabled={splitDisabled}
+              startIcon={<SplitScreenIcon sx={{ fontSize: 14 }} />}
+              sx={{
+                fontSize: '0.65rem',
+                py: 0.25,
+                px: 1.5,
+                borderRadius: '6px',
+                background: mode === 'split' ? '#7f5af0' : 'transparent',
+                borderColor: 'rgba(255,255,255,0.08)',
+                color: mode === 'split' ? '#fff' : '#cbd5e1',
+                '&:hover': {
+                  background: mode === 'split' ? '#6d47dd' : 'rgba(255,255,255,0.02)'
+                }
+              }}
+            >
+              Split
+            </Button>
+          </span>
+        </Tooltip>
 
-        <Button
-          size="small"
-          variant={mode === 'native-focus' ? 'contained' : 'outlined'}
-          onClick={() => onModeChange('native-focus')}
-          disabled={!hasActiveComponent}
-          startIcon={<VisibilityIcon sx={{ fontSize: 14 }} />}
-          sx={{
-            fontSize: '0.65rem',
-            py: 0.25,
-            px: 1.5,
-            borderRadius: '6px',
-            background: mode === 'native-focus' ? '#7f5af0' : 'transparent',
-            borderColor: 'rgba(255,255,255,0.08)',
-            color: mode === 'native-focus' ? '#fff' : '#cbd5e1',
-            '&:hover': {
-              background: mode === 'native-focus' ? '#6d47dd' : 'rgba(255,255,255,0.02)'
-            }
-          }}
-        >
-          Focus Active UI
-        </Button>
+        <Tooltip title={focusDisabled ? "Select a file, dependency map, or intelligence card first." : "Focuses the currently selected Intelligence Feed component."} arrow>
+          <span>
+            <Button
+              size="small"
+              variant={mode === 'native-focus' ? 'contained' : 'outlined'}
+              onClick={() => onModeChange('native-focus')}
+              disabled={focusDisabled}
+              startIcon={<VisibilityIcon sx={{ fontSize: 14 }} />}
+              sx={{
+                fontSize: '0.65rem',
+                py: 0.25,
+                px: 1.5,
+                borderRadius: '6px',
+                background: mode === 'native-focus' ? '#7f5af0' : 'transparent',
+                borderColor: 'rgba(255,255,255,0.08)',
+                color: mode === 'native-focus' ? '#fff' : '#cbd5e1',
+                '&:hover': {
+                  background: mode === 'native-focus' ? '#6d47dd' : 'rgba(255,255,255,0.02)'
+                }
+              }}
+            >
+              Focus Active UI
+            </Button>
+          </span>
+        </Tooltip>
       </Stack>
     </Box>
   );

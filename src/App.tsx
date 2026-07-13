@@ -2001,6 +2001,8 @@ const App: React.FC = () => {
             <WorkbenchModeToggle
               mode={workbenchMode}
               onModeChange={handleWorkbenchModeChange}
+              hasActiveWorkspace={!!activeWorkspace}
+              hasFeedItems={previewFeed.length > 0}
               hasActiveComponent={!!activeComponent}
             />
 
