@@ -97,6 +97,15 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  const btnOpenSidePanel = document.getElementById('btnOpenSidePanel');
+  if (btnOpenSidePanel) {
+    btnOpenSidePanel.addEventListener('click', () => {
+      chrome.windows.getCurrent({ populate: false }, (window) => {
+        chrome.sidePanel.open({ windowId: window.id });
+      });
+    });
+  }
+
   function showError(msg) {
     errorMsg.textContent = msg;
     errorMsg.style.display = 'block';

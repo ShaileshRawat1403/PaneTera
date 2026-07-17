@@ -3,8 +3,35 @@ import { initializeStorageSecurity, setAccessToken, setRefreshToken, getAccessTo
 import { request } from './transport.js';
 import { validateOrigin } from './shared/validation.js';
 
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener(async () => {
   initializeStorageSecurity();
+
+  // Create context menus for selection and page contexts
+  chrome.contextMenus.create({
+    id: 'capture-selection',
+    title: 'Send selection to Tessera',
+    contexts: ['selection'],
+    documentUrlPatterns: ['https://*/*', 'http://*/*']
+  });
+
+  chrome.contextMenus.create({
+    id: 'capture-page',
+    title: 'Send page to Tessera',
+    contexts: ['page'],
+    documentUrlPatterns: ['https://*/*', 'http://*/*']
+  });
+
+  // Check if capture shortcut is assigned
+  const commands = await chrome.commands.getAll();
+  const captureCommand = commands.find(c => c.name === 'capture-context');
+  if (captureCommand && !captureCommand.shortcut) {
+    chrome.notifications.create({
+      type: 'basic',
+      iconUrl: 'icon128.png',
+      title: 'Tessera',
+      message: 'Capture shortcut is not assigned. Configure it in chrome://extensions/shortcuts.'
+    });
+  }
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -63,102 +90,17 @@ async function handleMessage(message, sendResponse) {
       }
 
       case 'capture': {
-        // 1. Get active tab
-        let tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
         let activeTab = tabs[0];
         
-        // Handle full-tab popup testing mode: if the active tab is the extension itself,
-        // find the last regular web tab in the window.
+        // Handle full-tab popup testing mode
         if (activeTab && activeTab.url && activeTab.url.startsWith('chrome-extension://')) {
           const allTabs = await chrome.tabs.query({ currentWindow: true });
           activeTab = allTabs.slice().reverse().find(t => t.url && !t.url.startsWith('chrome-extension://') && !t.url.startsWith('chrome://'));
         }
 
-        if (!activeTab) {
-          sendResponse({ success: false, error: 'No active tab found' });
-          return;
-        }
-
-        if (!activeTab.url || activeTab.url.startsWith('chrome://')) {
-          sendResponse({ success: false, error: 'Cannot capture context on restricted system pages. Tab: ' + JSON.stringify(activeTab) });
-          return;
-        }
-
-        // 2. Inject scripting capture
-        let results;
-        try {
-          results = await chrome.scripting.executeScript({
-            target: { tabId: activeTab.id },
-            files: ['capture.js']
-          });
-        } catch (e) {
-          sendResponse({ success: false, error: 'Script injection blocked. Please grant site permissions.' });
-          return;
-        }
-
-        if (!results || results.length === 0) {
-          sendResponse({ success: false, error: 'Failed to extract DOM elements' });
-          return;
-        }
-
-        const captureData = results[0].result;
-
-        // 3. Verify actual tab origin dynamically right before sending to prevent spoofing
-        const freshTab = await chrome.tabs.get(activeTab.id);
-        const actualUrl = freshTab.url || '';
-        const expectedOrigin = captureData.origin;
-        if (!validateOrigin(expectedOrigin, actualUrl)) {
-          sendResponse({ success: false, error: 'Origin verification mismatch: Target navigated' });
-          return;
-        }
-
-        // 4. Send the observation request envelope
-        const transactionId = 'tx-' + Math.random().toString(36).substring(2) + '-' + Date.now();
-        const idempotencyKey = 'idem-' + Math.random().toString(36).substring(2) + '-' + Date.now();
-        
-        const payload = {
-          protocolVersion: "1.0",
-          capabilityVersion: "1.0",
-          transactionId,
-          idempotencyKey,
-          issuedAt: new Date().toISOString(),
-          expiresAt: new Date(Date.now() + 30000).toISOString(),
-          capability: captureData.selectedText ? "browser.selection.observe" : "browser.page.observe",
-          riskLevel: "inspect",
-          target: {
-            tabId: activeTab.id,
-            frameId: 0,
-            expectedOrigin
-          },
-          approval: {
-            required: false,
-            status: "not-required",
-            grantId: null
-          },
-          constraints: {
-            maxElements: 1,
-            maxOutputBytes: 10000,
-            timeoutMs: 5000
-          },
-          payload: {
-            title: captureData.title,
-            url: captureData.url,
-            selectedText: captureData.selectedText
-          }
-        };
-
-        const resp = await request('/api/browser/observations', {
-          method: 'POST',
-          body: JSON.stringify(payload)
-        });
-
-        if (resp.ok) {
-          const resultData = await resp.json();
-          sendResponse({ success: true, observation: resultData });
-        } else {
-          const err = await resp.json();
-          sendResponse({ success: false, error: err.error || 'Failed to submit observation' });
-        }
+        const result = await performCapture({ tab: activeTab, trigger: 'popup' });
+        sendResponse(result);
         break;
       }
 
@@ -181,3 +123,132 @@ async function handleMessage(message, sendResponse) {
     sendResponse({ success: false, error: err.message || 'Background execution error' });
   }
 }
+
+// -----------------------------------------------------------------------------
+// EVENT LISTENERS: Context Menu and Keyboard Shortcut
+// -----------------------------------------------------------------------------
+
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  if (info.menuItemId === 'capture-selection' || info.menuItemId === 'capture-page') {
+    const selectionText = info.menuItemId === 'capture-selection' ? info.selectionText : undefined;
+    await performCapture({ tab, trigger: 'context-menu', selectionText });
+  }
+});
+
+chrome.commands.onCommand.addListener(async (command) => {
+  if (command === 'capture-context') {
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    let activeTab = tabs[0];
+    if (activeTab) {
+      await performCapture({ tab: activeTab, trigger: 'shortcut' });
+    }
+  }
+});
+
+// -----------------------------------------------------------------------------
+// SHARED CAPTURE LOGIC
+// -----------------------------------------------------------------------------
+
+async function performCapture({ tab, trigger, selectionText }) {
+  try {
+    if (!tab) {
+      throw new Error('No active tab found');
+    }
+
+    if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
+      throw new Error('This Chrome page cannot be captured. Open a normal HTTP or HTTPS page.');
+    }
+
+    let captureData = { title: tab.title, url: tab.url, origin: new URL(tab.url).origin, selectedText: selectionText };
+
+    // For shortcut or popup (where selectionText is undefined), we need to inject script to get selection
+    if (trigger === 'shortcut' || trigger === 'popup') {
+      try {
+        const results = await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          files: ['capture.js']
+        });
+        if (results && results.length > 0) {
+          captureData = results[0].result; // capture.js returns { url, title, origin, selectedText }
+        } else {
+          throw new Error('Failed to extract DOM elements');
+        }
+      } catch (e) {
+        throw new Error('Script injection blocked. Please grant site permissions.');
+      }
+    }
+
+    // Always revalidate the current tab origin immediately before dispatch
+    const freshTab = await chrome.tabs.get(tab.id);
+    const actualUrl = freshTab.url || '';
+    const expectedOrigin = captureData.origin;
+    if (!validateOrigin(expectedOrigin, actualUrl)) {
+      throw new Error('Origin verification mismatch: Target navigated');
+    }
+
+    const transactionId = 'tx-' + Math.random().toString(36).substring(2) + '-' + Date.now();
+    const idempotencyKey = 'idem-' + Math.random().toString(36).substring(2) + '-' + Date.now();
+    
+    const payload = {
+      protocolVersion: "1.0",
+      capabilityVersion: "1.0",
+      transactionId,
+      idempotencyKey,
+      issuedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 30000).toISOString(),
+      capability: captureData.selectedText ? "browser.selection.observe" : "browser.page.observe",
+      riskLevel: "inspect",
+      target: {
+        tabId: tab.id,
+        frameId: 0,
+        expectedOrigin
+      },
+      approval: { required: false, status: "not-required", grantId: null },
+      constraints: { maxElements: 1, maxOutputBytes: 10000, timeoutMs: 5000 },
+      payload: {
+        title: captureData.title,
+        url: captureData.url,
+        selectedText: captureData.selectedText
+      }
+    };
+
+    const resp = await request('/api/browser/observations', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+
+    if (resp.ok) {
+      const observation = await resp.json();
+      if (trigger !== 'popup') {
+        chrome.notifications.create({
+          type: 'basic',
+          iconUrl: 'icon128.png',
+          title: 'Tessera',
+          message: 'Context sent successfully'
+        });
+      }
+      return { success: true, observation };
+    } else {
+      const err = await resp.json();
+      const errorMessage = err.error || 'Failed to submit observation';
+      if (trigger !== 'popup') {
+        chrome.notifications.create({
+          type: 'basic',
+          iconUrl: 'icon128.png',
+          title: 'Tessera capture failed',
+          message: errorMessage
+        });
+      }
+      return { success: false, error: errorMessage };
+    }
+  } catch (e) {
+    if (trigger !== 'popup') {
+      chrome.notifications.create({
+        type: 'basic',
+        iconUrl: 'icon128.png',
+        title: 'Tessera capture failed',
+        message: e.message || 'Unknown error'
+      });
+    }
+    return { success: false, error: e.message || 'Unknown error' };
+  }

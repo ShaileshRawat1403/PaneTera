@@ -8,7 +8,9 @@
     "activeTab",
     "scripting",
     "storage",
-    "sidePanel"
+    "sidePanel",
+    "contextMenus",
+    "notifications"
   ],
   "host_permissions": [
     "http://127.0.0.1/*",
@@ -31,5 +33,14 @@
   },
   "action": {
     "default_popup": "popup.html"
+  },
+  "commands": {
+    "capture-context": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+K",
+        "mac": "Command+Shift+K"
+      },
+      "description": "Capture Web Context for Tessera Portal"
+    }
   }
 }
