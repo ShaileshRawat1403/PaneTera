@@ -161,11 +161,12 @@ async function runTests() {
     assert.ok(missingData.nodes.some((n: any) => n.path === 'non-existent.ts' && n.status === 'missing'));
 
     console.log('✓ All Static Structure Scan + Dependency map tests passed successfully!');
-    cleanupMockFiles();
   } catch (err: any) {
-    cleanupMockFiles();
     console.error('FAIL:', err);
-    process.exit(1);
+    process.exitCode = 1;
+  } finally {
+    cleanupMockFiles();
+    adapter.stop();
   }
 }
 

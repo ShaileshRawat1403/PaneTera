@@ -65,6 +65,6 @@ export class BrowserEvidenceStore {
 // Singleton instance
 export let browserEvidenceStore = new BrowserEvidenceStore();
 
-export function setBrowserEvidenceStoreForTest(store: BrowserEvidenceStore) {
-  browserEvidenceStore = store;
+export function setBrowserEvidenceStoreForTest(store: BrowserEvidenceStore | undefined) {
+  browserEvidenceStore = store || new BrowserEvidenceStore();
 }

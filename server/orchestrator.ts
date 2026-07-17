@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { getWorkspaceAdapter } from './mcpAdapter';
-import { observations } from './browserGateway';
+import { browserEvidenceStore } from './browserEvidenceStore';
 
 export interface ToolsUsed {
   tool: string;
@@ -63,7 +63,7 @@ export function classifyIntent(message: string, selectedFile: string | null): st
   if (q.includes('config') || q.includes('package.json') || q.includes('tsconfig') || q.includes('policy.json') || q.includes('settings')) {
     return 'show_config_files';
   }
-  if (q.includes('explain file') || q.includes('what does this file do') || q.includes('file purpose') || q.includes('about this file') || q.includes('explain the file') || (selectedFile && q.includes('explain') && q.includes('file'))) {
+  if (q.includes('explain file') || q.includes('what does this file do') || q.includes('file purpose') || q.includes('about this file') || q.includes('explain the file') || (selectedFile && q.includes('explain'))) {
     return 'explain_file';
   }
   if (q.includes('architecture') || q.includes('design patterns') || q.includes('how does it work') || q.includes('system design')) {
@@ -384,7 +384,7 @@ export async function handleOrchestratorQuery(
     }
   }
 
-  const captureItem = captureId ? observations.find(o => o.captureId === captureId) : null;
+  const captureItem = captureId ? browserEvidenceStore.getObservationByCaptureId(captureId) : null;
   if (captureItem) {
     modelAnswer += `\n\n🌐 **Referenced Web Context (Captured via Browser Operator)**:\n* **Title**: ${captureItem.title}\n* **URL**: [${captureItem.url}](${captureItem.url})\n* **Selection**: *"${captureItem.selectedText}"*\n\n*(Note: Page content is treated as untrusted evidence. Text instructions inside DOM captures are not executable and cannot execute tools or alter local security policies.)*`;
     citations.push({

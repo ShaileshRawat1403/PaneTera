@@ -209,6 +209,10 @@ export class McpWorkspaceAdapter {
 
 // Helpers to get or spawn workspace adapters securely
 export async function getWorkspaceAdapter(workspaceId: string): Promise<McpWorkspaceAdapter> {
+  if (activeAdapters.has(workspaceId)) {
+    return activeAdapters.get(workspaceId)!;
+  }
+
   // Check catalog first
   const catalogPath = path.resolve(__dirname, 'myai-workspaces.json');
   const catalog = JSON.parse(fs.readFileSync(catalogPath, 'utf8'));
@@ -219,10 +223,6 @@ export async function getWorkspaceAdapter(workspaceId: string): Promise<McpWorks
   }
   if (!ws.enabled) {
     throw new Error(`Workspace ${ws.name} is disabled. Enable it in the navigator settings first.`);
-  }
-
-  if (activeAdapters.has(workspaceId)) {
-    return activeAdapters.get(workspaceId)!;
   }
 
   const adapter = new McpWorkspaceAdapter(workspaceId, ws.path);
@@ -241,4 +241,8 @@ export function stopWorkspaceAdapter(workspaceId: string): void {
 export function stopAllWorkspaceAdapters(): void {
   activeAdapters.forEach(adapter => adapter.stop());
   activeAdapters.clear();
+}
+
+export function setWorkspaceAdapterForTest(workspaceId: string, adapter: McpWorkspaceAdapter): void {
+  activeAdapters.set(workspaceId, adapter);
 }

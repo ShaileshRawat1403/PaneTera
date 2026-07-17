@@ -3,7 +3,9 @@ import * as assert from 'assert';
 import * as path from 'path';
 import * as fs from 'fs';
 import { handleOrchestratorQuery, classifyIntent } from '../server/orchestrator';
-import { getWorkspaceAdapter, stopWorkspaceAdapter } from '../server/mcpAdapter';
+import { McpWorkspaceAdapter, getWorkspaceAdapter, stopWorkspaceAdapter, stopAllWorkspaceAdapters, setWorkspaceAdapterForTest } from '../server/mcpAdapter';
+
+process.env.ORCHESTRATOR_PROVIDER = 'none';
 
 console.log('Running Orchestrator Chat V0 tests...');
 
@@ -44,6 +46,8 @@ const mockResolver = async (id: string) => {
 
 async function runTests() {
   setupMockFiles();
+  const mockAdapter = new McpWorkspaceAdapter('test-orch-ws', mockDir);
+  setWorkspaceAdapterForTest('test-orch-ws', mockAdapter);
 
   try {
     // 1. Test no workspace selected
@@ -55,6 +59,7 @@ async function runTests() {
     // 2. Test unknown intent clarification
     console.log('- Testing: unknown intent clarification...');
     const vagueRes = await handleOrchestratorQuery('hello', 'test-orch-ws', null, 'engineer', mockResolver);
+    console.log('vagueRes.answer:', vagueRes.answer);
     assert.strictEqual(vagueRes.intent, 'needs_clarification');
     assert.ok(vagueRes.answer.includes('clarification'));
 
@@ -109,10 +114,13 @@ async function runTests() {
     console.log('✓ All Orchestrator Chat V0 tests passed successfully!');
   } finally {
     cleanupMockFiles();
+    stopAllWorkspaceAdapters();
   }
 }
 
-runTests().catch(err => {
+runTests().then(() => {
+  process.exit(0);
+}).catch(err => {
   console.error('Test run failed:', err);
   process.exit(1);
 });
