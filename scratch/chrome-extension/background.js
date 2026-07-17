@@ -64,23 +64,15 @@ async function handleMessage(message, sendResponse) {
 
       case 'capture': {
         // 1. Get active tab
-        let tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-        let activeTab = tabs[0];
-        
-        // Handle full-tab popup testing mode: if the active tab is the extension itself,
-        // find the last regular web tab in the window.
-        if (activeTab && activeTab.url && activeTab.url.startsWith('chrome-extension://')) {
-          const allTabs = await chrome.tabs.query({ currentWindow: true });
-          activeTab = allTabs.slice().reverse().find(t => t.url && !t.url.startsWith('chrome-extension://') && !t.url.startsWith('chrome://'));
-        }
-
-        if (!activeTab) {
+        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (tabs.length === 0) {
           sendResponse({ success: false, error: 'No active tab found' });
           return;
         }
 
+        const activeTab = tabs[0];
         if (!activeTab.url || activeTab.url.startsWith('chrome://')) {
-          sendResponse({ success: false, error: 'Cannot capture context on restricted system pages. Tab: ' + JSON.stringify(activeTab) });
+          sendResponse({ success: false, error: 'Cannot capture context on restricted system pages' });
           return;
         }
 
