@@ -1026,6 +1026,7 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
               const MAIN_WORKBENCH_COMPONENTS = new Set([
                 "SoothsayerWorkbench",
                 "BrowserObservation",
+                "BrowserExtraction",
                 "LiveAppWorkbench",
                 "ContentOpsStarter",
                 "ProposedAction",
@@ -1088,6 +1089,7 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
                         {item.type === 'ContentWorkflow' && 'GOVERNED CONTENT RUN'}
                         {item.type === 'SoothsayerWorkbench' && 'SOOTHSAYER WORKBENCH'}
                         {item.type === 'BrowserObservation' && 'BROWSER OBSERVATION'}
+                        {item.type === 'BrowserExtraction' && 'STRUCTURED EVIDENCE'}
                       </Typography>
                     </Box>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }} onClick={(e) => e.stopPropagation()}>
@@ -1304,6 +1306,16 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
                     {item.type === 'BrowserObservation' && (
                       <InteractiveComponent
                         uiComponent={{ type: 'BrowserObservation', data: item.data }}
+                        onAction={onAction}
+                        onApproveAction={onApproveAction}
+                        onCancelAction={onRemoveItem}
+                        variant="feed"
+                      />
+                    )}
+
+                    {item.type === 'BrowserExtraction' && (
+                      <InteractiveComponent
+                        uiComponent={{ type: 'BrowserExtraction', data: item.data }}
                         onAction={onAction}
                         onApproveAction={onApproveAction}
                         onCancelAction={onRemoveItem}

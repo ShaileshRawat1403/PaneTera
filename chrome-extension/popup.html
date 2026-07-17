@@ -142,7 +142,20 @@
       <strong>Active Mode:</strong> Governed Read-Only<br/>
       Observations will be routed to the Workbench Intelligence Feed.
     </div>
-    <button id="btnCapture">Capture Web Context</button>
+    <div class="input-group" style="margin-bottom: 12px;">
+      <label>Action</label>
+      <select id="capabilitySelect" style="width:100%; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:6px; padding:10px; color:#f4f4f5; font-size:12px; margin-bottom:10px;">
+        <option value="browser.page.observe">Observe Page (Phase 1)</option>
+        <option value="browser.article.extract">Extract Article</option>
+        <option value="browser.outline.extract">Extract Outline</option>
+        <option value="browser.table.extract">Extract Tables</option>
+        <option value="browser.links.extract">Extract Links</option>
+        <option value="browser.metadata.extract">Extract Metadata</option>
+        <option value="browser.structuredData.extract">Extract Structured Data (JSON-LD)</option>
+        <option value="browser.codeBlocks.extract">Extract Code Blocks</option>
+      </select>
+    </div>
+    <button id="btnCapture">Execute Action</button>
     <button id="btnOpenSidePanel" class="btn-secondary">Open Tessera Side Panel</button>
     <button id="btnDisconnect" class="btn-secondary" style="border-color: rgba(239, 68, 68, 0.2); color: #ef4444;">Disconnect</button>
   </div>

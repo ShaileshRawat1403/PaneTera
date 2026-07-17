@@ -70,9 +70,12 @@ document.addEventListener('DOMContentLoaded', () => {
     btnCapture.disabled = true;
     btnCapture.textContent = 'Capturing context...';
 
-    chrome.runtime.sendMessage({ type: 'capture' }, (response) => {
+    const capabilitySelect = document.getElementById('capabilitySelect');
+    const capability = capabilitySelect ? capabilitySelect.value : 'browser.page.observe';
+
+    chrome.runtime.sendMessage({ type: 'capture', capability }, (response) => {
       btnCapture.disabled = false;
-      btnCapture.textContent = 'Capture Web Context';
+      btnCapture.textContent = 'Execute Action';
 
       if (response && response.success) {
         // Show temporary success feedback

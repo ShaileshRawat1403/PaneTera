@@ -650,18 +650,32 @@ const App: React.FC = () => {
           }
         });
         if (resp.ok) {
-          const data = await resp.json() as any[];
+          const responseData = await resp.json();
+          // Backward compatibility for when it was just an array, or the new object format
+          const obsData = Array.isArray(responseData) ? responseData : (responseData.observations || []);
+          const extData = responseData.extractions || [];
+
           setPreviewFeed(prev => {
-            const newItems = data.filter(obs => !prev.some(item => item.id === obs.captureId));
-            if (newItems.length === 0) return prev;
+            const newItems = obsData.filter((obs: any) => !prev.some(item => item.id === obs.captureId));
+            const newExtractions = extData.filter((ext: any) => !prev.some(item => item.id === ext.extractionId || item.id === ext.parentCaptureId));
             
-            const converted = newItems.map(obs => ({
+            if (newItems.length === 0 && newExtractions.length === 0) return prev;
+            
+            const convertedObs = newItems.map((obs: any) => ({
               id: obs.captureId,
               type: 'BrowserObservation' as const,
               data: obs,
               timestamp: obs.capturedAt
             }));
-            return [...prev, ...converted];
+
+            const convertedExt = newExtractions.map((ext: any) => ({
+              id: ext.extractionId || ext.parentCaptureId,
+              type: 'BrowserExtraction' as const,
+              data: ext,
+              timestamp: ext.source.capturedAt
+            }));
+
+            return [...prev, ...convertedObs, ...convertedExt];
           });
         }
       } catch (e) {

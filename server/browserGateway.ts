@@ -25,6 +25,31 @@ export interface ObservationItem {
   capturedAt: string;
 }
 
+export interface ExtractionResult {
+  extractionId: string;
+  parentCaptureId: string;
+  capability: string;
+  source: {
+    title: string;
+    url: string;
+    origin: string;
+    capturedAt: string;
+  };
+  trust: {
+    sourceType: "browser-dom";
+    trustLevel: "untrusted";
+    instructionAuthority: "none";
+  };
+  data: any;
+  evidence: {
+    items: any[];
+    elementsMatched: number;
+    contentBytes: number;
+  };
+  warnings: string[];
+  truncated: boolean;
+}
+
 // In-Memory Database for Alpha Session
 let activePairingCode: string | null = null;
 let pairingCodeExpires: Date | null = null;
@@ -33,6 +58,7 @@ let failedAttempts = 0;
 const sessions = new Map<string, BrowserSession>();
 const refreshTokens = new Map<string, BrowserSession>(); // Maps refreshToken string to session
 export const observations: ObservationItem[] = [];
+export const extractions: ExtractionResult[] = [];
 const processedIdempotencyKeys = new Set<string>();
 
 // Helper to sanitize input strings
@@ -230,7 +256,7 @@ browserRouter.post('/observations', requireExtensionToken, (req: Request, res: R
   // Enforce origin verification bounds
   let derivedOrigin = '';
   try {
-    derivedOrigin = new URL(url).origin;
+    derivedOrigin = new URL(url || envelope.payload.source?.url || '').origin;
   } catch (e) {
     return res.status(400).json({ error: 'Invalid payload target URL format' });
   }
@@ -239,13 +265,14 @@ browserRouter.post('/observations', requireExtensionToken, (req: Request, res: R
     return res.status(400).json({ error: 'Security Exception: expected target origin mismatch' });
   }
 
-  const maxBytes = envelope.constraints?.maxOutputBytes || 10000;
-  const contentBytes = typeof Blob !== 'undefined' ? new Blob([selectedText || '']).size : Buffer.byteLength(selectedText || '', 'utf8');
+  const maxBytes = envelope.constraints?.maxOutputBytes || 2000000;
+  const payloadString = JSON.stringify(envelope.payload);
+  const contentBytes = typeof Blob !== 'undefined' ? new Blob([payloadString]).size : Buffer.byteLength(payloadString, 'utf8');
   if (contentBytes > maxBytes) {
     return res.status(400).json({ error: 'Payload size limit exceeded constraints bounds' });
   }
-  if (contentBytes > 100000) {
-    return res.status(400).json({ error: 'Payload size limit exceeded maximum bounds (100KB)' });
+  if (contentBytes > 2000000) {
+    return res.status(400).json({ error: 'Payload size limit exceeded maximum bounds (2MB)' });
   }
 
   const session = (req as any).browserSession as BrowserSession;
@@ -255,37 +282,59 @@ browserRouter.post('/observations', requireExtensionToken, (req: Request, res: R
   while (observations.length > 0 && observations[0].capturedAt < oneHourAgo) {
     observations.shift();
   }
+  while (extractions.length > 0 && extractions[0].source.capturedAt < oneHourAgo) {
+    extractions.shift();
+  }
 
   const captureId = 'capture-' + Math.random().toString(36).substring(2) + '-' + Date.now();
-  const newObs: ObservationItem = {
-    captureId,
-    sourceType: "browser-dom",
-    trustLevel: "untrusted",
-    instructionAuthority: "none",
-    captureType: "page-selection",
-    title: sanitizeText(title),
-    url: sanitizeText(url),
-    origin: sanitizeText(expectedOrigin),
-    selectedText: sanitizeText(selectedText || ''),
-    capturedAt: new Date().toISOString()
-  };
+  
+  if (envelope.capability === 'browser.page.observe' || envelope.capability === 'browser.selection.observe') {
+    // Phase 1 Observation
+    const newObs: ObservationItem = {
+      captureId,
+      sourceType: "browser-dom",
+      trustLevel: "untrusted",
+      instructionAuthority: "none",
+      captureType: "page-selection",
+      title: sanitizeText(title),
+      url: sanitizeText(url),
+      origin: sanitizeText(expectedOrigin),
+      selectedText: sanitizeText(selectedText || ''),
+      capturedAt: new Date().toISOString()
+    };
 
-  // Limit memory database to 50 items max
-  if (observations.length >= 50) {
-    observations.shift();
+    if (observations.length >= 50) observations.shift();
+    observations.push(newObs);
+
+    logAudit('browser.observe', {
+      actor: `extension:${session.runtimeId}`,
+      installationId: session.installationId,
+      capability: envelope.capability,
+      targetUrl: newObs.url,
+      captureId,
+      policyDecision: 'allowed',
+      status: 'success',
+      details: `Observed context: "${newObs.title}"`
+    });
+  } else {
+    // Phase 2 Extraction
+    const extractionPayload = envelope.payload as ExtractionResult;
+    extractionPayload.parentCaptureId = captureId;
+    
+    if (extractions.length >= 50) extractions.shift();
+    extractions.push(extractionPayload);
+
+    logAudit('browser.extract', {
+      actor: `extension:${session.runtimeId}`,
+      installationId: session.installationId,
+      capability: envelope.capability,
+      targetUrl: extractionPayload.source.url,
+      extractionId: extractionPayload.extractionId,
+      policyDecision: 'allowed',
+      status: 'success',
+      details: `Extracted ${envelope.capability} from "${extractionPayload.source.title}"`
+    });
   }
-  observations.push(newObs);
-
-  logAudit('browser.observe', {
-    actor: `extension:${session.runtimeId}`,
-    installationId: session.installationId,
-    capability: envelope.capability,
-    targetUrl: newObs.url,
-    captureId,
-    policyDecision: 'allowed',
-    status: 'success',
-    details: `Observed context: "${newObs.title}"`
-  });
 
   // Return normalized response envelope
   res.json({
@@ -328,11 +377,12 @@ browserRouter.get('/observations', (req: Request, res: Response, next: NextFunct
   // Cursor-based filtering
   const after = req.query.after as string;
   if (after) {
-    const filtered = observations.filter(o => o.capturedAt > after);
-    return res.json(filtered);
+    const filteredObs = observations.filter(o => o.capturedAt > after);
+    const filteredExt = extractions.filter(e => e.source.capturedAt > after);
+    return res.json({ observations: filteredObs, extractions: filteredExt });
   }
 
-  res.json(observations);
+  res.json({ observations, extractions });
 });
 
 // GET /api/browser/observations/:captureId -> Single observation lookup
@@ -345,9 +395,11 @@ browserRouter.get('/observations/:captureId', (req: Request, res: Response) => {
   }
 
   const item = observations.find(o => o.captureId === req.params.captureId);
-  if (!item) {
+  const ext = extractions.find(e => e.parentCaptureId === req.params.captureId || e.extractionId === req.params.captureId);
+  
+  if (!item && !ext) {
     return res.status(404).json({ error: 'Observation context not found' });
   }
 
-  res.json(item);
+  res.json(item || ext);
 });

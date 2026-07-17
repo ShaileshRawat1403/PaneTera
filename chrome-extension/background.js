@@ -99,7 +99,8 @@ async function handleMessage(message, sendResponse) {
           activeTab = allTabs.slice().reverse().find(t => t.url && !t.url.startsWith('chrome-extension://') && !t.url.startsWith('chrome://'));
         }
 
-        const result = await performCapture({ tab: activeTab, trigger: 'popup' });
+        const capability = message.capability || 'browser.page.observe';
+        const result = await performCapture({ tab: activeTab, trigger: 'popup', capability });
         sendResponse(result);
         break;
       }
@@ -140,7 +141,7 @@ chrome.commands.onCommand.addListener(async (command) => {
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     let activeTab = tabs[0];
     if (activeTab) {
-      await performCapture({ tab: activeTab, trigger: 'shortcut' });
+      await performCapture({ tab: activeTab, trigger: 'shortcut', capability: 'browser.page.observe' });
     }
   }
 });
@@ -149,7 +150,7 @@ chrome.commands.onCommand.addListener(async (command) => {
 // SHARED CAPTURE LOGIC
 // -----------------------------------------------------------------------------
 
-async function performCapture({ tab, trigger, selectionText }) {
+async function performCapture({ tab, trigger, selectionText, capability = 'browser.page.observe' }) {
   try {
     if (!tab) {
       throw new Error('No active tab found');
@@ -159,29 +160,42 @@ async function performCapture({ tab, trigger, selectionText }) {
       throw new Error('This Chrome page cannot be captured. Open a normal HTTP or HTTPS page.');
     }
 
-    let captureData = { title: tab.title, url: tab.url, origin: new URL(tab.url).origin, selectedText: selectionText };
+    let captureData = null;
 
-    // For shortcut or popup (where selectionText is undefined), we need to inject script to get selection
-    if (trigger === 'shortcut' || trigger === 'popup') {
-      try {
-        const results = await chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          files: ['capture.js']
-        });
-        if (results && results.length > 0) {
-          captureData = results[0].result; // capture.js returns { url, title, origin, selectedText }
-        } else {
-          throw new Error('Failed to extract DOM elements');
-        }
-      } catch (e) {
-        throw new Error('Script injection blocked. Please grant site permissions.');
+    // We need to inject the bundle to get extraction capabilities
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ['dist/capture.bundle.js']
+      });
+      
+      const results = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: (cap) => {
+          if (window.TesseraExtractors && window.TesseraExtractors[cap]) {
+            return window.TesseraExtractors[cap]();
+          }
+          throw new Error(`Capability ${cap} not found in extractors bundle`);
+        },
+        args: [capability]
+      });
+      
+      if (results && results.length > 0 && results[0].result) {
+        captureData = results[0].result;
+      } else {
+        throw new Error('Failed to extract DOM elements or structured evidence');
       }
+    } catch (e) {
+      throw new Error('Script injection or extraction blocked. Please grant site permissions.');
     }
 
     // Always revalidate the current tab origin immediately before dispatch
     const freshTab = await chrome.tabs.get(tab.id);
     const actualUrl = freshTab.url || '';
-    const expectedOrigin = captureData.origin;
+    
+    // For Phase 1 fallback, captureData was { origin: ... }. For Phase 2 contracts, origin is at captureData.source.origin
+    const expectedOrigin = captureData.source ? captureData.source.origin : captureData.origin;
+    
     if (!validateOrigin(expectedOrigin, actualUrl)) {
       throw new Error('Origin verification mismatch: Target navigated');
     }
@@ -189,28 +203,52 @@ async function performCapture({ tab, trigger, selectionText }) {
     const transactionId = 'tx-' + Math.random().toString(36).substring(2) + '-' + Date.now();
     const idempotencyKey = 'idem-' + Math.random().toString(36).substring(2) + '-' + Date.now();
     
-    const payload = {
-      protocolVersion: "1.0",
-      capabilityVersion: "1.0",
-      transactionId,
-      idempotencyKey,
-      issuedAt: new Date().toISOString(),
-      expiresAt: new Date(Date.now() + 30000).toISOString(),
-      capability: captureData.selectedText ? "browser.selection.observe" : "browser.page.observe",
-      riskLevel: "inspect",
-      target: {
-        tabId: tab.id,
-        frameId: 0,
-        expectedOrigin
-      },
-      approval: { required: false, status: "not-required", grantId: null },
-      constraints: { maxElements: 1, maxOutputBytes: 10000, timeoutMs: 5000 },
-      payload: {
-        title: captureData.title,
-        url: captureData.url,
-        selectedText: captureData.selectedText
+    let payload;
+    
+    // Check if this is a Phase 2 ExtractionResult contract or Phase 1 observation payload
+    if (capability !== 'browser.page.observe' && capability !== 'browser.selection.observe') {
+      // Phase 2 Payload
+      payload = {
+        protocolVersion: "1.0",
+        capabilityVersion: "1.0",
+        transactionId,
+        idempotencyKey,
+        issuedAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 30000).toISOString(),
+        capability: capability,
+        riskLevel: "inspect",
+        target: { tabId: tab.id, frameId: 0, expectedOrigin },
+        approval: { required: false, status: "not-required", grantId: null },
+        constraints: { maxElements: 5000, maxOutputBytes: 2000000, timeoutMs: 5000 },
+        payload: captureData // captureData is the ExtractionResult contract
+      };
+    } else {
+      // Phase 1 Payload
+      // Add selectionText if it came from context menu
+      if (selectionText) {
+        captureData.selectedText = selectionText;
+        capability = 'browser.selection.observe';
       }
-    };
+      
+      payload = {
+        protocolVersion: "1.0",
+        capabilityVersion: "1.0",
+        transactionId,
+        idempotencyKey,
+        issuedAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 30000).toISOString(),
+        capability: capability,
+        riskLevel: "inspect",
+        target: { tabId: tab.id, frameId: 0, expectedOrigin },
+        approval: { required: false, status: "not-required", grantId: null },
+        constraints: { maxElements: 1, maxOutputBytes: 10000, timeoutMs: 5000 },
+        payload: {
+          title: captureData.title,
+          url: captureData.url,
+          selectedText: captureData.selectedText
+        }
+      };
+    }
 
     const resp = await request('/api/browser/observations', {
       method: 'POST',

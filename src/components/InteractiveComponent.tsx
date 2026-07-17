@@ -14,6 +14,7 @@ import InfoIcon from '@mui/icons-material/Info';
 import LaptopMacIcon from '@mui/icons-material/LaptopMac';
 import { NativeWorkbenchRenderer } from './nativeWorkbench/NativeWorkbenchRenderer';
 import { BrowserObservationView } from './nativeWorkbench/BrowserObservationView';
+import { BrowserExtractionView } from './nativeWorkbench/BrowserExtractionView';
 import { WorkspacesCatalog } from './nativeWorkbench/WorkspacesCatalog';
 interface ComponentProps {
   uiComponent: UiComponent;
@@ -934,6 +935,10 @@ export const InteractiveComponent: React.FC<ComponentProps> = ({ uiComponent, on
   }
   if (type === 'BrowserObservation') {
     return <BrowserObservationView data={data} variant={variant === 'feed' ? 'feed' : 'main'} />;
+  }
+
+  if (type === 'BrowserExtraction') {
+    return <BrowserExtractionView data={data} variant={variant === 'feed' ? 'feed' : 'main'} />;
   }
 
   return null;
