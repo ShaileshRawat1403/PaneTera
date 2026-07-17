@@ -8,15 +8,29 @@ export interface BrowserSession {
   accessToken: string;
   refreshToken: string;
   runtimeId: string;
-  installationId: string;
+  installationId: string; // Used as subjectId/ownerId for the session
   pairedAt: Date;
+}
+
+export interface EvidenceOwnership {
+  ownerId: string;
+  createdBy: {
+    type: "browser-extension" | "workbench" | "import";
+    actorId: string;
+  };
+  sourceSessionId?: string;
+}
+
+export interface BrowserTrust {
+  sourceType: "browser-dom";
+  trustLevel: "untrusted";
+  instructionAuthority: "none";
 }
 
 export interface ObservationItem {
   captureId: string;
-  sourceType: "browser-dom";
-  trustLevel: "untrusted";
-  instructionAuthority: "none";
+  ownership: EvidenceOwnership;
+  trust: BrowserTrust;
   captureType: "page-selection";
   title: string;
   url: string;
@@ -25,30 +39,40 @@ export interface ObservationItem {
   capturedAt: string;
 }
 
+export interface EvidenceItem {
+  evidenceId: string;
+  extractionId: string;
+  ownership: EvidenceOwnership;
+  trust: BrowserTrust;
+  kind: string;
+  locator?: any;
+  content: string;
+  contentBytes: number;
+}
+
 export interface ExtractionResult {
   extractionId: string;
   parentCaptureId: string;
   capability: string;
+  ownership: EvidenceOwnership;
+  trust: BrowserTrust;
   source: {
     title: string;
     url: string;
     origin: string;
     capturedAt: string;
   };
-  trust: {
-    sourceType: "browser-dom";
-    trustLevel: "untrusted";
-    instructionAuthority: "none";
-  };
   data: any;
   evidence: {
-    items: any[];
+    items: EvidenceItem[];
     elementsMatched: number;
     contentBytes: number;
   };
   warnings: string[];
   truncated: boolean;
 }
+
+import { browserEvidenceStore } from './browserEvidenceStore';
 
 // In-Memory Database for Alpha Session
 let activePairingCode: string | null = null;
@@ -57,8 +81,6 @@ let failedAttempts = 0;
 
 const sessions = new Map<string, BrowserSession>();
 const refreshTokens = new Map<string, BrowserSession>(); // Maps refreshToken string to session
-export const observations: ObservationItem[] = [];
-export const extractions: ExtractionResult[] = [];
 const processedIdempotencyKeys = new Set<string>();
 
 // Helper to sanitize input strings
@@ -276,15 +298,24 @@ browserRouter.post('/observations', requireExtensionToken, (req: Request, res: R
   }
 
   const session = (req as any).browserSession as BrowserSession;
+  
+  const ownership: EvidenceOwnership = {
+    ownerId: session.installationId, // Bound strictly to the authenticated user/workspace
+    createdBy: {
+      type: "browser-extension",
+      actorId: session.runtimeId
+    },
+    sourceSessionId: session.accessToken // Optional trace to the session
+  };
+  
+  const trust: BrowserTrust = {
+    sourceType: "browser-dom",
+    trustLevel: "untrusted",
+    instructionAuthority: "none"
+  };
 
   // Retention duration constraint: remove observations older than 1 hour
-  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-  while (observations.length > 0 && observations[0].capturedAt < oneHourAgo) {
-    observations.shift();
-  }
-  while (extractions.length > 0 && extractions[0].source.capturedAt < oneHourAgo) {
-    extractions.shift();
-  }
+  browserEvidenceStore.applyRetentionPolicy();
 
   const captureId = 'capture-' + Math.random().toString(36).substring(2) + '-' + Date.now();
   
@@ -292,9 +323,8 @@ browserRouter.post('/observations', requireExtensionToken, (req: Request, res: R
     // Phase 1 Observation
     const newObs: ObservationItem = {
       captureId,
-      sourceType: "browser-dom",
-      trustLevel: "untrusted",
-      instructionAuthority: "none",
+      ownership,
+      trust,
       captureType: "page-selection",
       title: sanitizeText(title),
       url: sanitizeText(url),
@@ -303,8 +333,7 @@ browserRouter.post('/observations', requireExtensionToken, (req: Request, res: R
       capturedAt: new Date().toISOString()
     };
 
-    if (observations.length >= 50) observations.shift();
-    observations.push(newObs);
+    browserEvidenceStore.storeObservation(newObs);
 
     logAudit('browser.observe', {
       actor: `extension:${session.runtimeId}`,
@@ -319,10 +348,21 @@ browserRouter.post('/observations', requireExtensionToken, (req: Request, res: R
   } else {
     // Phase 2 Extraction
     const extractionPayload = envelope.payload as ExtractionResult;
-    extractionPayload.parentCaptureId = captureId;
     
-    if (extractions.length >= 50) extractions.shift();
-    extractions.push(extractionPayload);
+    // Explicitly enforce backend ownership and trust to ignore extension payload values
+    extractionPayload.parentCaptureId = captureId;
+    extractionPayload.ownership = ownership;
+    extractionPayload.trust = trust;
+    
+    if (extractionPayload.evidence && Array.isArray(extractionPayload.evidence.items)) {
+      extractionPayload.evidence.items.forEach((item: any) => {
+        item.extractionId = extractionPayload.extractionId;
+        item.ownership = ownership;
+        item.trust = trust;
+      });
+    }
+    
+    browserEvidenceStore.storeExtraction(extractionPayload);
 
     logAudit('browser.extract', {
       actor: `extension:${session.runtimeId}`,
@@ -376,13 +416,9 @@ browserRouter.get('/observations', (req: Request, res: Response, next: NextFunct
 
   // Cursor-based filtering
   const after = req.query.after as string;
-  if (after) {
-    const filteredObs = observations.filter(o => o.capturedAt > after);
-    const filteredExt = extractions.filter(e => e.source.capturedAt > after);
-    return res.json({ observations: filteredObs, extractions: filteredExt });
-  }
-
-  res.json({ observations, extractions });
+  const filteredObs = browserEvidenceStore.getObservations(after);
+  const filteredExt = browserEvidenceStore.getExtractions(after);
+  return res.json({ observations: filteredObs, extractions: filteredExt });
 });
 
 // GET /api/browser/observations/:captureId -> Single observation lookup
@@ -394,8 +430,8 @@ browserRouter.get('/observations/:captureId', (req: Request, res: Response) => {
     return res.status(401).json({ error: 'Unauthorized lookup session' });
   }
 
-  const item = observations.find(o => o.captureId === req.params.captureId);
-  const ext = extractions.find(e => e.parentCaptureId === req.params.captureId || e.extractionId === req.params.captureId);
+  const item = browserEvidenceStore.getObservationByCaptureId(req.params.captureId);
+  const ext = browserEvidenceStore.getExtractionById(req.params.captureId);
   
   if (!item && !ext) {
     return res.status(404).json({ error: 'Observation context not found' });

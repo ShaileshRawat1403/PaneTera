@@ -16,6 +16,7 @@ import * as fs from 'fs';
 import { FEATURES } from './features';
 import { handleOrchestratorQuery } from './orchestrator';
 import { browserRouter } from './browserGateway';
+import { mcpRouter } from './mcp/browserMcpRoute';
 
 dotenv.config();
 
@@ -47,6 +48,9 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 
 // Mount browser gateway router BEFORE global master token check middleware
 app.use('/api/browser', browserRouter);
+
+// Mount MCP Façade V0 router
+app.use('/mcp/browser', mcpRouter);
 
 // Token authentication middleware (supports Authorization header and query parameter token for EventSource)
 app.use((req: Request, res: Response, next: NextFunction) => {
