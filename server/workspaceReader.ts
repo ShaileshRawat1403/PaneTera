@@ -17,12 +17,21 @@ export async function listWorkspaces(): Promise<Array<{name:string; path:string}
     }
     // Ensure each workspace is inside the allowed ROOT
     const workspaces = doc.workspaces.map((ws:any) => {
-      if (!ws.name || !ws.path) throw new Error('Workspace entry missing name or path');
-      const absPath = path.resolve(ws.path);
+      if (!ws.name) throw new Error('Workspace entry missing name');
+      
+      let absPath: string;
+      if (ws.folder) {
+        absPath = path.resolve(ROOT, ws.folder);
+      } else if (ws.path) {
+        absPath = path.resolve(ws.path);
+      } else {
+        throw new Error(`Workspace ${ws.name} missing 'folder' or 'path' property`);
+      }
+
       // Boundary check must be segment-aware: plain startsWith(ROOT) would
       // accept sibling dirs like `${ROOT}-evil`.
       if (absPath !== ROOT && !absPath.startsWith(ROOT + path.sep)) {
-        throw new Error(`Workspace ${ws.name} is outside allowed root`);
+        throw new Error(`Workspace ${ws.name} at path ${absPath} is outside allowed WORKSPACE_ROOT (${ROOT})`);
       }
       return { name: ws.name, path: absPath };
     });
