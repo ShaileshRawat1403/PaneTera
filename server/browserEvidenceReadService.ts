@@ -1,5 +1,5 @@
 import { browserEvidenceStore } from './browserEvidenceStore';
-import { ObservationItem, ExtractionResult, EvidenceItem } from './browserGateway';
+import { ObservationItem, ExtractionResult, EvidenceItem } from './evidence/evidenceTypes';
 import { McpClientPrincipal } from './mcp/browserMcpAuth';
 
 export class UnauthorizedAccessError extends Error {

@@ -9,7 +9,7 @@
     "lint": "tsc --noEmit --project tsconfig.json",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "tsx test/validateCommand.test.ts && tsx test/proposalFlow.test.ts && tsx test/repoSetupProposal.test.ts && tsx test/liveAppWorkbench.test.ts && tsx test/workflowIntent.test.ts && tsx test/browserObservation.test.ts && tsx test/missionControlV1.test.ts && tsx test/staticStructureScan.test.ts && tsx test/orchestrator.test.ts && tsx test/workbenchModeToggle.test.ts && tsx test/browserGateway.test.ts"
+    "test": "tsx test/validateCommand.test.ts && tsx test/proposalFlow.test.ts && tsx test/repoSetupProposal.test.ts && tsx test/liveAppWorkbench.test.ts && tsx test/workflowIntent.test.ts && tsx test/browserObservation.test.ts && tsx test/missionControlV1.test.ts && tsx test/staticStructureScan.test.ts && tsx test/orchestrator.test.ts && tsx test/workbenchModeToggle.test.ts && tsx test/browserGateway.test.ts && tsx test/evidenceGraphResolver.test.ts && tsx test/researchPersistence.test.ts && tsx test/researchSession.test.ts && tsx test/provenanceValidation.test.ts && tsx test/evidenceCanonicalizer.test.ts"
   },
   "dependencies": {
     "@emotion/react": "^11.11.4",
@@ -23,13 +23,15 @@
     "express": "^4.19.2",
     "js-yaml": "^4.1.0",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "uuid": "^14.0.1"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.14.9",
     "@types/react-dom": "^18.3.7",
+    "@types/uuid": "^10.0.0",
     "@vitejs/plugin-react": "^4.2.1",
     "concurrently": "^8.2.2",
     "eslint": "^8.57.0",

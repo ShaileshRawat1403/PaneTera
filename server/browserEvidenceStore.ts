@@ -1,16 +1,44 @@
-import { ObservationItem, ExtractionResult } from './browserGateway';
+import { ObservationItem, ExtractionResult } from './evidence/evidenceTypes';
+import { evidenceRetentionService } from './evidence/evidenceRetentionService';
 
 export class BrowserEvidenceStore {
   private observations: ObservationItem[] = [];
   private extractions: ExtractionResult[] = [];
 
+  private enforceCapacityLimit<T extends { captureId?: string; parentCaptureId?: string; extractionId?: string }>(
+    items: T[], 
+    limit: number, 
+    idExtractor: (item: T) => { captureId?: string; extractionId?: string }
+  ): void {
+    while (items.length >= limit) {
+      // Find oldest unleased record to evict
+      let indexToEvict = -1;
+      for (let i = 0; i < items.length; i++) {
+        const ids = idExtractor(items[i]);
+        const isCaptureLeased = ids.captureId ? evidenceRetentionService.isLeased('captureId', ids.captureId) : false;
+        const isExtractionLeased = ids.extractionId ? evidenceRetentionService.isLeased('extractionId', ids.extractionId) : false;
+        
+        if (!isCaptureLeased && !isExtractionLeased) {
+          indexToEvict = i;
+          break; // First one is the oldest because array is push-ordered
+        }
+      }
+
+      if (indexToEvict !== -1) {
+        items.splice(indexToEvict, 1);
+      } else {
+        throw new Error('Capacity failure: all records are actively leased');
+      }
+    }
+  }
+
   public storeObservation(obs: ObservationItem): void {
-    if (this.observations.length >= 50) this.observations.shift();
+    this.enforceCapacityLimit(this.observations, 50, o => ({ captureId: o.captureId }));
     this.observations.push(obs);
   }
 
   public storeExtraction(ext: ExtractionResult): void {
-    if (this.extractions.length >= 50) this.extractions.shift();
+    this.enforceCapacityLimit(this.extractions, 50, e => ({ extractionId: e.extractionId, captureId: e.parentCaptureId }));
     this.extractions.push(ext);
   }
 
@@ -25,11 +53,27 @@ export class BrowserEvidenceStore {
 
   public applyRetentionPolicy(): void {
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-    while (this.observations.length > 0 && this.observations[0].capturedAt < oneHourAgo) {
-      this.observations.shift();
+    
+    // Evict observations
+    for (let i = 0; i < this.observations.length; ) {
+      const obs = this.observations[i];
+      if (obs.capturedAt < oneHourAgo && !evidenceRetentionService.isLeased('captureId', obs.captureId)) {
+        this.observations.splice(i, 1);
+      } else {
+        i++;
+      }
     }
-    while (this.extractions.length > 0 && this.extractions[0].source.capturedAt < oneHourAgo) {
-      this.extractions.shift();
+
+    // Evict extractions
+    for (let i = 0; i < this.extractions.length; ) {
+      const ext = this.extractions[i];
+      if (ext.source.capturedAt < oneHourAgo && 
+          !evidenceRetentionService.isLeased('extractionId', ext.extractionId) &&
+          !evidenceRetentionService.isLeased('captureId', ext.parentCaptureId)) {
+        this.extractions.splice(i, 1);
+      } else {
+        i++;
+      }
     }
   }
 
