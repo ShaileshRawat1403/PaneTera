@@ -1,0 +1,12 @@
+{
+  "apps": [
+    {
+      "appId": "soothsayer-local",
+      "name": "The Soothsayer",
+      "url": "http://127.0.0.1:4173",
+      "description": "Governed AI workflow runtime",
+      "enabled": true,
+      "sandboxProfile": "authenticated-local"
+    }
+  ]
+}

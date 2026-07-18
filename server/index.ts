@@ -17,6 +17,7 @@ import { FEATURES } from './features';
 import { handleOrchestratorQuery } from './orchestrator';
 import { browserRouter } from './browserGateway';
 import { mcpRouter } from './mcp/browserMcpRoute';
+import { workbenchRouter } from './workbench/workbenchRoutes';
 
 dotenv.config();
 
@@ -52,6 +53,8 @@ app.use('/api/browser', browserRouter);
 // Mount MCP Façade V0 router
 app.use('/mcp/browser', mcpRouter);
 
+// Mount Workbench APIs
+app.use('/api/workbench', workbenchRouter);
 // Token authentication middleware (supports Authorization header and query parameter token for EventSource)
 app.use((req: Request, res: Response, next: NextFunction) => {
   const authHeader = req.headers.authorization?.split(' ')[1] || (req.query.token as string);

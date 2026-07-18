@@ -3,8 +3,9 @@ import { Box, Button, Stack, Typography, Tooltip } from '@mui/material';
 import ForumIcon from '@mui/icons-material/Forum';
 import SplitScreenIcon from '@mui/icons-material/VerticalSplit';
 import VisibilityIcon from '@mui/icons-material/Visibility';
+import CodeIcon from '@mui/icons-material/Code';
 
-export type WorkbenchMode = 'conversation' | 'native-focus' | 'split';
+export type WorkbenchMode = 'conversation' | 'native-focus' | 'split' | 'local-app';
 
 interface WorkbenchModeToggleProps {
   mode: WorkbenchMode;
@@ -117,6 +118,32 @@ export const WorkbenchModeToggle: React.FC<WorkbenchModeToggleProps> = ({
             </Button>
           </span>
         </Tooltip>
+
+        <Tooltip title="Local App Workbench" arrow>
+          <span>
+            <Button
+              size="small"
+              variant={mode === 'local-app' ? 'contained' : 'outlined'}
+              onClick={() => onModeChange('local-app')}
+              startIcon={<CodeIcon sx={{ fontSize: 14 }} />}
+              sx={{
+                fontSize: '0.65rem',
+                py: 0.25,
+                px: 1.5,
+                borderRadius: '6px',
+                background: mode === 'local-app' ? '#7f5af0' : 'transparent',
+                borderColor: 'rgba(255,255,255,0.08)',
+                color: mode === 'local-app' ? '#fff' : '#cbd5e1',
+                '&:hover': {
+                  background: mode === 'local-app' ? '#6d47dd' : 'rgba(255,255,255,0.02)'
+                }
+              }}
+            >
+              Local App
+            </Button>
+          </span>
+        </Tooltip>
+
       </Stack>
     </Box>
   );

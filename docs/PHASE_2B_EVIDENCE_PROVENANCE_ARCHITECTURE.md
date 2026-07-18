@@ -23,6 +23,9 @@ The authoritative evidence graph conceptually links source and derived analysis:
 *   `ResearchSession` → `ResearchSessionSnapshot` → selected `EvidenceItem`s and `WorkspaceEvidenceRef`s
 *   `ResearchAnalysis` → `AnalysisClaim` → `ProvenanceRef` → `ResearchSessionSnapshot` entry
 
+### EvidenceItem Capacity Limits
+`EvidenceItem`s are not stored in a separate top-level bounded collection. Instead, they are a nested array physically bounded under their parent `ExtractionResult`. Capacity limits apply to `Capture` and `ExtractionResult` directly. When an extraction is evicted, all its nested `EvidenceItem`s are evicted with it.
+
 ## EvidenceGraphResolver
 An `EvidenceGraphResolver` service must be implemented to act as the single source of truth for graph resolution.
 It will be responsible for:
@@ -317,3 +320,10 @@ Audit schema omits all sensitive contents (no excerpts, absolute paths, or token
 *   No LLM generation, no UI, no workspace integration yet.
 
 *Why:* Validates the foundational deterministic resolution and retention mechanics before introducing non-deterministic provider models or front-end dependencies.
+
+# 18. PHASE 2B.1 ACCEPTED FREEZE
+
+Phase 2B.1 has been strictly accepted and frozen.
+*   **Commit Hash**: 2f7cf8e
+*   **Tag**: v0.6.0-alpha-phase-2b.1-evidence-graph (Pushed)
+*   **Status**: PHASE 2B.1 ACCEPTED

@@ -39,6 +39,14 @@ import { StaticStructureCard } from './components/workbench/StaticStructureCard'
 import { DependencyMapCard } from './components/workbench/DependencyMapCard';
 import DeviceHubIcon from '@mui/icons-material/DeviceHub';
 
+import { useWorkbenchPreferences } from './hooks/useWorkbenchPreferences';
+import { WorkbenchLayout } from './components/workbench/WorkbenchLayout';
+import { WorkbenchEmptyState } from './components/workbench/WorkbenchEmptyState';
+import { WorkbenchFailureState } from './components/workbench/WorkbenchFailureState';
+import { LiveWorkbenchSurface } from './components/workbench/LiveWorkbenchSurface';
+import { LiveWorkbenchToolbar } from './components/workbench/LiveWorkbenchToolbar';
+
+
 // Codex developer-cockpit styling presets
 const codexTheme = createTheme({
   typography: {
@@ -91,6 +99,7 @@ interface Message {
 }
 
 const App: React.FC = () => {
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [token, setToken] = useState<string>('');
   const [showTokenPrompt, setShowTokenPrompt] = useState<boolean>(false);
@@ -137,6 +146,50 @@ const App: React.FC = () => {
     const stored = localStorage.getItem('portal-workbench-mode');
     return (stored as WorkbenchMode) || 'native-focus';
   });
+
+  const { prefs, setAppId, setLeftPanelWidth } = useWorkbenchPreferences();
+  const [localAppStatus, setLocalAppStatus] = React.useState<string>('checking');
+  const [localAppDef, setLocalAppDef] = React.useState<any>(null);
+
+  React.useEffect(() => {
+    if (prefs.activeAppId && workbenchMode === 'local-app') {
+      setLocalAppStatus('checking');
+      fetch(`/api/workbench/apps/${prefs.activeAppId}/status`)
+        .then(res => res.json())
+        .then(data => {
+          setLocalAppStatus(data.status);
+          // Also fetch app definition from apps list
+          return fetch('/api/workbench/apps');
+        })
+        .then(res => res ? res.json() : null)
+        .then(data => {
+          if (data && data.apps) {
+            const def = data.apps.find((a: any) => a.appId === prefs.activeAppId);
+            setLocalAppDef(def || null);
+          }
+        })
+        .catch(err => {
+          console.error(err);
+          setLocalAppStatus('unavailable');
+        });
+    }
+  }, [prefs.activeAppId, workbenchMode]);
+
+  const handleSelectLocalApp = (appId: string) => {
+    setAppId(appId);
+  };
+  
+  const handleClearLocalApp = () => {
+    setAppId(null);
+    setLocalAppDef(null);
+  };
+
+  const handleReloadLocalApp = () => {
+    // simple toggle to re-trigger effect
+    setLocalAppStatus('checking');
+    setTimeout(() => setAppId(prefs.activeAppId), 10);
+  };
+
 
   const [activeWorkspace, setActiveWorkspace] = useState<Workspace | null>(null);
   const [isAuditLogsOpen, setIsAuditLogsOpen] = useState(false);
@@ -1318,8 +1371,8 @@ const App: React.FC = () => {
     );
   };
 
-  return (
-    <ThemeProvider theme={codexTheme}>
+  const mainWorkbenchContent = (
+    <>
       <CssBaseline />
 
       {/* Cmd+K spotlight search overlay */}
@@ -2311,6 +2364,34 @@ const App: React.FC = () => {
           {snackbarMessage}
         </Alert>
       </Snackbar>
+    </>
+  );
+
+  return (
+    <ThemeProvider theme={codexTheme}>
+      {workbenchMode === 'local-app' ? (
+        <WorkbenchLayout
+          leftPanelWidth={prefs.leftPanelWidth}
+          onWidthChange={setLeftPanelWidth}
+          renderLeft={mainWorkbenchContent}
+          renderRight={
+            !prefs.activeAppId ? (
+              <WorkbenchEmptyState onSelectApp={handleSelectLocalApp} />
+            ) : localAppStatus !== 'reachable' ? (
+              <WorkbenchFailureState status={localAppStatus} onRetry={handleReloadLocalApp} onClear={handleClearLocalApp} />
+            ) : (
+              <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                <LiveWorkbenchToolbar app={localAppDef} status={localAppStatus} onReload={handleReloadLocalApp} onClose={handleClearLocalApp} />
+                <Box sx={{ flexGrow: 1, overflow: 'hidden' }}>
+                  {localAppDef && <LiveWorkbenchSurface app={localAppDef} status={localAppStatus} />}
+                </Box>
+              </Box>
+            )
+          }
+        />
+      ) : (
+        mainWorkbenchContent
+      )}
     </ThemeProvider>
   );
 };
