@@ -23,6 +23,7 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import ViewSidebarIcon from '@mui/icons-material/ViewSidebar';
 import CodeIcon from '@mui/icons-material/Code';
 import ForumIcon from '@mui/icons-material/Forum';
+import AddIcon from '@mui/icons-material/Add';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
 import { WorkbenchShell } from './components/workbench/WorkbenchShell';
 import { WorkbenchModeToggle, WorkbenchMode } from './components/workbench/WorkbenchModeToggle';
@@ -742,6 +743,36 @@ const App: React.FC = () => {
   const addMessage = (msg: Message) => {
     setMessages(prev => [...prev, msg]);
   };
+
+  const handleAddWorkspace = async () => {
+    try {
+      const dirHandle = await (window as any).showDirectoryPicker();
+      const folderName = dirHandle.name;
+      const response = await fetch('/api/workspaces/add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: folderName, folder: folderName }),
+      });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Failed to add workspace');
+      }
+      
+      fetch('/api/workspaces')
+        .then(res => res.json())
+        .then(data => {
+          if (Array.isArray(data)) setWorkspacesList(data);
+        });
+      
+      setSnackbarMessage(`Added workspace: ${folderName}`);
+      setSnackbarOpen(true);
+    } catch (err: any) {
+      if (err.name === 'AbortError') return;
+      setSnackbarMessage(`Error: ${err.message}`);
+      setSnackbarOpen(true);
+    }
+  };
+
 
   const handleSend = async (text: string) => {
     addMessage({ role: 'user', content: text });
@@ -1762,11 +1793,18 @@ const App: React.FC = () => {
                     <Divider sx={{ width: '60%', borderColor: 'rgba(255,255,255,0.06)' }} />
 
                     {/* 3. Workspaces shortcut */}
-                    <Tooltip title={`Workspaces (${workspacesList.length} registered)`} placement="right">
-                      <IconButton onClick={() => handleSend('List workspaces')} size="small" sx={{ color: '#7f5af0', p: 0.5 }}>
-                        <FolderIcon sx={{ fontSize: 18 }} />
-                      </IconButton>
-                    </Tooltip>
+                    <Stack direction="row" spacing={0.5} alignItems="center">
+                      <Tooltip title={`Workspaces (${workspacesList.length} registered)`} placement="right">
+                        <IconButton onClick={() => handleSend('List workspaces')} size="small" sx={{ color: '#7f5af0', p: 0.5 }}>
+                          <FolderIcon sx={{ fontSize: 18 }} />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Add Local Project Folder" placement="right">
+                        <IconButton onClick={handleAddWorkspace} size="small" sx={{ color: '#7f5af0', p: 0.5 }}>
+                          <AddIcon sx={{ fontSize: 18 }} />
+                        </IconButton>
+                      </Tooltip>
+                    </Stack>
 
                     {/* 4. Live Deployed Apps */}
                     <Tooltip title={`Soothsayer Live: ${soothsayerStatus.toUpperCase()}`} placement="right">

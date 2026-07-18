@@ -7,6 +7,14 @@
       "type": "repo",
       "enabled": true,
       "status": "online"
+    },
+    {
+      "id": "pruningmypothos",
+      "name": "pruningmypothos",
+      "path": "/Users/Shailesh/MYAIAGENTS/pruningmypothos",
+      "type": "repo",
+      "enabled": true,
+      "status": "online"
     }
   ]
 }

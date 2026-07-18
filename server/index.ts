@@ -5,7 +5,7 @@ import chokidar from 'chokidar';
 import path from 'path';
 import { exec, spawn, spawn as spawnProc, ChildProcess as CP } from 'child_process';
 import readline from 'readline';
-import { readFileSafe, listWorkspaces, listFilesInWorkspace, searchFilesInWorkspace } from './workspaceReader';
+import { readFileSafe, listWorkspaces, listFilesInWorkspace, searchFilesInWorkspace, addWorkspaceToPortalYaml } from './workspaceReader';
 import { executeCommand, type ExecutionMode, validateCommand, buildProposedActionData, parseLocalCommandProposal, selectedExecutionMode } from './execution';
 import { buildRepoSetupProposal } from './repoSetup';
 import { parseLiveAppIntent, buildLiveAppWorkbench } from './liveApp';
@@ -310,6 +310,48 @@ app.get('/api/workspaces', async (req, res) => {
   try {
     const workspaces = await listWorkspaces();
     res.json(workspaces);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Add a new workspace to portal.yaml and register it in the catalog
+app.post('/api/workspaces/add', async (req, res) => {
+  try {
+    const { name, folder } = req.body;
+    if (!name || !folder) {
+      return res.status(400).json({ error: 'Missing name or folder in request body' });
+    }
+    try {
+      await addWorkspaceToPortalYaml(name, folder);
+    } catch (e: any) {
+      if (!e.message.includes('already exists')) {
+        throw e;
+      }
+    }
+
+    // After adding to portal.yaml, also register it in myai-workspaces.json
+    const catalogPath = path.resolve(__dirname, 'myai-workspaces.json');
+    const catalog = JSON.parse(fs.readFileSync(catalogPath, 'utf8'));
+    
+    // We get the absolute path for myai-workspaces.json since it expects it
+    const workspacesList = await listWorkspaces();
+    const newlyAdded = workspacesList.find(w => w.name === name);
+    
+    if (newlyAdded && !catalog.workspaces.find((w: any) => w.id === name)) {
+      catalog.workspaces.push({
+        id: name,
+        name: name,
+        path: newlyAdded.path,
+        type: 'repo',
+        enabled: true,
+        status: 'online'
+      });
+      fs.writeFileSync(catalogPath, JSON.stringify(catalog, null, 2), 'utf8');
+      logAudit('workspace enabled', { workspaceId: name, details: 'Manually added via folder picker' });
+    }
+
+    res.json({ success: true, message: `Workspace ${name} added successfully.` });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

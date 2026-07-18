@@ -15,6 +15,8 @@ import {
 import crypto from "crypto";
 
 export class AnalysisValidationService {
+  private idempotencyMap = new Map<string, Promise<ResearchAnalysis>>();
+
   constructor(
     private provenanceService: ProvenanceValidationService,
     private provider: CandidateAnalysisProvider
@@ -26,25 +28,41 @@ export class AnalysisValidationService {
     snapshot: ResearchSessionSnapshot,
     transactionId: string
   ): Promise<ResearchAnalysis> {
-    const analysisId = crypto.randomUUID();
+    const operation = "generateAnalysis";
+    const providerId = this.provider.providerId;
+    const promptVersion = this.provider.promptVersion;
 
-    logAudit({
-      operation: "research.analysis.request",
-      ownerId,
-      sessionId,
-      snapshotId: snapshot.snapshotId,
-      transactionId,
-      status: "started"
-    });
+    const idempotencyKey = crypto
+      .createHash("sha256")
+      .update(`${ownerId}:${sessionId}:${snapshot.snapshotId}:${operation}:${providerId}:${promptVersion}`)
+      .digest("hex");
 
-    let pack;
-    try {
-      pack = buildEvidencePack(snapshot);
-      logAudit({ operation: "research.analysis.pack.build", sessionId, snapshotId: snapshot.snapshotId, status: "success" });
-    } catch (e: any) {
-      logAudit({ operation: "research.analysis.pack.build", sessionId, snapshotId: snapshot.snapshotId, status: "error", details: e.message });
-      throw e;
+    if (this.idempotencyMap.has(idempotencyKey)) {
+      logAudit({ operation: "research.analysis.request", sessionId, status: "idempotency_hit" });
+      return this.idempotencyMap.get(idempotencyKey)!;
     }
+
+    const analysisPromise = (async () => {
+      const analysisId = crypto.randomUUID();
+
+      logAudit({
+        operation: "research.analysis.request",
+        ownerId,
+        sessionId,
+        snapshotId: snapshot.snapshotId,
+        transactionId,
+        status: "started"
+      });
+
+      let pack;
+      try {
+        pack = buildEvidencePack(snapshot);
+        logAudit({ operation: "research.analysis.pack.build", sessionId, snapshotId: snapshot.snapshotId, status: "success" });
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        logAudit({ operation: "research.analysis.pack.build", sessionId, snapshotId: snapshot.snapshotId, status: "error", details: msg });
+        throw e;
+      }
 
     const serializedPack = serializeEvidencePackForProvider(pack);
     const request: CandidateAnalysisRequest = {
@@ -61,9 +79,10 @@ export class AnalysisValidationService {
     try {
       providerResponse = await this.provider.generateCandidate(request);
       logAudit({ operation: "research.analysis.provider.invoke", sessionId, providerId: this.provider.providerId, status: "success" });
-    } catch (e: any) {
-      logAudit({ operation: "research.analysis.provider.invoke", sessionId, providerId: this.provider.providerId, status: "error", details: e.message });
-      this.rejectAnalysis(ownerId, sessionId, snapshot, "Provider failure: " + e.message, analysisId);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      logAudit({ operation: "research.analysis.provider.invoke", sessionId, providerId: this.provider.providerId, status: "error", details: msg });
+      this.rejectAnalysis(ownerId, sessionId, snapshot, "Provider failure: " + msg, analysisId);
       throw e;
     }
 
@@ -71,9 +90,10 @@ export class AnalysisValidationService {
     try {
       parsedCandidate = parseStructuredOutput(providerResponse.rawOutput);
       logAudit({ operation: "research.analysis.parse", sessionId, status: "success", candidateClaimCount: parsedCandidate.claims.length });
-    } catch (e: any) {
-      logAudit({ operation: "research.analysis.parse", sessionId, status: "error", details: e.message });
-      this.rejectAnalysis(ownerId, sessionId, snapshot, "Parse failure: " + e.message, analysisId);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      logAudit({ operation: "research.analysis.parse", sessionId, status: "error", details: msg });
+      this.rejectAnalysis(ownerId, sessionId, snapshot, "Parse failure: " + msg, analysisId);
       throw e;
     }
 
@@ -94,10 +114,16 @@ export class AnalysisValidationService {
       let claimResolvedRefs = 0;
       let claimUnresolvedRefs = 0;
 
-      const checkRefs = (refs: { snapshotEntryId: string }[], targetList: ValidatedProvenanceRef[]) => {
+      const checkRefs = async (refs: { snapshotEntryId: string }[], targetList: ValidatedProvenanceRef[]) => {
         for (const ref of refs) {
           summary.totalReferences++;
-          const result = this.provenanceService.validateReference(ownerId, snapshot, ref.snapshotEntryId);
+          const result = await this.provenanceService.validateSnapshotReference(
+            ownerId, 
+            sessionId, 
+            snapshot.snapshotId, 
+            ref.snapshotEntryId, 
+            snapshot.version
+          );
           if (result.valid) {
             targetList.push({ snapshotEntryId: ref.snapshotEntryId, resolved: true });
             claimResolvedRefs++;
@@ -115,8 +141,8 @@ export class AnalysisValidationService {
         }
       };
 
-      checkRefs(candidate.supportingReferences, supportingRefs);
-      checkRefs(candidate.counterEvidenceReferences, counterRefs);
+      await checkRefs(candidate.supportingReferences, supportingRefs);
+      await checkRefs(candidate.counterEvidenceReferences, counterRefs);
 
       let provStatus: "resolved" | "partially-resolved" | "unresolved" = "resolved";
       if (claimUnresolvedRefs > 0) {
@@ -213,6 +239,16 @@ export class AnalysisValidationService {
     }
 
     return analysis;
+    })();
+
+    this.idempotencyMap.set(idempotencyKey, analysisPromise);
+    try {
+      const result = await analysisPromise;
+      return result;
+    } catch (e) {
+      this.idempotencyMap.delete(idempotencyKey);
+      throw e;
+    }
   }
 
   private rejectAnalysis(ownerId: string, sessionId: string, snapshot: ResearchSessionSnapshot, reason: string, analysisId: string) {

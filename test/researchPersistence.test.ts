@@ -2,6 +2,7 @@ import assert from 'assert';
 import fs from 'fs';
 import path from 'path';
 import { researchSessionStore, resetResearchSessionStoreForTest } from '../server/research/researchSessionStore';
+import { researchAnalysisStore, resetResearchAnalysisStoreForTest } from '../server/research/researchAnalysisStore';
 import { getTesseraAppDataDir } from '../server/appData';
 import { ResearchSession } from '../server/research/researchTypes';
 import { researchSessionService } from '../server/research/researchSessionService';
@@ -157,6 +158,73 @@ async function runTests() {
     // validate its content hash
     const rehashed = hashCanonicalText(entry.excerpt);
     assert.strictEqual(rehashed.contentHash, entry.integrity.contentHash);
+    cleanup();
+
+    // Test: Analysis restart proof
+    console.log(' - proves analysis restart durability');
+    setup();
+    process.env.TESSERA_APP_DATA = tempDir;
+    resetResearchSessionStoreForTest();
+    resetResearchAnalysisStoreForTest();
+
+    // Setup session and snapshot
+    const sessionAnalysis = await researchSessionService.createSession('user-2', 'Analysis Durability Test');
+    
+    // Create an actual snapshot to satisfy validation
+    const mockObs: ObservationItem = {
+      captureId: 'cap-ana', captureType: 'page-selection',
+      ownership: { ownerId: 'user-2', createdBy: { type: 'workbench', actorId: 'x' } },
+      trust: { sourceType: 'browser-dom', trustLevel: 'untrusted', instructionAuthority: 'none' },
+      title: 'T', url: 'U', origin: 'O', selectedText: '', capturedAt: new Date().toISOString()
+    };
+    const mockEv: EvidenceItem = {
+      evidenceId: 'ev-ana', extractionId: 'ext-ana',
+      ownership: mockObs.ownership, trust: mockObs.trust,
+      kind: 'text', content: 'Analysis Test', contentBytes: 13
+    };
+    const mockExt: ExtractionResult = {
+      extractionId: 'ext-ana', parentCaptureId: 'cap-ana', capability: 'cap',
+      ownership: mockObs.ownership, trust: mockObs.trust,
+      source: { title: 'T', url: 'U', origin: 'O', capturedAt: mockObs.capturedAt },
+      data: {}, evidence: { items: [mockEv], elementsMatched: 1, contentBytes: 13 },
+      warnings: [], truncated: false
+    };
+
+    let anaStore = new BrowserEvidenceStore();
+    anaStore.storeObservation(mockObs);
+    anaStore.storeExtraction(mockExt);
+    setBrowserEvidenceStoreForTest(anaStore);
+
+    const snapAna = await researchSessionService.createSnapshot('user-2', sessionAnalysis.sessionId, [
+      { captureId: 'cap-ana', extractionId: 'ext-ana', evidenceId: 'ev-ana' }
+    ]);
+    
+    // Create an analysis
+    const mockAnalysis = {
+      analysisId: 'ana-123',
+      ownerId: 'user-2',
+      sessionId: sessionAnalysis.sessionId,
+      snapshotId: snapAna.snapshotId,
+      snapshotContentHash: snapAna.snapshotIntegrity.contentHash,
+      schemaVersion: '1.0',
+      createdAt: new Date().toISOString(),
+      generator: { type: 'mock', provider: 'test', model: 'test', promptVersion: '1.0' },
+      status: 'completed',
+      claims: [],
+      validationSummary: { totalReferences: 0, resolvedReferences: 0, unresolvedReferences: 0, claimsBlocked: 0, warnings: [] },
+      warnings: []
+    };
+    
+    await researchAnalysisStore.saveAnalysis(mockAnalysis as any);
+    
+    // Restart store (clear memory)
+    resetResearchAnalysisStoreForTest();
+    
+    // Should still be able to read it
+    const loadedAnalysis = await researchAnalysisStore.getAnalysis(sessionAnalysis.sessionId, 'ana-123');
+    assert.ok(loadedAnalysis);
+    assert.strictEqual(loadedAnalysis.analysisId, 'ana-123');
+    
     cleanup();
 
     console.log('Research Persistence and AppData tests passed.');

@@ -34,10 +34,6 @@ interface NavigatorProps {
 export const WorkspaceNavigator: React.FC<NavigatorProps> = ({ token, activeWorkspace, onSelectWorkspace, onAuditLogsClick, onTestingCockpitClick }) => {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [suggestions, setSuggestions] = useState<Workspace[]>([]);
-  const [isAddOpen, setIsAddOpen] = useState(false);
-  const [newId, setNewId] = useState('');
-  const [newName, setNewName] = useState('');
-  const [newPath, setNewPath] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -100,30 +96,26 @@ export const WorkspaceNavigator: React.FC<NavigatorProps> = ({ token, activeWork
 
   const handleAddWorkspace = async () => {
     setErrorMsg('');
-    if (!newId || !newName || !newPath) {
-      setErrorMsg('All fields are required.');
-      return;
-    }
     try {
-      const resp = await fetch('/api/myai-workspaces/register', {
+      const dirHandle = await (window as any).showDirectoryPicker();
+      const folderName = dirHandle.name;
+      
+      const resp = await fetch('/api/workspaces/add', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ id: newId, name: newName, path: newPath })
+        body: JSON.stringify({ name: folderName, folder: folderName })
       });
       const data = await resp.json();
       if (resp.ok && data.success) {
-        setIsAddOpen(false);
-        setNewId('');
-        setNewName('');
-        setNewPath('');
-        fetchData();
+        fetchData(); // Reload workspaces from updated catalog
       } else {
         setErrorMsg(data.error || 'Failed to register workspace.');
       }
     } catch (err: any) {
+      if (err.name === 'AbortError') return; // User cancelled
       setErrorMsg(err.message || 'Error occurred.');
     }
   };
@@ -161,7 +153,7 @@ export const WorkspaceNavigator: React.FC<NavigatorProps> = ({ token, activeWork
           <IconButton size="small" onClick={fetchData} sx={{ color: '#cbd5e1' }} title="Scan and refresh catalog">
             <RefreshIcon sx={{ fontSize: 14 }} />
           </IconButton>
-          <IconButton size="small" onClick={() => setIsAddOpen(true)} sx={{ color: '#7f5af0' }} title="Add workspace manually">
+          <IconButton size="small" onClick={handleAddWorkspace} sx={{ color: '#7f5af0' }} title="Add workspace manually">
             <AddIcon sx={{ fontSize: 14 }} />
           </IconButton>
         </Stack>
@@ -293,52 +285,6 @@ export const WorkspaceNavigator: React.FC<NavigatorProps> = ({ token, activeWork
         )}
       </Stack>
 
-      {/* Manual Registration Dialog */}
-      <Dialog open={isAddOpen} onClose={() => setIsAddOpen(false)} PaperProps={{ sx: { background: '#0e0f12', border: '1px solid rgba(255,255,255,0.1)' } }}>
-        <DialogTitle sx={{ color: '#f4f4f5', fontWeight: 800, fontSize: '1rem' }}>Register Local Workspace</DialogTitle>
-        <DialogContent sx={{ minWidth: 320 }}>
-          <Stack spacing={2} sx={{ mt: 1 }}>
-            {errorMsg && <Typography variant="caption" sx={{ color: '#ef4444' }}>{errorMsg}</Typography>}
-            <TextField
-              label="Workspace Unique ID"
-              size="small"
-              value={newId}
-              onChange={(e) => setNewId(e.target.value.toLowerCase().replace(/[^a-z0-9-_]/g, ''))}
-              placeholder="e.g. backend-api"
-              variant="outlined"
-              fullWidth
-              InputLabelProps={{ style: { color: '#71717a' } }}
-              inputProps={{ style: { color: '#f4f4f5' } }}
-            />
-            <TextField
-              label="Workspace Name"
-              size="small"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              placeholder="e.g. Backend API Core"
-              variant="outlined"
-              fullWidth
-              InputLabelProps={{ style: { color: '#71717a' } }}
-              inputProps={{ style: { color: '#f4f4f5' } }}
-            />
-            <TextField
-              label="Absolute Directory Path"
-              size="small"
-              value={newPath}
-              onChange={(e) => setNewPath(e.target.value)}
-              placeholder="e.g. /Users/Name/Projects/my-app"
-              variant="outlined"
-              fullWidth
-              InputLabelProps={{ style: { color: '#71717a' } }}
-              inputProps={{ style: { color: '#f4f4f5' } }}
-            />
-          </Stack>
-        </DialogContent>
-        <DialogActions sx={{ p: 2, pt: 0 }}>
-          <Button size="small" onClick={() => setIsAddOpen(false)} sx={{ color: '#a1a1aa' }}>Cancel</Button>
-          <Button size="small" onClick={handleAddWorkspace} variant="contained" sx={{ background: '#7f5af0', '&:hover': { background: '#6d47dd' } }}>Add</Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   );
 };

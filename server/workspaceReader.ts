@@ -41,6 +41,27 @@ export async function listWorkspaces(): Promise<Array<{name:string; path:string}
   }
 }
 
+export async function addWorkspaceToPortalYaml(name: string, folder: string): Promise<void> {
+  const raw = await fs.readFile(PORTAL_YAML, 'utf8');
+  const doc = yaml.load(raw) as any;
+  if (!doc || !Array.isArray(doc.workspaces)) {
+    throw new Error('Invalid portal.yaml format');
+  }
+  
+  // Check if it already exists
+  if (doc.workspaces.some((w: any) => w.name === name || w.folder === folder)) {
+    throw new Error(`Workspace with name "${name}" or folder "${folder}" already exists.`);
+  }
+
+  doc.workspaces.push({
+    name,
+    folder
+  });
+
+  const newYaml = yaml.dump(doc);
+  await fs.writeFile(PORTAL_YAML, newYaml, 'utf8');
+}
+
 // Safe file read respecting allowlist, size limits, and blocked paths
 const BLOCKED_FOLDERS = ['.git','node_modules','dist','build','.next','.turbo','.cache','out'];
 const BLOCKED_FILES = ['.env','*.key','*.pem','*.crt','*.crt','*.secret'];

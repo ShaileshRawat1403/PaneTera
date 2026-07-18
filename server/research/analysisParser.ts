@@ -21,29 +21,37 @@ export function parseStructuredOutput(rawOutput: string): CandidateResearchAnaly
     throw new Error("Raw output contains commentary. Expected pure JSON object.");
   }
 
-  let parsed: any;
+  let parsed: unknown;
   try {
     parsed = JSON.parse(trimmed);
-  } catch (e: any) {
-    throw new Error(`Invalid JSON: ${e.message}`);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new Error(`Invalid JSON: ${msg}`);
   }
 
-  if (parsed.schemaVersion !== "1.0") {
-    throw new Error(`Unsupported schemaVersion: ${parsed.schemaVersion}`);
+  if (!parsed || typeof parsed !== 'object') {
+    throw new Error("Parsed output is not an object.");
+  }
+  
+  const parsedObj = parsed as Record<string, unknown>;
+
+  if (parsedObj.schemaVersion !== "1.0") {
+    throw new Error(`Unsupported schemaVersion: ${parsedObj.schemaVersion}`);
   }
 
-  if (!Array.isArray(parsed.claims)) {
+  if (!Array.isArray(parsedObj.claims)) {
     throw new Error("Missing or invalid 'claims' array.");
   }
 
-  if (parsed.claims.length > MAX_CLAIMS) {
+  if (parsedObj.claims.length > MAX_CLAIMS) {
     throw new Error(`Claims exceed maximum limit (${MAX_CLAIMS})`);
   }
 
   const seenClaimIds = new Set<string>();
   const claims: CandidateAnalysisClaim[] = [];
 
-  for (const c of parsed.claims) {
+  for (const item of parsedObj.claims) {
+    const c = item as Record<string, unknown>;
     if (!c.candidateClaimId || typeof c.candidateClaimId !== "string") {
       throw new Error("Invalid or missing candidateClaimId");
     }
@@ -59,16 +67,17 @@ export function parseStructuredOutput(rawOutput: string): CandidateResearchAnaly
       throw new Error(`Claim text exceeds maximum length for claim ${c.candidateClaimId}`);
     }
 
-    if (!["supported", "mixed", "insufficient", "unsupported"].includes(c.proposedAssessment)) {
+    if (!["supported", "mixed", "insufficient", "unsupported"].includes(c.proposedAssessment as string)) {
       throw new Error(`Invalid proposedAssessment for claim ${c.candidateClaimId}: ${c.proposedAssessment}`);
     }
 
-    const validateRefs = (refs: any, refType: string) => {
+    const validateRefs = (refs: unknown, refType: string) => {
       if (!Array.isArray(refs)) throw new Error(`Missing or invalid ${refType} for claim ${c.candidateClaimId}`);
       if (refs.length > MAX_REFERENCES_PER_CLAIM) throw new Error(`${refType} exceeds maximum limit for claim ${c.candidateClaimId}`);
       const seen = new Set<string>();
       const parsedRefs: CandidateProvenanceRef[] = [];
-      for (const r of refs) {
+      for (const item of refs) {
+        const r = item as Record<string, unknown>;
         if (!r.snapshotEntryId || typeof r.snapshotEntryId !== "string") throw new Error(`Invalid snapshotEntryId in ${refType} for claim ${c.candidateClaimId}`);
         if (seen.has(r.snapshotEntryId)) throw new Error(`Duplicate reference ${r.snapshotEntryId} in ${refType} for claim ${c.candidateClaimId}`);
         seen.add(r.snapshotEntryId);
@@ -100,8 +109,8 @@ export function parseStructuredOutput(rawOutput: string): CandidateResearchAnaly
     }
 
     claims.push({
-      candidateClaimId: c.candidateClaimId,
-      text: c.text,
+      candidateClaimId: c.candidateClaimId as string,
+      text: c.text as string,
       proposedAssessment: c.proposedAssessment as CandidateAssessment,
       supportingReferences,
       counterEvidenceReferences,

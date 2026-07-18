@@ -21,11 +21,14 @@ export interface CandidateAnalysisResponse {
 
 export interface CandidateAnalysisProvider {
   readonly providerId: string;
+  readonly promptVersion: string;
   generateCandidate(request: CandidateAnalysisRequest): Promise<CandidateAnalysisResponse>;
 }
 
 export class MockAnalysisProvider implements CandidateAnalysisProvider {
   readonly providerId = "mock-provider-v1";
+  readonly promptVersion = "1.0";
+
 
   async generateCandidate(request: CandidateAnalysisRequest): Promise<CandidateAnalysisResponse> {
     const rawJSON = JSON.stringify({

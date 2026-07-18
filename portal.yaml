@@ -3,3 +3,5 @@ workspaces:
     path: /Users/Shailesh/MYAIAGENTS/active/flowright
   - name: websiteops-pothos-proof
     path: /Users/Shailesh/MYAIAGENTS/websiteops-pothos-proof
+  - name: pruningmypothos
+    folder: pruningmypothos
