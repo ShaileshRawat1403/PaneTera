@@ -104,6 +104,7 @@ const App: React.FC = () => {
   const [token, setToken] = useState<string>('');
   const [showTokenPrompt, setShowTokenPrompt] = useState<boolean>(false);
   const [tokenInput, setTokenInput] = useState<string>('');
+  const [tokenError, setTokenError] = useState<string>('');
   const [previewFeed, setPreviewFeed] = useState<FeedItem[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [isCmdKOpen, setIsCmdKOpen] = useState<boolean>(false);
@@ -797,14 +798,24 @@ const App: React.FC = () => {
     }
   };
 
-  const handleTokenSave = () => {
+  const handleTokenSave = async () => {
     const trimmed = tokenInput.trim();
     if (trimmed) {
-      localStorage.setItem('portalToken', trimmed);
-      setToken(trimmed);
-      setShowTokenPrompt(false);
-      // Trigger a status refresh on token update
-      window.location.reload();
+      setTokenError('');
+      try {
+        const res = await fetch('/api/health', {
+          headers: { Authorization: `Bearer ${trimmed}` }
+        });
+        if (!res.ok) {
+          setTokenError('Invalid token. Please try again.');
+          return;
+        }
+        localStorage.setItem('portalToken', trimmed);
+        setToken(trimmed);
+        setShowTokenPrompt(false);
+      } catch (e) {
+        setTokenError('Failed to verify token.');
+      }
     }
   };
 
@@ -1654,6 +1665,11 @@ const App: React.FC = () => {
                   placeholder="Secure token"
                   value={tokenInput}
                   onChange={e => setTokenInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      handleTokenSave();
+                    }
+                  }}
                   sx={{
                     '& .MuiOutlinedInput-root': {
                       borderRadius: '8px',
@@ -1675,6 +1691,11 @@ const App: React.FC = () => {
                   Unlock
                 </Button>
               </Box>
+              {tokenError && (
+                <Typography variant="body2" sx={{ color: '#ef4444', mt: 1.5 }}>
+                  {tokenError}
+                </Typography>
+              )}
             </Paper>
           </Box>
         )}
