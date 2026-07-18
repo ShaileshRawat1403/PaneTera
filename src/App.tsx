@@ -2376,9 +2376,9 @@ const App: React.FC = () => {
           renderLeft={mainWorkbenchContent}
           renderRight={
             !prefs.activeAppId ? (
-              <WorkbenchEmptyState onSelectApp={handleSelectLocalApp} />
+              <WorkbenchEmptyState onSelectApp={handleSelectLocalApp} onClose={() => handleWorkbenchModeChange('native-focus')} />
             ) : localAppStatus !== 'reachable' ? (
-              <WorkbenchFailureState status={localAppStatus} onRetry={handleReloadLocalApp} onClear={handleClearLocalApp} />
+              <WorkbenchFailureState status={localAppStatus} onRetry={handleReloadLocalApp} onClear={handleClearLocalApp} onClose={() => handleWorkbenchModeChange('native-focus')} />
             ) : (
               <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                 <LiveWorkbenchToolbar app={localAppDef} status={localAppStatus} onReload={handleReloadLocalApp} onClose={handleClearLocalApp} />

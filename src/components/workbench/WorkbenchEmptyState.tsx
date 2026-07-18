@@ -1,12 +1,14 @@
 import React from 'react';
-import { Box, Typography } from '@mui/material';
+import { Box, Typography, IconButton } from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
 import { WorkbenchAppSelector } from './WorkbenchAppSelector';
 
 interface WorkbenchEmptyStateProps {
   onSelectApp: (appId: string) => void;
+  onClose?: () => void;
 }
 
-export const WorkbenchEmptyState: React.FC<WorkbenchEmptyStateProps> = ({ onSelectApp }) => {
+export const WorkbenchEmptyState: React.FC<WorkbenchEmptyStateProps> = ({ onSelectApp, onClose }) => {
   return (
     <Box sx={{ 
       display: 'flex', 
@@ -15,8 +17,18 @@ export const WorkbenchEmptyState: React.FC<WorkbenchEmptyStateProps> = ({ onSele
       justifyContent: 'center',
       height: '100%',
       p: 4,
-      bgcolor: '#09090b'
+      bgcolor: '#09090b',
+      position: 'relative'
     }}>
+      {onClose && (
+        <IconButton 
+          onClick={onClose} 
+          sx={{ position: 'absolute', top: 16, right: 16, color: '#a1a1aa' }}
+          aria-label="Close Local App Workbench"
+        >
+          <CloseIcon />
+        </IconButton>
+      )}
       <Typography variant="h5" sx={{ color: '#f4f4f5', mb: 2, fontWeight: 600 }}>
         Local App Workbench
       </Typography>

@@ -1,15 +1,17 @@
 import React from 'react';
-import { Box, Typography, Button } from '@mui/material';
+import { Box, Typography, Button, IconButton } from '@mui/material';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import CloseIcon from '@mui/icons-material/Close';
 
 interface WorkbenchFailureStateProps {
   status: string; // 'framing-likely-blocked', 'invalid-configuration', 'unavailable', 'checking'
   onRetry: () => void;
   onClear: () => void;
+  onClose?: () => void;
 }
 
-export const WorkbenchFailureState: React.FC<WorkbenchFailureStateProps> = ({ status, onRetry, onClear }) => {
+export const WorkbenchFailureState: React.FC<WorkbenchFailureStateProps> = ({ status, onRetry, onClear, onClose }) => {
   let title = 'Application Unavailable';
   let message = 'The selected local application is not responding.';
   let Icon = ErrorOutlineIcon;
@@ -41,8 +43,18 @@ export const WorkbenchFailureState: React.FC<WorkbenchFailureStateProps> = ({ st
       height: '100%',
       p: 4,
       bgcolor: '#09090b',
-      textAlign: 'center'
+      textAlign: 'center',
+      position: 'relative'
     }}>
+      {onClose && (
+        <IconButton 
+          onClick={onClose} 
+          sx={{ position: 'absolute', top: 16, right: 16, color: '#a1a1aa' }}
+          aria-label="Close Local App Workbench"
+        >
+          <CloseIcon />
+        </IconButton>
+      )}
       {status !== 'checking' && <Icon sx={{ fontSize: 64, color, mb: 2 }} />}
       <Typography variant="h6" sx={{ color: '#f4f4f5', mb: 1, fontWeight: 600 }}>
         {title}
