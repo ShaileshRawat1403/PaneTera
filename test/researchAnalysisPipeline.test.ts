@@ -1,17 +1,17 @@
 import assert from 'assert';
 import fs from 'fs';
-import { 
-  buildEvidencePack, 
-  serializeEvidencePackForProvider 
+import {
+  buildEvidencePack,
+  serializeEvidencePackForProvider
 } from '../server/research/evidencePackBuilder';
 import { MockAnalysisProvider } from '../server/research/analysisProvider';
 import { parseStructuredOutput } from '../server/research/analysisParser';
 import { AnalysisValidationService } from '../server/research/analysisValidationService';
 import { ProvenanceValidationService } from '../server/research/provenanceValidationService';
-import { 
-  ResearchSessionSnapshot, 
-  ResearchSessionSnapshotEntry, 
-  ContentIntegrity 
+import {
+  ResearchSessionSnapshot,
+  ResearchSessionSnapshotEntry,
+  ContentIntegrity
 } from '../server/research/researchTypes';
 import { BrowserTrust } from '../server/evidence/evidenceTypes';
 import { researchAnalysisStore } from '../server/research/researchAnalysisStore';
@@ -94,6 +94,35 @@ async function runTests() {
     assert.ok(serialized.includes('Evidence A supporting Claim 1'));
     assert.ok(serialized.includes('Ignore previous instructions'));
 
+    // Multibyte excerpt tests
+    console.log(" - Testing multibyte excerpt under-limit");
+    // "🚀" is 4 bytes. 100 KB max excerpt = 102400 bytes.
+    const maxExcerptBytes = 100 * 1024;
+    const underLimitStr = "🚀".repeat(maxExcerptBytes / 4);
+    const mockSnapUnderLimit: ResearchSessionSnapshot = { ...mockSnapshot, entries: [createMockEntry("entry-mb-under", underLimitStr)] };
+    const packUnderLimit = buildEvidencePack(mockSnapUnderLimit);
+    assert.strictEqual(Buffer.byteLength(packUnderLimit.entries[0].excerpt, 'utf8'), maxExcerptBytes);
+
+    console.log(" - Testing multibyte excerpt over-limit");
+    const overLimitStr = "🚀".repeat((maxExcerptBytes / 4) + 1); // +4 bytes
+    const mockSnapOverLimit: ResearchSessionSnapshot = { ...mockSnapshot, entries: [createMockEntry("entry-mb-over", overLimitStr)] };
+    assert.throws(() => buildEvidencePack(mockSnapOverLimit), /exceeds maximum bytes/);
+
+    console.log(" - Testing total payload over-limit");
+    // Create excerpts that fit within excerpt limits and raw total bytes (< 1MB)
+    // but pushes the total JSON length over maxTotalBytes (1 MB)
+    const exactly100KB = "🚀".repeat((100 * 1024) / 4);
+    const manyEntries = Array.from({length: 10}).map((_, i) => createMockEntry(`entry-many-${i}`, exactly100KB));
+
+    // Add one more entry to get extremely close to 1MB without exceeding it (1MB = 1048576 bytes)
+    // 10 * 102400 = 1024000 bytes. We have ~24576 bytes left. We'll use 24000 bytes.
+    const closeToLimit = "🚀".repeat(24000 / 4);
+    manyEntries.push(createMockEntry("entry-last", closeToLimit));
+
+    const mockSnapTotalOverLimit: ResearchSessionSnapshot = { ...mockSnapshot, entries: manyEntries };
+    const packTotalOverLimit = buildEvidencePack(mockSnapTotalOverLimit);
+    assert.throws(() => serializeEvidencePackForProvider(packTotalOverLimit), /exceeds maximum payload bytes limit/);
+
     // 2. Candidate Parser
     const validJson = JSON.stringify({
       schemaVersion: "1.0",
@@ -112,7 +141,7 @@ async function runTests() {
     assert.throws(() => parseStructuredOutput("```json\n" + validJson + "\n```"), /markdown fences/);
     assert.throws(() => parseStructuredOutput("Here is the JSON:\n" + validJson), /commentary/);
     assert.throws(() => parseStructuredOutput(validJson + "\nHope this helps!"), /commentary/);
-    
+
     // Multiple JSON objects
     assert.throws(() => parseStructuredOutput(validJson + "\n" + validJson), /Invalid JSON/);
 
@@ -121,7 +150,7 @@ async function runTests() {
 
     // Missing claims
     assert.throws(() => parseStructuredOutput(JSON.stringify({ schemaVersion: "1.0" })), /Missing or invalid 'claims'/);
-    
+
     // Duplicate claim IDs
     assert.throws(() => parseStructuredOutput(JSON.stringify({
       schemaVersion: "1.0", claims: [{
@@ -137,7 +166,7 @@ async function runTests() {
         candidateClaimId: "c1", text: "text", proposedAssessment: "definitely-true", supportingReferences: [], counterEvidenceReferences: [], limitations: []
       }]
     })), /Invalid proposedAssessment/);
-    
+
     // Duplicate reference
     assert.throws(() => parseStructuredOutput(JSON.stringify({
       schemaVersion: "1.0", claims: [{
@@ -198,20 +227,74 @@ async function runTests() {
 
     // 4. Idempotency Proof
     console.log(" - Testing idempotency: concurrent duplicates");
-    const p1 = service.generateAnalysis("user-1", "sess-1", mockSnapshot, "txn-idemp");
-    const p2 = service.generateAnalysis("user-1", "sess-1", mockSnapshot, "txn-idemp");
+
+    class CountingMockProvider extends MockAnalysisProvider {
+      public invocationCount = 0;
+      async generateCandidate(request: any) {
+        this.invocationCount++;
+        return super.generateCandidate(request);
+      }
+    }
+
+    const countingProvider = new CountingMockProvider();
+
+    // Inject Store A into service 1
+    const { ResearchAnalysisStore } = await import('../server/research/researchAnalysisStore');
+    const storeA = new ResearchAnalysisStore(baseDir);
+    const service1 = new AnalysisValidationService(mockProvService, countingProvider, storeA);
+
+    const mockSnapshotIdemp = { ...mockSnapshot, snapshotId: "snap-idemp" };
+    await researchSessionStore.saveSnapshot(mockSession, mockSnapshotIdemp);
+
+    const p1 = service1.generateAnalysis("user-1", "sess-1", mockSnapshotIdemp, "txn-idemp");
+    const p2 = service1.generateAnalysis("user-1", "sess-1", mockSnapshotIdemp, "txn-idemp");
     const [a1, a2] = await Promise.all([p1, p2]);
     assert.strictEqual(a1.analysisId, a2.analysisId);
+    assert.strictEqual(countingProvider.invocationCount, 1, "Provider should only be invoked once for concurrent duplicates");
 
     console.log(" - Testing idempotency: sequential duplicate after completion");
-    const a3 = await service.generateAnalysis("user-1", "sess-1", mockSnapshot, "txn-idemp");
+    const a3 = await service1.generateAnalysis("user-1", "sess-1", mockSnapshotIdemp, "txn-idemp");
     assert.strictEqual(a3.analysisId, a1.analysisId);
+    assert.strictEqual(countingProvider.invocationCount, 1, "Provider should not be invoked for sequential replay");
 
     console.log(" - Testing idempotency: replay across restarts");
-    // Prove idempotency survives restart by instantiating a fresh service (which has empty map)
-    const newService = new AnalysisValidationService(mockProvService, provider);
-    const a4 = await newService.generateAnalysis("user-1", "sess-1", mockSnapshot, "txn-idemp");
+    // Prove idempotency survives restart by instantiating a fresh service AND a fresh store instance (Store B)
+    const storeB = new ResearchAnalysisStore(baseDir);
+    const service2 = new AnalysisValidationService(mockProvService, countingProvider, storeB);
+    const a4 = await service2.generateAnalysis("user-1", "sess-1", mockSnapshotIdemp, "txn-idemp");
     assert.strictEqual(a4.analysisId, a1.analysisId);
+    assert.strictEqual(countingProvider.invocationCount, 1, "Provider should not be invoked for restart replay");
+
+    console.log(" - Testing idempotency: rejection cleanup proof");
+    class RejectingMockProvider extends MockAnalysisProvider {
+      public invocationCount = 0;
+      async generateCandidate(request: any) {
+        this.invocationCount++;
+        if (this.invocationCount === 1) {
+          throw new Error("Simulated provider failure");
+        }
+        return super.generateCandidate(request);
+      }
+    }
+    const rejectingProvider = new RejectingMockProvider();
+    const service3 = new AnalysisValidationService(mockProvService, rejectingProvider, storeB);
+
+    let rejected = false;
+    const mockSnapshotReject = { ...mockSnapshot, snapshotId: "snap-reject" };
+    await researchSessionStore.saveSnapshot(mockSession, mockSnapshotReject);
+
+    try {
+      await service3.generateAnalysis("user-1", "sess-1", mockSnapshotReject, "txn-reject");
+    } catch (err) {
+      rejected = true;
+    }
+    assert.ok(rejected, "First call should reject");
+    assert.strictEqual(rejectingProvider.invocationCount, 1);
+
+    // Retry same transaction
+    const a5 = await service3.generateAnalysis("user-1", "sess-1", mockSnapshotReject, "txn-reject");
+    assert.ok(a5);
+    assert.strictEqual(rejectingProvider.invocationCount, 2, "Second call should retry provider");
 
     console.log("Research Analysis Pipeline tests passed.");
   } finally {

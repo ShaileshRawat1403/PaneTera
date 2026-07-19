@@ -4,11 +4,11 @@ import { ResearchSessionSnapshot, ProvenanceStatus } from "./researchTypes";
 import { buildEvidencePack, serializeEvidencePackForProvider } from "./evidencePackBuilder";
 import { CandidateAnalysisProvider, CandidateAnalysisRequest } from "./analysisProvider";
 import { parseStructuredOutput } from "./analysisParser";
-import { researchAnalysisStore } from "./researchAnalysisStore";
-import { 
-  ResearchAnalysis, 
-  AnalysisClaim, 
-  ClaimValidationFailure, 
+import { researchAnalysisStore, ResearchAnalysisStore } from "./researchAnalysisStore";
+import {
+  ResearchAnalysis,
+  AnalysisClaim,
+  ClaimValidationFailure,
   ValidatedProvenanceRef,
   ProvenanceValidationSummary
 } from "./analysisTypes";
@@ -19,7 +19,8 @@ export class AnalysisValidationService {
 
   constructor(
     private provenanceService: ProvenanceValidationService,
-    private provider: CandidateAnalysisProvider
+    private provider: CandidateAnalysisProvider,
+    private store: ResearchAnalysisStore = researchAnalysisStore
   ) {}
 
   public async generateAnalysis(
@@ -37,14 +38,23 @@ export class AnalysisValidationService {
       .update(`${ownerId}:${sessionId}:${snapshot.snapshotId}:${operation}:${providerId}:${promptVersion}`)
       .digest("hex");
 
+    // Deterministic analysisId allows durable idempotency lookup across restarts
+    const analysisId = crypto.createHash("sha256").update(idempotencyKey).digest("hex");
+
+    // 1. Check persistent store
+    const existing = await this.store.getAnalysis(sessionId, analysisId);
+    if (existing) {
+      logAudit({ operation: "research.analysis.request", sessionId, status: "idempotency_hit_store" });
+      return existing;
+    }
+
+    // 2. Check in-flight map
     if (this.idempotencyMap.has(idempotencyKey)) {
-      logAudit({ operation: "research.analysis.request", sessionId, status: "idempotency_hit" });
+      logAudit({ operation: "research.analysis.request", sessionId, status: "idempotency_hit_inflight" });
       return this.idempotencyMap.get(idempotencyKey)!;
     }
 
     const analysisPromise = (async () => {
-      const analysisId = crypto.randomUUID();
-
       logAudit({
         operation: "research.analysis.request",
         ownerId,
@@ -118,10 +128,10 @@ export class AnalysisValidationService {
         for (const ref of refs) {
           summary.totalReferences++;
           const result = await this.provenanceService.validateSnapshotReference(
-            ownerId, 
-            sessionId, 
-            snapshot.snapshotId, 
-            ref.snapshotEntryId, 
+            ownerId,
+            sessionId,
+            snapshot.snapshotId,
+            ref.snapshotEntryId,
             snapshot.version
           );
           if (result.valid) {
@@ -201,7 +211,7 @@ export class AnalysisValidationService {
 
     let finalStatus: "completed" | "completed-with-warnings" | "rejected" = "completed";
     const nonBlockedClaims = validatedClaims.filter(c => c.validationStatus !== "blocked");
-    
+
     if (nonBlockedClaims.length === 0) {
       finalStatus = "rejected";
     } else if (summary.claimsBlocked > 0 || nonBlockedClaims.some(c => c.validationStatus === "validated-with-warnings") || summary.warnings.length > 0) {
@@ -228,7 +238,7 @@ export class AnalysisValidationService {
       warnings: summary.warnings.map(w => ({ type: "validation_warning", message: w }))
     };
 
-    await researchAnalysisStore.saveAnalysis(analysis);
+    await this.store.saveAnalysis(analysis);
 
     if (finalStatus === "rejected") {
       logAudit({ operation: "research.analysis.reject", sessionId, analysisId, status: "rejected" });
@@ -242,13 +252,15 @@ export class AnalysisValidationService {
     })();
 
     this.idempotencyMap.set(idempotencyKey, analysisPromise);
-    try {
-      const result = await analysisPromise;
-      return result;
-    } catch (e) {
-      this.idempotencyMap.delete(idempotencyKey);
-      throw e;
-    }
+
+    // Ensure cleanup of the in-flight map once resolved/rejected
+    analysisPromise.catch(() => {}).finally(() => {
+      if (this.idempotencyMap.get(idempotencyKey) === analysisPromise) {
+        this.idempotencyMap.delete(idempotencyKey);
+      }
+    });
+
+    return analysisPromise;
   }
 
   private rejectAnalysis(ownerId: string, sessionId: string, snapshot: ResearchSessionSnapshot, reason: string, analysisId: string) {

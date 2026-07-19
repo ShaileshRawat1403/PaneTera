@@ -2,7 +2,7 @@ import assert from 'assert';
 import fs from 'fs';
 import path from 'path';
 import { researchSessionStore, resetResearchSessionStoreForTest } from '../server/research/researchSessionStore';
-import { researchAnalysisStore, resetResearchAnalysisStoreForTest } from '../server/research/researchAnalysisStore';
+import { researchAnalysisStore } from '../server/research/researchAnalysisStore';
 import { getTesseraAppDataDir } from '../server/appData';
 import { ResearchSession } from '../server/research/researchTypes';
 import { researchSessionService } from '../server/research/researchSessionService';
@@ -129,7 +129,7 @@ async function runTests() {
     process.env.TESSERA_APP_DATA = tempDir;
     resetResearchSessionStoreForTest();
     setEvidenceRetentionServiceForTest(undefined);
-    
+
     // Create browser evidence
     let store = new BrowserEvidenceStore();
     store.storeObservation(baseObs);
@@ -137,24 +137,24 @@ async function runTests() {
     setBrowserEvidenceStoreForTest(store);
 
     const sessionDurability = await researchSessionService.createSession('user-1', 'Durability Test');
-    
+
     // create snapshot
     const snap = await researchSessionService.createSnapshot('user-1', sessionDurability.sessionId, [
       { captureId: 'cap-1', extractionId: 'ext-1', evidenceId: 'ev-1' }
     ]);
-    
+
     // release transient leases (happens automatically at end of createSnapshot)
     // evict or remove live evidence
-    setBrowserEvidenceStoreForTest(new BrowserEvidenceStore()); 
-    
+    setBrowserEvidenceStoreForTest(new BrowserEvidenceStore());
+
     // reload ResearchSessionStore
     resetResearchSessionStoreForTest();
-    
+
     // retrieve the immutable snapshot excerpt
     const loadedSnap = await researchSessionStore.getSnapshot(sessionDurability.sessionId, snap.snapshotId, snap.version);
     assert.ok(loadedSnap);
     const entry = loadedSnap!.entries[0];
-    
+
     // validate its content hash
     const rehashed = hashCanonicalText(entry.excerpt);
     assert.strictEqual(rehashed.contentHash, entry.integrity.contentHash);
@@ -164,7 +164,7 @@ async function runTests() {
     console.log(' - proves Mutex lifecycle');
     const storeA = new (await import('../server/research/researchAnalysisStore')).ResearchAnalysisStore(tempDir);
     const mutex = storeA.getMutex();
-    
+
     // release after success
     const rel1 = await mutex.acquire('sess-mutex');
     assert.strictEqual(mutex.activeKeyCount(), 1);
@@ -209,7 +209,7 @@ async function runTests() {
 
     // Setup session and snapshot
     const sessionAnalysis = await researchSessionService.createSession('user-2', 'Analysis Durability Test');
-    
+
     // Create an actual snapshot to satisfy validation
     const mockObs: ObservationItem = {
       captureId: 'cap-ana', captureType: 'page-selection',
@@ -254,14 +254,51 @@ async function runTests() {
       validationSummary: { totalReferences: 0, resolvedReferences: 0, unresolvedReferences: 0, claimsBlocked: 0, warnings: [] },
       warnings: []
     };
-    
+
     await storeA.saveAnalysis(mockAnalysis as any);
-    
+
     // Read from Store B
     const loadedAnalysis = await storeB.getAnalysis(sessionAnalysis.sessionId, 'ana-123');
     assert.ok(loadedAnalysis);
     assert.strictEqual(loadedAnalysis.analysisId, 'ana-123');
-    
+
+    // Test: Atomic race condition proof for analyses
+    console.log(' - proves atomic race condition for analysis publications');
+    const storeRace1 = new (await import('../server/research/researchAnalysisStore')).ResearchAnalysisStore(tempDir);
+    const storeRace2 = new (await import('../server/research/researchAnalysisStore')).ResearchAnalysisStore(tempDir);
+
+    const raceAnalysisId = 'ana-race';
+    const mockAnalysisRace1 = { ...mockAnalysis, analysisId: raceAnalysisId, status: 'completed' };
+    const mockAnalysisRace2 = { ...mockAnalysis, analysisId: raceAnalysisId, status: 'rejected' };
+
+    // both stores attempt to save concurrently
+    const p1 = storeRace1.saveAnalysis(mockAnalysisRace1 as any);
+    const p2 = storeRace2.saveAnalysis(mockAnalysisRace2 as any);
+
+    const results = await Promise.allSettled([p1, p2]);
+    const fulfilled = results.filter(r => r.status === 'fulfilled');
+    const rejected = results.filter(r => r.status === 'rejected');
+
+    assert.strictEqual(fulfilled.length, 1, 'Exactly one publish should succeed');
+    assert.strictEqual(rejected.length, 1, 'Exactly one publish should fail with conflict');
+
+    if (rejected[0].status === 'rejected') {
+      assert.ok(
+        (rejected[0].reason as Error).message.includes('immutable and already exists') ||
+        (rejected[0].reason as Error).message.includes('EEXIST'),
+        'Loser must receive a conflict error'
+      );
+    }
+
+    // Verify winner was not corrupted
+    const winnerAnalysis = await storeRace1.getAnalysis(sessionAnalysis.sessionId, raceAnalysisId);
+    assert.ok(winnerAnalysis);
+
+    // Assert winner is valid and matches one of the inputs precisely
+    assert.ok(winnerAnalysis.status === 'completed' || winnerAnalysis.status === 'rejected');
+    const expectedStatus = fulfilled[0] === results[0] ? 'completed' : 'rejected';
+    assert.strictEqual(winnerAnalysis.status, expectedStatus, 'Winner content must be intact');
+
     cleanup();
 
     console.log('Research Persistence and AppData tests passed.');
