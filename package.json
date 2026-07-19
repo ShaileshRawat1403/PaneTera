@@ -9,7 +9,7 @@
     "lint": "tsc --noEmit --project tsconfig.json",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "tsx test/validateCommand.test.ts && tsx test/proposalFlow.test.ts && tsx test/repoSetupProposal.test.ts && tsx test/liveAppWorkbench.test.ts && tsx test/workflowIntent.test.ts && tsx test/browserObservation.test.ts && tsx test/missionControlV1.test.ts && tsx test/staticStructureScan.test.ts && tsx test/orchestrator.test.ts && tsx test/workbenchModeToggle.test.ts && tsx test/browserGateway.test.ts && tsx test/evidenceGraphResolver.test.ts && tsx test/researchPersistence.test.ts && tsx test/researchSession.test.ts && tsx test/provenanceValidation.test.ts && tsx test/evidenceCanonicalizer.test.ts && tsx test/researchAnalysisPipeline.test.ts"
+    "test": "tsx test/validateCommand.test.ts && tsx test/proposalFlow.test.ts && tsx test/repoSetupProposal.test.ts && tsx test/liveAppWorkbench.test.ts && tsx test/workflowIntent.test.ts && tsx test/browserObservation.test.ts && tsx test/missionControlV1.test.ts && tsx test/staticStructureScan.test.ts && tsx test/orchestrator.test.ts && tsx test/workbenchModeToggle.test.ts && tsx test/browserGateway.test.ts && tsx test/evidenceGraphResolver.test.ts && tsx test/researchPersistence.test.ts && tsx test/researchSession.test.ts && tsx test/provenanceValidation.test.ts && tsx test/evidenceCanonicalizer.test.ts && tsx test/researchAnalysisPipeline.test.ts && tsx test/workspaceReader.test.ts"
   },
   "dependencies": {
     "@emotion/react": "^11.11.4",
@@ -22,6 +22,7 @@
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "js-yaml": "^4.1.0",
+    "playwright": "^1.61.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "uuid": "^14.0.1"

@@ -22,22 +22,25 @@ import { ResearchSession } from '../server/research/researchTypes';
 const mockTrust: BrowserTrust = { sourceType: "browser-dom", trustLevel: "untrusted", instructionAuthority: "none" };
 const mockIntegrity: ContentIntegrity = { hashAlgorithm: "sha256", canonicalizationVersion: "text-v1", contentHash: "hash-123", contentBytes: 100 };
 
-const createMockEntry = (id: string, excerpt: string): ResearchSessionSnapshotEntry => ({
-  snapshotEntryId: id,
-  position: 0,
-  sourceType: "browser-evidence",
-  captureId: `cap-${id}`,
-  extractionId: `ext-${id}`,
-  evidenceId: `ev-${id}`,
-  sourceTitle: `Title ${id}`,
-  sourceUri: `http://localhost/${id}`,
-  sourceOrigin: "http://localhost",
-  capturedAt: new Date().toISOString(),
-  excerpt,
-  integrity: mockIntegrity,
-  ownership: { ownerId: "user-1", createdBy: { type: "workbench", actorId: "test" } },
-  trust: mockTrust
-});
+const createMockEntry = (id: string, excerpt: string): ResearchSessionSnapshotEntry => {
+  const actualBytes = Buffer.byteLength(excerpt, 'utf8');
+  return {
+    snapshotEntryId: id,
+    position: 0,
+    sourceType: "browser-evidence",
+    captureId: `cap-${id}`,
+    extractionId: `ext-${id}`,
+    evidenceId: `ev-${id}`,
+    sourceTitle: `Title ${id}`,
+    sourceUri: `http://localhost/${id}`,
+    sourceOrigin: "http://localhost",
+    capturedAt: new Date().toISOString(),
+    excerpt,
+    integrity: { ...mockIntegrity, contentBytes: actualBytes },
+    ownership: { ownerId: "user-1", createdBy: { type: "workbench", actorId: "test" } },
+    trust: mockTrust
+  };
+};
 
 const mockSnapshot: ResearchSessionSnapshot = {
   snapshotId: "snap-1",
@@ -107,24 +110,55 @@ async function runTests() {
     assert.strictEqual(parsed.claims.length, 1);
 
     assert.throws(() => parseStructuredOutput("```json\n" + validJson + "\n```"), /markdown fences/);
+    assert.throws(() => parseStructuredOutput("Here is the JSON:\n" + validJson), /commentary/);
+    assert.throws(() => parseStructuredOutput(validJson + "\nHope this helps!"), /commentary/);
+    
+    // Multiple JSON objects
+    assert.throws(() => parseStructuredOutput(validJson + "\n" + validJson), /Invalid JSON/);
+
+    // Invalid schema version
+    assert.throws(() => parseStructuredOutput(JSON.stringify({ schemaVersion: "2.0", claims: [] })), /Unsupported schemaVersion/);
+
+    // Missing claims
     assert.throws(() => parseStructuredOutput(JSON.stringify({ schemaVersion: "1.0" })), /Missing or invalid 'claims'/);
+    
+    // Duplicate claim IDs
+    assert.throws(() => parseStructuredOutput(JSON.stringify({
+      schemaVersion: "1.0", claims: [{
+        candidateClaimId: "c1", text: "text", proposedAssessment: "supported", supportingReferences: [], counterEvidenceReferences: [], limitations: []
+      }, {
+        candidateClaimId: "c1", text: "text2", proposedAssessment: "supported", supportingReferences: [], counterEvidenceReferences: [], limitations: []
+      }]
+    })), /Duplicate candidateClaimId/);
+
+    // Invalid assessment
     assert.throws(() => parseStructuredOutput(JSON.stringify({
       schemaVersion: "1.0", claims: [{
         candidateClaimId: "c1", text: "text", proposedAssessment: "definitely-true", supportingReferences: [], counterEvidenceReferences: [], limitations: []
       }]
     })), /Invalid proposedAssessment/);
     
+    // Duplicate reference
     assert.throws(() => parseStructuredOutput(JSON.stringify({
       schemaVersion: "1.0", claims: [{
         candidateClaimId: "c1", text: "text", proposedAssessment: "supported", supportingReferences: [{ snapshotEntryId: "e1" }, { snapshotEntryId: "e1" }], counterEvidenceReferences: [], limitations: []
       }]
     })), /Duplicate reference/);
 
+    // Support/counter overlap
     assert.throws(() => parseStructuredOutput(JSON.stringify({
       schemaVersion: "1.0", claims: [{
         candidateClaimId: "c1", text: "text", proposedAssessment: "mixed", supportingReferences: [{ snapshotEntryId: "e1" }], counterEvidenceReferences: [{ snapshotEntryId: "e1" }], limitations: []
       }]
     })), /appears in both supporting and counter/);
+
+    // Oversized field
+    const hugeText = "A".repeat(2001);
+    assert.throws(() => parseStructuredOutput(JSON.stringify({
+      schemaVersion: "1.0", claims: [{
+        candidateClaimId: "c1", text: hugeText, proposedAssessment: "supported", supportingReferences: [], counterEvidenceReferences: [], limitations: []
+      }]
+    })), /exceeds maximum length/);
 
     // 3. Validation Service
     const mockProvService = new ProvenanceValidationService();
@@ -161,6 +195,23 @@ async function runTests() {
     assert.ok(saved);
     assert.strictEqual(saved!.analysisId, analysis.analysisId);
     assert.strictEqual(saved!.snapshotContentHash, mockSnapshot.snapshotIntegrity.contentHash);
+
+    // 4. Idempotency Proof
+    console.log(" - Testing idempotency: concurrent duplicates");
+    const p1 = service.generateAnalysis("user-1", "sess-1", mockSnapshot, "txn-idemp");
+    const p2 = service.generateAnalysis("user-1", "sess-1", mockSnapshot, "txn-idemp");
+    const [a1, a2] = await Promise.all([p1, p2]);
+    assert.strictEqual(a1.analysisId, a2.analysisId);
+
+    console.log(" - Testing idempotency: sequential duplicate after completion");
+    const a3 = await service.generateAnalysis("user-1", "sess-1", mockSnapshot, "txn-idemp");
+    assert.strictEqual(a3.analysisId, a1.analysisId);
+
+    console.log(" - Testing idempotency: replay across restarts");
+    // Prove idempotency survives restart by instantiating a fresh service (which has empty map)
+    const newService = new AnalysisValidationService(mockProvService, provider);
+    const a4 = await newService.generateAnalysis("user-1", "sess-1", mockSnapshot, "txn-idemp");
+    assert.strictEqual(a4.analysisId, a1.analysisId);
 
     console.log("Research Analysis Pipeline tests passed.");
   } finally {

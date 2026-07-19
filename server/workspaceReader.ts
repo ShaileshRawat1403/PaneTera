@@ -4,7 +4,7 @@ import fs from 'fs/promises';
 import yaml from 'js-yaml';
 
 // Settings
-const ROOT = process.env.WORKSPACE_ROOT || '/Users/Shailesh/MYAIAGENTS';
+const getRoot = () => process.env.WORKSPACE_ROOT || '/Users/Shailesh/MYAIAGENTS';
 const PORTAL_YAML = path.join(process.cwd(), 'portal.yaml');
 
 // Load portal.yaml and validate its structure
@@ -15,13 +15,14 @@ export async function listWorkspaces(): Promise<Array<{name:string; path:string}
     if (!doc || !Array.isArray(doc.workspaces)) {
       throw new Error('Invalid portal.yaml format');
     }
+    const currentRoot = getRoot();
     // Ensure each workspace is inside the allowed ROOT
     const workspaces = doc.workspaces.map((ws:any) => {
       if (!ws.name) throw new Error('Workspace entry missing name');
       
       let absPath: string;
       if (ws.folder) {
-        absPath = path.resolve(ROOT, ws.folder);
+        absPath = path.resolve(currentRoot, ws.folder);
       } else if (ws.path) {
         absPath = path.resolve(ws.path);
       } else {
@@ -30,8 +31,8 @@ export async function listWorkspaces(): Promise<Array<{name:string; path:string}
 
       // Boundary check must be segment-aware: plain startsWith(ROOT) would
       // accept sibling dirs like `${ROOT}-evil`.
-      if (absPath !== ROOT && !absPath.startsWith(ROOT + path.sep)) {
-        throw new Error(`Workspace ${ws.name} at path ${absPath} is outside allowed WORKSPACE_ROOT (${ROOT})`);
+      if (absPath !== currentRoot && !absPath.startsWith(currentRoot + path.sep)) {
+        throw new Error(`Workspace ${ws.name} at path ${absPath} is outside allowed WORKSPACE_ROOT (${currentRoot})`);
       }
       return { name: ws.name, path: absPath };
     });
@@ -73,18 +74,27 @@ export async function readFileSafe(workspaceName:string, relPath:string): Promis
   const ws = workspaces.find(w=>w.name===workspaceName);
   if (!ws) throw new Error(`Workspace ${workspaceName} not allowed`);
   const absPath = path.resolve(ws.path, relPath);
+  let realAbsPath: string;
+  try {
+    realAbsPath = await fs.realpath(absPath);
+  } catch (e) {
+    // If it doesn't exist, just use the resolved path for the rest of the checks
+    // The actual read will fail anyway if it doesn't exist.
+    realAbsPath = absPath;
+  }
+
   // Ensure the final resolved path is still inside the workspace root.
   // Segment-aware: startsWith(ws.path) alone would accept `${ws.path}-evil`.
-  if (absPath !== ws.path && !absPath.startsWith(ws.path + path.sep)) {
+  if (realAbsPath !== ws.path && !realAbsPath.startsWith(ws.path + path.sep)) {
     throw new Error('Path traversal detected');
   }
   // Block disallowed folders
-  const segments = absPath.split(path.sep);
+  const segments = realAbsPath.split(path.sep);
   if (segments.some(seg=>BLOCKED_FOLDERS.includes(seg))) {
     throw new Error('Access to blocked folder');
   }
   // Block disallowed file patterns (simple check for .env etc.)
-  const base = path.basename(absPath);
+  const base = path.basename(realAbsPath);
   if (BLOCKED_FILES.some(pat=> {
     if (pat.startsWith('*.')) {
       return base.endsWith(pat.slice(1));
@@ -94,14 +104,25 @@ export async function readFileSafe(workspaceName:string, relPath:string): Promis
     throw new Error('Access to blocked file');
   }
   // Extension allowlist
-  const ext = path.extname(absPath).toLowerCase();
+  const ext = path.extname(realAbsPath).toLowerCase();
   if (!ALLOWED_EXTS.includes(ext)) throw new Error('File extension not allowed');
   // Size check
-  const stat = await fs.stat(absPath);
+  let stat;
+  try {
+    stat = await fs.stat(realAbsPath);
+  } catch (e: any) {
+    if (e.code === 'ENOENT') throw new Error(`File not found: ${relPath}`);
+    throw new Error('Failed to stat file');
+  }
   if (stat.size > MAX_SIZE) throw new Error('File too large');
   // Read and return as UTF‑8 text
-  const data = await fs.readFile(absPath, 'utf8');
-  return data;
+  try {
+    const data = await fs.readFile(realAbsPath, 'utf8');
+    return data;
+  } catch (e: any) {
+    if (e.code === 'ENOENT') throw new Error(`File not found: ${relPath}`);
+    throw new Error('Failed to read file');
+  }
 }
 
 export async function listFilesInWorkspace(workspaceName: string): Promise<string[]> {

@@ -160,12 +160,52 @@ async function runTests() {
     assert.strictEqual(rehashed.contentHash, entry.integrity.contentHash);
     cleanup();
 
-    // Test: Analysis restart proof
-    console.log(' - proves analysis restart durability');
-    setup();
-    process.env.TESSERA_APP_DATA = tempDir;
-    resetResearchSessionStoreForTest();
-    resetResearchAnalysisStoreForTest();
+    // Mutex Lifecycle Proof
+    console.log(' - proves Mutex lifecycle');
+    const storeA = new (await import('../server/research/researchAnalysisStore')).ResearchAnalysisStore(tempDir);
+    const mutex = storeA.getMutex();
+    
+    // release after success
+    const rel1 = await mutex.acquire('sess-mutex');
+    assert.strictEqual(mutex.activeKeyCount(), 1);
+    rel1();
+    assert.strictEqual(mutex.activeKeyCount(), 0);
+
+    // release after failure (simulated by throwing inside lock)
+    const rel2 = await mutex.acquire('sess-mutex');
+    assert.strictEqual(mutex.activeKeyCount(), 1);
+    try {
+      throw new Error("fail");
+    } catch(e) {
+      rel2();
+    }
+    assert.strictEqual(mutex.activeKeyCount(), 0);
+
+    // multiple ordered waiters
+    const w1 = mutex.acquire('sess-mutex');
+    const w2 = mutex.acquire('sess-mutex');
+    const r1 = await w1;
+    assert.strictEqual(mutex.activeKeyCount(), 1);
+    let r2Finished = false;
+    w2.then(r => { r2Finished = true; r(); });
+    assert.strictEqual(r2Finished, false);
+    r1();
+    await new Promise(res => setTimeout(res, 10)); // let event loop tick
+    assert.strictEqual(r2Finished, true);
+    assert.strictEqual(mutex.activeKeyCount(), 0);
+
+    // different sessions progressing independently
+    const sess1 = await mutex.acquire('sess-1');
+    const sess2 = await mutex.acquire('sess-2');
+    assert.strictEqual(mutex.activeKeyCount(), 2);
+    sess1();
+    assert.strictEqual(mutex.activeKeyCount(), 1);
+    sess2();
+    assert.strictEqual(mutex.activeKeyCount(), 0);
+
+    // Test: Analysis restart proof with distinct Store instances
+    console.log(' - proves analysis restart durability with Store instances');
+    const storeB = new (await import('../server/research/researchAnalysisStore')).ResearchAnalysisStore(tempDir);
 
     // Setup session and snapshot
     const sessionAnalysis = await researchSessionService.createSession('user-2', 'Analysis Durability Test');
@@ -198,8 +238,8 @@ async function runTests() {
     const snapAna = await researchSessionService.createSnapshot('user-2', sessionAnalysis.sessionId, [
       { captureId: 'cap-ana', extractionId: 'ext-ana', evidenceId: 'ev-ana' }
     ]);
-    
-    // Create an analysis
+
+    // Create an analysis in Store A
     const mockAnalysis = {
       analysisId: 'ana-123',
       ownerId: 'user-2',
@@ -215,13 +255,10 @@ async function runTests() {
       warnings: []
     };
     
-    await researchAnalysisStore.saveAnalysis(mockAnalysis as any);
+    await storeA.saveAnalysis(mockAnalysis as any);
     
-    // Restart store (clear memory)
-    resetResearchAnalysisStoreForTest();
-    
-    // Should still be able to read it
-    const loadedAnalysis = await researchAnalysisStore.getAnalysis(sessionAnalysis.sessionId, 'ana-123');
+    // Read from Store B
+    const loadedAnalysis = await storeB.getAnalysis(sessionAnalysis.sessionId, 'ana-123');
     assert.ok(loadedAnalysis);
     assert.strictEqual(loadedAnalysis.analysisId, 'ana-123');
     
