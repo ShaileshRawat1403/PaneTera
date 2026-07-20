@@ -56,7 +56,7 @@ interface RepoSetupProposal {
 ## Example Prompts
 
 - `“add my websiteops repo”`
-- `“connect /Users/Shailesh/MYAIAGENTS/myai-portal”`
+- `“connect /Users/Shailesh/MYAIAGENTS/PaneTera”`
 - `“track the flowright repo”`
 - `“make websiteops-pothos-proof available”`
 

@@ -54,7 +54,8 @@ async function runTests() {
     console.log('- Testing: no workspace selected...');
     const noWsRes = await handleOrchestratorQuery('Explain the repo', null, null, 'engineer', mockResolver);
     assert.strictEqual(noWsRes.intent, 'needs_clarification');
-    assert.ok(noWsRes.answer.includes('Select a workspace'));
+    assert.ok(noWsRes.answer.includes('Choose a workspace'));
+    assert.ok(noWsRes.answer.includes('Website previews do not require a workspace'));
 
     // 2. Test unknown intent clarification
     console.log('- Testing: unknown intent clarification...');

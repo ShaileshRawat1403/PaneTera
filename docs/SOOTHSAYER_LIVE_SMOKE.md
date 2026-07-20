@@ -33,7 +33,7 @@
 
 ### 5. UI Card Behavior
 - **Status**: **PASS**
-- **Notes**: The [LiveAppWorkbenchCard.tsx](file:///Users/Shailesh/MYAIAGENTS/myai-portal/src/components/LiveAppWorkbenchCard.tsx) displays:
+- **Notes**: The [LiveAppWorkbenchCard.tsx](file:///Users/Shailesh/MYAIAGENTS/PaneTera/src/components/LiveAppWorkbenchCard.tsx) displays:
   - Application Name: Soothsayer
   - Target URL
   - Status indicators (Configured: success, URL Reachable: success, Manifest Reachable: success, Manifest Available: success)

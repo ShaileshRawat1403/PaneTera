@@ -14,7 +14,7 @@ const WORKSPACE_ROOT = '/Users/Shailesh/MYAIAGENTS';
 const validQueries = [
   'add myai-portal',
   'add my myai-portal repo',
-  'connect /Users/Shailesh/MYAIAGENTS/myai-portal',
+  'connect /Users/Shailesh/MYAIAGENTS/PaneTera',
   'track the websiteops repo',
   'make flowright available',
   'use myai-portal repo',
@@ -42,18 +42,18 @@ for (const q of invalidQueries) {
 }
 
 async function runAsyncTests() {
-  // 2. Target Resolver Tests - Inside Root and Exists (myai-portal itself)
-  const proposal1 = await resolveRepoSetupTarget('myai-portal', WORKSPACE_ROOT);
-  assert.strictEqual(proposal1.workspaceName, 'myai-portal');
-  assert.strictEqual(proposal1.exists, true, 'myai-portal should exist');
-  assert.strictEqual(proposal1.insideWorkspaceRoot, true, 'myai-portal should be inside root');
-  assert.strictEqual(proposal1.allowed, true, 'myai-portal should be allowed');
-  assert.strictEqual(proposal1.gitDetected, true, 'myai-portal should have git detected');
+  // 2. Target Resolver Tests - Inside Root and Exists (PaneTera itself)
+  const proposal1 = await resolveRepoSetupTarget('PaneTera', WORKSPACE_ROOT);
+  assert.strictEqual(proposal1.workspaceName, 'PaneTera');
+  assert.strictEqual(proposal1.exists, true, 'PaneTera should exist');
+  assert.strictEqual(proposal1.insideWorkspaceRoot, true, 'PaneTera should be inside root');
+  assert.strictEqual(proposal1.allowed, true, 'PaneTera should be allowed');
+  assert.strictEqual(proposal1.gitDetected, true, 'PaneTera should have git detected');
   assert.ok(
     proposal1.packageManager === 'npm' || proposal1.packageManager === 'pnpm',
-    'myai-portal should be npm or pnpm project',
+    'PaneTera should be npm or pnpm project',
   );
-  assert.ok(proposal1.scripts && proposal1.scripts.includes('build'), 'myai-portal should have build script');
+  assert.ok(proposal1.scripts && proposal1.scripts.includes('build'), 'PaneTera should have build script');
 
   // 3. Target Resolver Tests - Inside Root but Missing
   const proposal2 = await resolveRepoSetupTarget('missing-folder-xyz', WORKSPACE_ROOT);
@@ -76,10 +76,10 @@ async function runAsyncTests() {
   assert.strictEqual(proposal4.allowed, false);
 
   // 6. buildRepoSetupProposal integration
-  const integration = await buildRepoSetupProposal('connect myai-portal', WORKSPACE_ROOT);
+  const integration = await buildRepoSetupProposal('connect PaneTera', WORKSPACE_ROOT);
   assert.ok(integration !== null);
   assert.strictEqual(integration.allowed, true);
-  assert.strictEqual(integration.workspaceName, 'myai-portal');
+  assert.strictEqual(integration.workspaceName, 'PaneTera');
 
   console.log('✓ All repo setup proposal tests passed!');
 }

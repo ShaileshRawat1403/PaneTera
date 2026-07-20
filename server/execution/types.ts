@@ -1,6 +1,6 @@
 // server/execution/types.ts
 //
-// Execution adapter contract for myai-portal.
+// Execution adapter contract for PaneTera.
 // See docs/MYAI_PORTAL_CONTRACT.md for the full product contract.
 //
 // Adapters are pluggable backends that run approved commands.

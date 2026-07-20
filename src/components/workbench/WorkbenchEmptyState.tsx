@@ -1,41 +1,69 @@
+// src/components/workbench/WorkbenchEmptyState.tsx
+// Choosing a live application when none is open.
+//
+// Migrated to theme tokens in the Phase 3 pass. The copy also changed: "Select
+// an approved local application from the registry to begin guided operations"
+// described the mechanism rather than the choice. The heading now names what
+// the person is picking.
+
 import React from 'react';
 import { Box, Typography, IconButton } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import { WorkbenchAppSelector } from './WorkbenchAppSelector';
+import { ink, radius, surface } from '../../theme/tokens';
 
 interface WorkbenchEmptyStateProps {
   onSelectApp: (appId: string) => void;
   onClose?: () => void;
 }
 
-export const WorkbenchEmptyState: React.FC<WorkbenchEmptyStateProps> = ({ onSelectApp, onClose }) => {
+export const WorkbenchEmptyState: React.FC<WorkbenchEmptyStateProps> = ({
+  onSelectApp,
+  onClose,
+}) => {
   return (
-    <Box sx={{ 
-      display: 'flex', 
-      flexDirection: 'column', 
-      alignItems: 'center', 
-      justifyContent: 'center',
-      height: '100%',
-      p: 4,
-      bgcolor: '#09090b',
-      position: 'relative'
-    }}>
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: '100%',
+        p: 4,
+        backgroundColor: surface.base,
+        position: 'relative',
+      }}
+    >
       {onClose && (
-        <IconButton 
-          onClick={onClose} 
-          sx={{ position: 'absolute', top: 16, right: 16, color: '#a1a1aa' }}
-          aria-label="Close Local App Workbench"
+        <IconButton
+          onClick={onClose}
+          sx={{ position: 'absolute', top: 16, right: 16 }}
+          aria-label="Close the live application workbench"
         >
           <CloseIcon />
         </IconButton>
       )}
-      <Typography variant="h5" sx={{ color: '#f4f4f5', mb: 2, fontWeight: 600 }}>
-        Local App Workbench
+
+      <Typography variant="h6" component="h2" sx={{ color: ink.primary, mb: 1, fontWeight: 600 }}>
+        Which application?
       </Typography>
-      <Typography variant="body1" sx={{ color: '#a1a1aa', mb: 4, textAlign: 'center', maxWidth: 400 }}>
-        Select an approved local application from the registry to begin guided operations.
+      <Typography
+        variant="body2"
+        sx={{ color: ink.secondary, mb: 3, textAlign: 'center', maxWidth: 400 }}
+      >
+        PaneTera can open a registered local application here and observe it. It does not act
+        inside the application.
       </Typography>
-      <Box sx={{ width: '100%', maxWidth: 400, bgcolor: '#18181b', borderRadius: 2, border: '1px solid rgba(255,255,255,0.05)' }}>
+
+      <Box
+        sx={{
+          width: '100%',
+          maxWidth: 400,
+          backgroundColor: surface.raised,
+          borderRadius: `${radius.md}px`,
+          border: `1px solid ${surface.border}`,
+        }}
+      >
         <WorkbenchAppSelector onSelect={onSelectApp} />
       </Box>
     </Box>

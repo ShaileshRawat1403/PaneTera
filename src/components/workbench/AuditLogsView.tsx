@@ -1,6 +1,7 @@
 // src/components/workbench/AuditLogsView.tsx
 import React, { useState, useEffect } from 'react';
 import { Box, Dialog, DialogTitle, DialogContent, DialogActions, Typography, List, ListItem, Button, Chip, Stack, CircularProgress, Accordion, AccordionSummary, AccordionDetails } from '@mui/material';
+import { accent, ink, status, surface, typography } from '../../theme/tokens';
 import SecurityIcon from '@mui/icons-material/Security';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
@@ -51,15 +52,21 @@ export const AuditLogsView: React.FC<AuditLogsProps> = ({ token, open, onClose }
     }
   }, [open, token]);
 
+  /**
+   * Audit outcome colours.
+   *
+   * A denied or failed event is a refusal and reads as one. Everything else is
+   * routine and stays neutral: an audit log is mostly a list of ordinary
+   * operations, and colouring "allowed" green would make the log a wall of
+   * green with nothing meaning anything. The contract reserves green for a
+   * completed verification, which an allowlist check is not.
+   */
   const getEventColors = (event: string) => {
     const ev = event.toLowerCase();
     if (ev.includes('denied') || ev.includes('violation') || ev.includes('error')) {
-      return { bg: 'rgba(239, 68, 68, 0.08)', text: '#ef4444', border: 'rgba(239, 68, 68, 0.15)' };
+      return { bg: status.dangerMuted, text: status.danger, border: status.danger };
     }
-    if (ev.includes('allowed') || ev.includes('enabled') || ev.includes('start') || ev.includes('success')) {
-      return { bg: 'rgba(34, 197, 94, 0.08)', text: '#22c55e', border: 'rgba(34, 197, 94, 0.15)' };
-    }
-    return { bg: 'rgba(127, 85, 240, 0.08)', text: '#b794f4', border: 'rgba(127, 85, 240, 0.15)' };
+    return { bg: 'transparent', text: ink.secondary, border: surface.border };
   };
 
   return (
@@ -70,21 +77,21 @@ export const AuditLogsView: React.FC<AuditLogsProps> = ({ token, open, onClose }
       fullWidth
       PaperProps={{
         sx: {
-          background: '#0e0f12',
-          border: '1px solid rgba(255, 255, 255, 0.08)',
+          background: surface.raised,
+          border: `1px solid ${surface.border}`,
           borderRadius: '12px',
           maxHeight: '80vh'
         }
       }}
     >
-      <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pb: 1.5, borderBottom: '1px solid rgba(255, 255, 255, 0.06)' }}>
+      <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pb: 1.5, borderBottom: `1px solid ${surface.border}` }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <SecurityIcon sx={{ color: '#7f5af0', fontSize: 18 }} />
-          <Typography variant="body2" sx={{ color: '#f4f4f5', fontWeight: 800, fontSize: '0.9rem' }}>
+          <SecurityIcon sx={{ color: accent.violet, fontSize: 18 }} />
+          <Typography variant="body2" sx={{ color: ink.primary, fontWeight: 600, fontSize: '0.9rem' }}>
             Authoritative Gateway Security Audit Trail
           </Typography>
         </Box>
-        <Button size="small" onClick={fetchLogs} startIcon={<RefreshIcon sx={{ fontSize: 12 }} />} sx={{ color: '#cbd5e1', textTransform: 'none', fontSize: '0.7rem' }}>
+        <Button size="small" onClick={fetchLogs} startIcon={<RefreshIcon sx={{ fontSize: 12 }} />} sx={{ color: ink.secondary, textTransform: 'none', fontSize: '0.7rem' }}>
           Refresh Trail
         </Button>
       </DialogTitle>
@@ -92,11 +99,11 @@ export const AuditLogsView: React.FC<AuditLogsProps> = ({ token, open, onClose }
       <DialogContent sx={{ p: 2 }}>
         {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', p: 5 }}>
-            <CircularProgress size={20} sx={{ color: '#7f5af0' }} />
+            <CircularProgress size={20} sx={{ color: accent.violet }} />
           </Box>
         ) : logs.length === 0 ? (
           <Box sx={{ p: 4, textAlign: 'center' }}>
-            <Typography variant="caption" sx={{ color: '#71717a' }}>No audit logs recorded yet.</Typography>
+            <Typography variant="caption" sx={{ color: ink.secondary }}>No audit logs recorded yet.</Typography>
           </Box>
         ) : (
           <List dense disablePadding>
@@ -114,15 +121,15 @@ export const AuditLogsView: React.FC<AuditLogsProps> = ({ token, open, onClose }
                   <Accordion
                     disableGutters
                     sx={{
-                      background: 'rgba(255,255,255,0.005)',
+                      background: surface.sunken,
                       border: `1px solid ${colors.border}`,
                       borderRadius: '6px !important',
-                      color: '#cbd5e1',
+                      color: ink.secondary,
                       '&:before': { display: 'none' }
                     }}
                   >
                     <AccordionSummary
-                      expandIcon={<ExpandMoreIcon sx={{ fontSize: 16, color: '#71717a' }} />}
+                      expandIcon={<ExpandMoreIcon sx={{ fontSize: 16, color: ink.secondary }} />}
                       sx={{
                         minHeight: 38,
                         py: 0,
@@ -143,23 +150,23 @@ export const AuditLogsView: React.FC<AuditLogsProps> = ({ token, open, onClose }
                             border: `1px solid ${colors.border}`
                           }}
                         />
-                        <Typography variant="caption" sx={{ color: '#71717a', fontFamily: 'monospace', fontSize: '0.62rem' }}>
+                        <Typography variant="caption" sx={{ color: ink.secondary, fontFamily: typography.mono, fontSize: '0.62rem' }}>
                           {new Date(log.timestamp).toLocaleTimeString()}
                         </Typography>
                         {log.details?.workspaceId && (
                           <Chip
-                            label={`WS: ${log.details.workspaceId}`}
+                            label={`Project: ${log.details.workspaceId}`}
                             size="small"
-                            sx={{ height: 14, fontSize: '0.5rem', background: 'rgba(255,255,255,0.02)', color: '#a1a1aa' }}
+                            sx={{ height: 14, fontSize: '0.5rem', background: surface.overlay, color: ink.secondary }}
                           />
                         )}
                         <Typography
                           variant="body2"
                           noWrap
                           sx={{
-                            color: '#cbd5e1',
+                            color: ink.secondary,
                             fontSize: '0.7rem',
-                            fontFamily: 'monospace',
+                            fontFamily: typography.mono,
                             flexGrow: 1,
                             maxWidth: '300px'
                           }}
@@ -171,22 +178,22 @@ export const AuditLogsView: React.FC<AuditLogsProps> = ({ token, open, onClose }
                     <AccordionDetails
                       sx={{
                         p: 1.5,
-                        background: 'rgba(9, 9, 11, 0.4)',
-                        borderTop: '1px solid rgba(255,255,255,0.03)'
+                        background: surface.sunken,
+                        borderTop: `1px solid ${surface.border}`
                       }}
                     >
-                      <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, display: 'block', mb: 0.5 }}>
+                      <Typography variant="caption" sx={{ color: ink.secondary, fontWeight: 600, display: 'block', mb: 0.5 }}>
                         DETAILED JSON PARAMETERS
                       </Typography>
                       <pre
                         style={{
                           margin: 0,
                           padding: '8px',
-                          background: 'rgba(0,0,0,0.2)',
+                          background: surface.sunken,
                           borderRadius: '4px',
-                          fontFamily: 'monospace',
+                          fontFamily: typography.mono,
                           fontSize: '0.68rem',
-                          color: '#a1a1aa',
+                          color: ink.secondary,
                           overflowX: 'auto',
                           whiteSpace: 'pre-wrap'
                         }}
@@ -202,8 +209,8 @@ export const AuditLogsView: React.FC<AuditLogsProps> = ({ token, open, onClose }
         )}
       </DialogContent>
 
-      <DialogActions sx={{ p: 2, pt: 0, borderTop: '1px solid rgba(255, 255, 255, 0.06)' }}>
-        <Button size="small" onClick={onClose} sx={{ color: '#cbd5e1', fontSize: '0.72rem' }}>
+      <DialogActions sx={{ p: 2, pt: 0, borderTop: `1px solid ${surface.border}` }}>
+        <Button size="small" onClick={onClose} sx={{ color: ink.secondary, fontSize: '0.72rem' }}>
           Close Auditor
         </Button>
       </DialogActions>

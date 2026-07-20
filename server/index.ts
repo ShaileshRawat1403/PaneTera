@@ -119,7 +119,7 @@ class RookMemoryBridge {
       this.call('initialize', {
         protocolVersion: '2024-11-05',
         capabilities: {},
-        clientInfo: { name: 'myai-portal', version: '1.0.0' }
+        clientInfo: { name: 'panetera', version: '1.0.0' }
       }),
       initTimeout
     ]);
@@ -315,6 +315,27 @@ app.get('/api/workspaces', async (req, res) => {
   }
 });
 
+// Browse native folder dialog
+app.post('/api/workspaces/browse', (req, res) => {
+  exec('osascript -e \'tell application (path to frontmost application as text) to choose folder with prompt "Select Workspace Folder"\' -e \'POSIX path of result\'', (error, stdout, stderr) => {
+    if (error) {
+      if (error.message.includes('User canceled')) {
+        return res.json({ canceled: true });
+      }
+      return res.status(500).json({ error: error.message });
+    }
+    const selectedPath = stdout.trim();
+    if (selectedPath) {
+      // Create a default name from the folder path
+      const pathParts = selectedPath.split('/').filter(Boolean);
+      const defaultName = pathParts[pathParts.length - 1] || 'New Workspace';
+      res.json({ canceled: false, path: selectedPath, name: defaultName });
+    } else {
+      res.json({ canceled: true });
+    }
+  });
+});
+
 // Add a new workspace to portal.yaml and register it in the catalog
 app.post('/api/workspaces/add', async (req, res) => {
   try {
@@ -444,7 +465,7 @@ app.get('/api/git/history', async (req, res) => {
 // Execute task whitelisted command
 app.post('/api/execute', async (req, res) => {
   if (!FEATURES.commandExecution) {
-    return res.status(403).json({ error: "Access Denied: Command execution feature is disabled in MyAI Portal V1." });
+    return res.status(403).json({ error: "Access denied: governed execution is disabled in PaneTera." });
   }
 
   const { workspaceName, command, procId } = req.body as { workspaceName: string; command: string; procId: string };
@@ -745,6 +766,15 @@ app.get('/api/desktop/apps', (req, res) => {
 // actuation, that is a deliberate new surface with its own threat model,
 // not a stub to grow into.
 
+const PANETERA_ASSISTANT_INSTRUCTION =
+  'You are PaneTera, a local-first human-AI workstation for any kind of builder, researcher, creator, analyst, or operator. ' +
+  'Infer the user’s intended outcome before choosing a tool or asking for context. Do not assume every request concerns code or a workspace. ' +
+  'When one essential detail is missing, ask the smallest useful clarification and give a concrete example. ' +
+  'Distinguish general conversation, project inspection, web surfaces, artifacts, evidence, bounded runs, and governed actions. ' +
+  'Never invent application state, files, evidence, tool results, permissions, or completed execution. ' +
+  'Repository and execution facts must come from tools; mutations require an explicit proposal and user approval. ' +
+  'Answer naturally, directly, and without internal intent codes or emojis.';
+
 // Gemini Q&A execution handler
 async function askGemini(query: string, history: any[] = []): Promise<{ reply: string; uiComponent?: any }> {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -777,8 +807,7 @@ async function askGemini(query: string, history: any[] = []): Promise<{ reply: s
       contents: contentsPayload,
       systemInstruction: {
         parts: [{
-          text: 'You are the assistant for MyAI Portal, a secure, governed dashboard for non-technical stakeholders.\n' +
-                'You help users explore their workspaces, inspect files, check folder contents, and search code/docs.\n' +
+          text: PANETERA_ASSISTANT_INSTRUCTION + '\n' +
                 'You must use the provided tools to fetch actual workspace data. Do not make up file paths or contents.\n' +
                 'If the user asks to build, test, lint, or check status/diff for a workspace, call proposeExecution — ' +
                 'never claim to have run or changed anything yourself. Execution only happens after the user explicitly ' +
@@ -968,8 +997,7 @@ async function askOpenAI(query: string, history: any[] = []): Promise<{ reply: s
   const messagesPayload: any[] = [
     {
       role: 'system',
-      content: 'You are the assistant for MyAI Portal, a secure, governed dashboard for non-technical stakeholders.\n' +
-               'You help users explore their workspaces, inspect files, check folder contents, and search code/docs.\n' +
+      content: PANETERA_ASSISTANT_INSTRUCTION + '\n' +
                'You must use the provided tools to fetch actual workspace data. Do not make up file paths or contents.\n' +
                'If the user asks to build, test, lint, or check status/diff for a workspace, call proposeExecution — ' +
                'never claim to have run or changed anything yourself. Execution only happens after the user explicitly ' +
@@ -1164,8 +1192,7 @@ async function askOllama(query: string): Promise<{ reply: string; uiComponent?: 
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: 'llama3',
-      prompt: `You are the assistant for MyAI Portal, a secure, governed dashboard for non-technical stakeholders.\n` +
-              `Help the user explore workspaces. Query: ${query}\n` +
+      prompt: `${PANETERA_ASSISTANT_INSTRUCTION}\nQuery: ${query}\n` +
               `You cannot execute anything from this offline path — if asked to build, test, or lint, tell the user ` +
               `to try again once the portal's main connection is available so the request can go through approval.\n` +
               `Answer in natural language, be concise, helpful, and do NOT use emojis in your response.`,
@@ -1207,7 +1234,7 @@ export async function resolveGatewayCardLocally(query: string): Promise<{ reply:
       try {
         const templates = await flowrightApi('GET', '/api/templates');
         return {
-          reply: `[LOCAL FALLBACK ENGINE] Flowright active workflows loaded from the local operator API.`,
+          reply: `Flowright active workflows are ready in the canvas.`,
           uiComponent: {
             type: 'WorkflowsList',
             data: {
@@ -1440,7 +1467,7 @@ export async function resolveGatewayCardLocally(query: string): Promise<{ reply:
   const setupProposal = await buildRepoSetupProposal(query);
   if (setupProposal) {
     return {
-      reply: `[LOCAL FALLBACK ENGINE] I found a repo setup proposal. Review it before adding it to the portal.`,
+      reply: `I found a project setup proposal. Review it before adding it to PaneTera.`,
       uiComponent: {
         type: 'RepoSetupProposal',
         data: setupProposal
@@ -1463,7 +1490,7 @@ export async function resolveGatewayCardLocally(query: string): Promise<{ reply:
   if (q === 'list workspaces' || q === 'show connected systems' || q === 'connected systems') {
     const workspaces = await listWorkspaces();
     return {
-      reply: `[LOCAL FALLBACK ENGINE] Active registered workspaces loaded. Choose a directory inside the stream panel to begin.`,
+      reply: `Your registered workspaces are ready. Choose one to begin.`,
       uiComponent: { type: 'WorkspaceList', data: workspaces }
     };
   }
@@ -1472,7 +1499,7 @@ export async function resolveGatewayCardLocally(query: string): Promise<{ reply:
   if (proposal) {
     const { workspace, command } = proposal;
     return {
-      reply: `[LOCAL FALLBACK ENGINE] I can run "${command}" in workspace "${workspace}". Nothing runs until you approve it below.`,
+      reply: `I can run "${command}" in workspace "${workspace}". Nothing runs until you approve it.`,
       uiComponent: {
         type: 'ProposedAction',
         data: buildProposedActionData(workspace, command, `Requested via: "${query}"`)
@@ -1495,7 +1522,7 @@ async function resolveQueryLocally(query: string): Promise<{ reply: string; uiCo
   if (q.includes('workspace') || q.includes('journey')) {
     const workspaces = await listWorkspaces();
     return {
-      reply: `[LOCAL FALLBACK ENGINE] Active registered workspaces loaded. Choose a directory inside the stream panel to begin.`,
+      reply: `Your registered workspaces are ready. Choose one to begin.`,
       uiComponent: { type: 'WorkspaceList', data: workspaces }
     };
   }
@@ -1509,7 +1536,7 @@ async function resolveQueryLocally(query: string): Promise<{ reply: string; uiCo
     try {
       const content = await readFileSafe(workspace, filePath);
       return {
-        reply: `[LOCAL FALLBACK ENGINE] File loaded: "${filePath}" inside workspace "${workspace}".`,
+        reply: `I loaded "${filePath}" from workspace "${workspace}" into the canvas.`,
         uiComponent: { type: 'CodePreview', data: { workspace, path: filePath, content } }
       };
     } catch (err: any) {
@@ -1526,7 +1553,7 @@ async function resolveQueryLocally(query: string): Promise<{ reply: string; uiCo
     try {
       const results = await searchFilesInWorkspace(workspace, keyword);
       return {
-        reply: `[LOCAL FALLBACK ENGINE] Search results populated for "${keyword}" inside workspace "${workspace}".`,
+        reply: `I found the workspace results for "${keyword}" and opened them in the canvas.`,
         uiComponent: { type: 'SearchResults', data: { workspace, keyword, results } }
       };
     } catch (err: any) {
@@ -1542,7 +1569,7 @@ async function resolveQueryLocally(query: string): Promise<{ reply: string; uiCo
     try {
       const files = await listFilesInWorkspace(workspace);
       return {
-        reply: `[LOCAL FALLBACK ENGINE] Found ${files.length} safe files inside workspace "${workspace}". View explorer on the right.`,
+        reply: `I found ${files.length} accessible files in workspace "${workspace}" and opened them in the canvas.`,
         uiComponent: { type: 'FileList', data: { workspace, files } }
       };
     } catch (err: any) {
@@ -1556,7 +1583,7 @@ async function resolveQueryLocally(query: string): Promise<{ reply: string; uiCo
   const webSearchMatch = query.match(webSearchRegex);
   if (webSearchMatch) {
     return {
-      reply: `[LOCAL FALLBACK ENGINE] Web search isn't connected in this build. Ask about a registered workspace, a file, or a keyword inside one instead.`
+      reply: `Live web search is not connected in this build. I can still open a public web address in the canvas, or search inside a registered workspace.`
     };
   }
 
@@ -1567,7 +1594,7 @@ async function resolveQueryLocally(query: string): Promise<{ reply: string; uiCo
   if (proposal) {
     const { workspace, command } = proposal;
     return {
-      reply: `[LOCAL FALLBACK ENGINE] I can run "${command}" in workspace "${workspace}". Nothing runs until you approve it below.`,
+      reply: `I can run "${command}" in workspace "${workspace}". Nothing runs until you approve it.`,
       uiComponent: {
         type: 'ProposedAction',
         data: buildProposedActionData(workspace, command, `Requested via: "${query}"`)
@@ -1590,7 +1617,7 @@ async function resolveQueryLocally(query: string): Promise<{ reply: string; uiCo
     ];
 
     return {
-      reply: `[LOCAL FALLBACK ENGINE] Pipelines and workflow history loaded for workspace "${workspace}". View build logs on the right.`,
+      reply: `I loaded the workflow history for workspace "${workspace}" into the canvas.`,
       uiComponent: {
         type: 'WorkflowsList',
         data: { workspace, workflows }
@@ -1606,7 +1633,7 @@ async function resolveQueryLocally(query: string): Promise<{ reply: string; uiCo
     try {
       const gitDetails = await getWorkspaceGit(workspace);
       return {
-        reply: `[LOCAL FALLBACK ENGINE] Git status and log history loaded for workspace "${workspace}".`,
+        reply: `I loaded the git status and recent history for workspace "${workspace}" into the canvas.`,
         uiComponent: {
           type: 'GitHistory',
           data: {
@@ -1624,7 +1651,7 @@ async function resolveQueryLocally(query: string): Promise<{ reply: string; uiCo
   // 4.8. Desktop apps status check fallback
   if (q.includes('desktop apps') || q.includes('running apps') || q.includes('system apps')) {
     return {
-      reply: `[LOCAL FALLBACK ENGINE] System application audit initialized. Querying active macOS process lists.`,
+      reply: `I started a local application audit and opened the results in the canvas.`,
       uiComponent: {
         type: 'DesktopApps',
         data: {}
@@ -1637,21 +1664,20 @@ async function resolveQueryLocally(query: string): Promise<{ reply: string; uiCo
   // whatever). Say that honestly instead of naming a specific cause we
   // haven't actually confirmed — a guessed diagnosis stated as fact is
   // exactly the kind of thing this build has been removing all session.
-  return {
-    reply: `SYSTEM CONFIG // LOCAL CORE CONTROLS
---------------------------------------------------
-Status: Live AI assistance unavailable right now
-Mode: Local deterministic parsing system active
+  if (/^(hi|hello|hey|good (morning|afternoon|evening))[.!?\s]*$/i.test(query)) {
+    return {
+      reply: 'Hello. What would you like to work on? You can describe a goal, open a public webpage, or choose a workspace for project-specific work.'
+    };
+  }
 
-Please run standard workspace queries directly:
-- "List workspaces" -> Scan active directories
-- "List files in rook" -> Index files in workspace
-- "Read README.md in flowright" -> Browse file code
-- "Search for config in flowright" -> Scan codebase
-- "git status in <workspace>" -> Check recent activity
-- "build/test/lint <workspace>" -> Propose a run for your approval
---------------------------------------------------
-Local terminal is operational. Ready for queries.`
+  if (/\b(what can you do|how can you help|help me|capabilities)\b/i.test(query)) {
+    return {
+      reply: 'I can help you think through a goal, open a public webpage in the canvas, inspect a chosen workspace, surface evidence, and propose safe actions for your approval. Live open-ended AI assistance is unavailable right now, but PaneTera’s local workspace and preview tools are ready.'
+    };
+  }
+
+  return {
+    reply: 'I understand the request, but live open-ended AI assistance is unavailable right now. I can still open a public webpage, list workspaces, inspect files, search a chosen project, show git status, or propose a build, test, or lint run for your approval.'
   };
 }
 
@@ -1696,7 +1722,7 @@ function isSuspicious(val: any): boolean {
 
 app.post('/api/browser-observation', (req, res) => {
   if (!FEATURES.browserObservation) {
-    return res.status(403).json({ error: "Access Denied: Browser observation feature is disabled in MyAI Portal V1." });
+    return res.status(403).json({ error: "Access denied: browser observation is disabled in PaneTera." });
   }
 
   const body = req.body;
@@ -2081,7 +2107,7 @@ app.post('/api/chat', async (req, res) => {
 
 if (process.env.NODE_ENV !== 'test') {
   app.listen(PORT, '127.0.0.1', () => {
-    console.log(`🚀 Portal backend listening on http://127.0.0.1:${PORT}`);
+    console.log(`🚀 PaneTera backend listening on http://127.0.0.1:${PORT}`);
   });
 }
 

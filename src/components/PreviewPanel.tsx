@@ -1,3 +1,11 @@
+// src/components/PreviewPanel.tsx
+// The Activity surface, rendered inside the contextual Activity drawer.
+//
+// Migrated to theme tokens in the Phase 3 pass. Two semantic corrections
+// beyond colour: a 'clean' project state is routine rather than a success, and
+// the decorative window-chrome dots no longer borrow the status palette.
+import { accent, elevation, ink, status as statusToken, surface, typography } from '../theme/tokens';
+import { scrollBehavior } from '../theme/motion';
 import React, { useState, useEffect, useRef } from 'react';
 import { Box, Typography, Paper, Divider, IconButton, Button, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Grid, Card, CardContent, CardActionArea, Tooltip, LinearProgress, CircularProgress, Tabs, Tab, Chip, Stack, Collapse } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
@@ -43,27 +51,24 @@ const LaptopBrowserFrame: React.FC<{ url: string; children: React.ReactNode }> =
     <Box
       sx={{
         width: '100%',
-        perspective: '1200px',
         mt: 2,
         mb: 1.5
       }}
     >
       <Box
         sx={{
-          background: 'rgba(24, 24, 27, 0.45)',
-          border: '1px solid rgba(255, 255, 255, 0.08)',
+          background: surface.raised,
+          border: `1px solid ${surface.border}`,
           borderRadius: '16px 16px 4px 4px',
           overflow: 'hidden',
-          boxShadow: '0 20px 40px rgba(0, 0, 0, 0.5), 0 0 100px rgba(127, 85, 240, 0.03)',
+          boxShadow: elevation.raised,
           display: 'flex',
           flexDirection: 'column',
-          transform: 'perspective(1200px) rotateX(1deg) rotateY(-0.5deg)',
           transformStyle: 'preserve-3d',
           transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
           '&:hover': {
-            transform: 'perspective(1200px) rotateX(3.5deg) rotateY(-1.8deg) translateZ(10px)',
-            borderColor: 'rgba(127, 85, 240, 0.35)',
-            boxShadow: '0 30px 60px rgba(0, 0, 0, 0.6), 0 0 120px rgba(127, 85, 240, 0.08)'
+            borderColor: accent.violetBorder,
+            boxShadow: elevation.overlay
           }
         }}
       >
@@ -74,15 +79,24 @@ const LaptopBrowserFrame: React.FC<{ url: string; children: React.ReactNode }> =
             alignItems: 'center',
             px: 2.5,
             py: 1.25,
-            background: 'rgba(255, 255, 255, 0.03)',
-            borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+            background: surface.border,
+            borderBottom: `1px solid ${surface.border}`,
             gap: 2
           }}
         >
           <Box sx={{ display: 'flex', gap: 0.8 }}>
-            <Box sx={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#ff5f56', boxShadow: '0 0 4px #ff5f56' }} />
-            <Box sx={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#ffbd2e', boxShadow: '0 0 4px #ffbd2e' }} />
-            <Box sx={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#27c93f', boxShadow: '0 0 4px #27c93f' }} />
+            {/*
+              Window-chrome dots are decoration, not state. They previously used
+              the danger, brass and success colours, which made a static ornament
+              read as three live status indicators.
+            */}
+            {[0, 1, 2].map(dot => (
+              <Box
+                key={dot}
+                aria-hidden
+                sx={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: surface.borderStrong }}
+              />
+            ))}
           </Box>
 
           {/* URL Address bar */}
@@ -93,8 +107,8 @@ const LaptopBrowserFrame: React.FC<{ url: string; children: React.ReactNode }> =
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              background: 'rgba(0, 0, 0, 0.3)',
-              border: '1px solid rgba(255, 255, 255, 0.05)',
+              background: surface.sunken,
+              border: `1px solid ${surface.border}`,
               borderRadius: '6px',
               py: 0.5,
               px: 2,
@@ -104,8 +118,8 @@ const LaptopBrowserFrame: React.FC<{ url: string; children: React.ReactNode }> =
             <Typography
               variant="caption"
               sx={{
-                fontFamily: 'monospace',
-                color: '#8e8e93',
+                fontFamily: typography.mono,
+                color: ink.secondary,
                 fontSize: '0.7rem',
                 letterSpacing: '0.02em',
                 textOverflow: 'ellipsis',
@@ -120,7 +134,7 @@ const LaptopBrowserFrame: React.FC<{ url: string; children: React.ReactNode }> =
         </Box>
 
         {/* Viewport Content */}
-        <Box sx={{ p: 2.5, background: '#070709', minHeight: 180 }}>
+        <Box sx={{ p: 2.5, background: surface.base, minHeight: 180 }}>
           {children}
         </Box>
       </Box>
@@ -131,10 +145,11 @@ const LaptopBrowserFrame: React.FC<{ url: string; children: React.ReactNode }> =
           height: '6px',
           width: '98%',
           margin: '0 auto',
-          background: 'linear-gradient(90deg, #3f3f46 0%, #71717a 50%, #3f3f46 100%)',
+          // Flat. This is a decorative base under the status board; a gradient
+          // and an inset highlight made it read as a physical object.
+          background: surface.border,
           borderRadius: '0 0 16px 16px',
-          boxShadow: '0 4px 10px rgba(0, 0, 0, 0.6), 0 1px 2px rgba(255, 255, 255, 0.1) inset',
-          borderTop: '1px solid rgba(0,0,0,0.4)',
+          borderTop: `1px solid ${surface.border}`,
           position: 'relative',
           zIndex: 5
         }}
@@ -200,18 +215,22 @@ const EcosystemStatusBoard: React.FC<{ token: string; onAction: (q: string) => v
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
+  // 'clean' is routine: a project with nothing uncommitted has not achieved
+  // anything, it is simply unremarkable. Green stays reserved for a run or a
+  // verification that actually completed, which is what the workflow and test
+  // outcomes below use it for.
   const statusColor = (s: WorkspaceStatus['status']) =>
-    s === 'clean' ? '#22c55e' : s === 'changes' ? '#f59e0b' : '#71717a';
+    s === 'clean' ? statusToken.neutral : s === 'changes' ? statusToken.brass : ink.muted;
   const statusLabel = (s: WorkspaceStatus['status']) =>
     s === 'clean' ? 'Up to date' : s === 'changes' ? 'Uncommitted changes' : 'No signal';
 
   return (
-    <Box sx={{ mb: 2.5, p: 2, background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.04)', borderRadius: '16px' }}>
+    <Box sx={{ mb: 2.5, p: 2, background: surface.sunken, border: `1px solid ${surface.border}`, borderRadius: '16px' }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Typography variant="caption" sx={{ color: '#b794f4', fontWeight: 700, letterSpacing: '0.05em' }}>
-          ECOSYSTEM STATUS
+        <Typography variant="caption" sx={{ color: accent.violet, fontWeight: 700, letterSpacing: '0.05em' }}>
+          PROJECT STATUS
         </Typography>
-        <Typography variant="caption" sx={{ color: '#71717a', fontSize: '0.65rem' }}>
+        <Typography variant="caption" sx={{ color: ink.muted, fontSize: '0.65rem' }}>
           Refreshes every 15s
         </Typography>
       </Box>
@@ -225,13 +244,13 @@ const EcosystemStatusBoard: React.FC<{ token: string; onAction: (q: string) => v
               <Card
                 onClick={() => onAction(`git status in ${ws.name}`)}
                 sx={{
-                  background: 'rgba(255,255,255,0.01)',
-                  border: '1px solid rgba(255,255,255,0.06)',
+                  background: surface.sunken,
+                  border: `1px solid ${surface.border}`,
                   borderRadius: '12px',
                   transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
                   '&:hover': {
-                    borderColor: 'rgba(127, 85, 240, 0.35)',
-                    boxShadow: '0 4px 20px rgba(127, 85, 240, 0.1)',
+                    borderColor: accent.violetBorder,
+                    boxShadow: `0 4px 20px ${accent.violetMuted}`,
                     transform: 'translateY(-1px)'
                   }
                 }}
@@ -240,14 +259,14 @@ const EcosystemStatusBoard: React.FC<{ token: string; onAction: (q: string) => v
                   <CardContent sx={{ p: 1.75 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Box sx={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: statusColor(ws.status), boxShadow: `0 0 6px ${statusColor(ws.status)}` }} />
-                        <Typography variant="body2" sx={{ fontWeight: 700, color: '#f4f4f5' }}>{ws.name}</Typography>
+                        <Box sx={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: statusColor(ws.status) }} />
+                        <Typography variant="body2" sx={{ fontWeight: 700, color: ink.primary }}>{ws.name}</Typography>
                       </Box>
                       <Typography variant="caption" sx={{ color: statusColor(ws.status), fontSize: '0.65rem', fontWeight: 600 }}>
                         {statusLabel(ws.status)}
                       </Typography>
                     </Box>
-                    <Typography variant="caption" sx={{ color: '#94a3b8', fontSize: '0.72rem', display: 'block', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <Typography variant="caption" sx={{ color: ink.secondary, fontSize: '0.72rem', display: 'block', fontFamily: typography.mono, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {ws.latestCommit}
                     </Typography>
                   </CardContent>
@@ -260,14 +279,14 @@ const EcosystemStatusBoard: React.FC<{ token: string; onAction: (q: string) => v
           <Grid item xs={12} sm={6}>
             <Card
               variant="outlined"
-              sx={{ background: 'transparent', border: '1px dashed rgba(255,255,255,0.12)', borderRadius: '12px', boxShadow: 'none' }}
+              sx={{ background: 'transparent', border: `1px dashed ${surface.borderStrong}`, borderRadius: '12px', boxShadow: 'none' }}
             >
               <CardContent sx={{ p: 1.75 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                  <Box sx={{ width: 8, height: 8, borderRadius: '50%', border: '1px solid #71717a' }} />
-                  <Typography variant="body2" sx={{ fontWeight: 700, color: '#a1a1aa' }}>dax</Typography>
+                  <Box sx={{ width: 8, height: 8, borderRadius: '50%', border: `1px solid ${ink.muted}` }} />
+                  <Typography variant="body2" sx={{ fontWeight: 700, color: ink.secondary }}>dax</Typography>
                 </Box>
-                <Typography variant="caption" sx={{ color: '#71717a', fontSize: '0.72rem' }}>
+                <Typography variant="caption" sx={{ color: ink.muted, fontSize: '0.72rem' }}>
                   Not connected yet — governance events land here in a later phase.
                 </Typography>
               </CardContent>
@@ -286,14 +305,14 @@ const FileListFeedCard: React.FC<{ data: any; onAction: (q: string) => void }> =
   const getWorkspaceStats = (name: string) => {
     return {
       stack: [],
-      desc: `${name} — registered workspace`,
+      desc: `${name} — registered project`,
       nodes: []
     };
   };
 
   return (
     <Box>
-      <Box sx={{ borderBottom: 1, borderColor: 'rgba(255, 255, 255, 0.06)', mb: 2 }}>
+      <Box sx={{ borderBottom: 1, borderColor: surface.border, mb: 2 }}>
         <Tabs value={tabValue} onChange={(e, val) => setTabValue(val)} sx={{ minHeight: 32, '& .MuiTab-root': { minHeight: 32, py: 0.5, fontSize: '0.75rem', fontWeight: 600 } }}>
           <Tab label="Files" />
           <Tab label="Architecture" />
@@ -307,23 +326,23 @@ const FileListFeedCard: React.FC<{ data: any; onAction: (q: string) => void }> =
             overflowY: 'auto',
             overflowX: 'hidden',
             borderRadius: '12px',
-            border: '1px solid rgba(255,255,255,0.04)',
-            background: 'rgba(0,0,0,0.1)',
+            border: `1px solid ${surface.border}`,
+            background: surface.sunken,
             WebkitOverflowScrolling: 'touch',
           }}
         >
           <List dense sx={{ p: 0 }}>
             {data.files.map((file: string, idx: number) => (
-              <ListItem key={idx} disablePadding divider={idx < data.files.length - 1} sx={{ borderColor: 'rgba(255,255,255,0.03)' }}>
+              <ListItem key={idx} disablePadding divider={idx < data.files.length - 1} sx={{ borderColor: surface.border }}>
                 <ListItemButton onClick={() => onAction(`Read file ${file} in ${data.workspace}`)} sx={{ py: 1 }}>
                   <ListItemIcon sx={{ minWidth: 28 }}>
-                    <InsertDriveFileIcon sx={{ color: '#7f5af0', fontSize: 16 }} />
+                    <InsertDriveFileIcon sx={{ color: accent.violet, fontSize: 16 }} />
                   </ListItemIcon>
                   <ListItemText
                     primary={file}
                     primaryTypographyProps={{
                       variant: 'body2',
-                      sx: { fontFamily: 'monospace', color: '#cbd5e1', fontSize: '0.8rem' }
+                      sx: { fontFamily: typography.mono, color: ink.secondary, fontSize: '0.8rem' }
                     }}
                   />
                 </ListItemButton>
@@ -333,10 +352,10 @@ const FileListFeedCard: React.FC<{ data: any; onAction: (q: string) => void }> =
         </Box>
       ) : (
         <Box sx={{ py: 0.5 }}>
-          <Paper variant="outlined" sx={{ p: 2, mb: 2, background: 'rgba(255,255,255,0.01)', borderColor: 'rgba(255,255,255,0.04)', borderRadius: '12px' }}>
+          <Paper variant="outlined" sx={{ p: 2, mb: 2, background: surface.sunken, borderColor: surface.border, borderRadius: '12px' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-              <InfoIcon sx={{ color: '#7f5af0', fontSize: 16 }} />
-              <Typography variant="caption" sx={{ fontWeight: 600, color: '#cbd5e1' }}>
+              <InfoIcon sx={{ color: accent.violet, fontSize: 16 }} />
+              <Typography variant="caption" sx={{ fontWeight: 600, color: ink.secondary }}>
                 Local Session Record
               </Typography>
             </Box>
@@ -345,12 +364,12 @@ const FileListFeedCard: React.FC<{ data: any; onAction: (q: string) => void }> =
             </Typography>
             <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
               {getWorkspaceStats(data.workspace).stack.map((tech, tIdx) => (
-                <Chip key={tIdx} label={tech} size="small" sx={{ height: 18, fontSize: '0.65rem', background: 'rgba(127, 85, 240, 0.08)', color: '#b794f4' }} />
+                <Chip key={tIdx} label={tech} size="small" sx={{ height: 18, fontSize: '0.65rem', background: accent.violetMuted, color: accent.violet }} />
               ))}
             </Stack>
           </Paper>
 
-          <Typography variant="caption" sx={{ fontWeight: 600, color: '#cbd5e1', display: 'block', mb: 1 }}>
+          <Typography variant="caption" sx={{ fontWeight: 600, color: ink.secondary, display: 'block', mb: 1 }}>
             Dependency Hierarchy
           </Typography>
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
@@ -362,21 +381,21 @@ const FileListFeedCard: React.FC<{ data: any; onAction: (q: string) => void }> =
                     px: 1.5,
                     py: 1,
                     width: '100%',
-                    background: 'rgba(127, 85, 240, 0.02)',
-                    border: '1px solid rgba(127, 85, 240, 0.12)',
+                    background: accent.violetMuted,
+                    border: `1px solid ${accent.violetMuted}`,
                     borderRadius: '10px',
                     display: 'flex',
                     alignItems: 'center',
                     gap: 1.5
                   }}
                 >
-                  <DnsIcon sx={{ fontSize: 12, color: '#7f5af0' }} />
-                  <Typography variant="caption" sx={{ fontWeight: 600, color: '#e2e8f0' }}>
+                  <DnsIcon sx={{ fontSize: 12, color: accent.violet }} />
+                  <Typography variant="caption" sx={{ fontWeight: 600, color: ink.primary }}>
                     {node}
                   </Typography>
                 </Paper>
                 {nIdx < getWorkspaceStats(data.workspace).nodes.length - 1 && (
-                  <Box sx={{ height: 12, width: 1, background: 'rgba(127, 85, 240, 0.3)' }} />
+                  <Box sx={{ height: 12, width: 1, background: accent.violetBorder }} />
                 )}
               </React.Fragment>
             ))}
@@ -410,9 +429,9 @@ const CodePreviewFeedCard: React.FC<{ data: any }> = ({ data }) => {
   return (
     <Box
       sx={{
-        background: '#040405',
+        background: surface.base,
         borderRadius: '12px',
-        border: '1px solid rgba(255,255,255,0.03)',
+        border: `1px solid ${surface.border}`,
         p: 2,
         maxHeight: 350,
         overflow: 'auto'
@@ -421,9 +440,9 @@ const CodePreviewFeedCard: React.FC<{ data: any }> = ({ data }) => {
       <Typography
         component="pre"
         sx={{
-          fontFamily: 'Fira Code, monospace',
+          fontFamily: typography.mono,
           fontSize: '0.75rem',
-          color: '#cbd5e1',
+          color: ink.secondary,
           margin: 0,
           lineHeight: 1.5,
           whiteSpace: 'pre'
@@ -431,7 +450,7 @@ const CodePreviewFeedCard: React.FC<{ data: any }> = ({ data }) => {
       >
         {lines.map((line, i) => (
           <Box key={i} sx={{ display: 'flex', animation: 'fadeIn 0.1s ease-in-out' }}>
-            <Box sx={{ width: 30, pr: 2, textAlign: 'right', color: 'rgba(255,255,255,0.15)', userSelect: 'none' }}>
+            <Box sx={{ width: 30, pr: 2, textAlign: 'right', color: surface.borderStrong, userSelect: 'none' }}>
               {i + 1}
             </Box>
             <Box sx={{ flexGrow: 1, whiteSpace: 'pre' }}>{line}</Box>
@@ -470,29 +489,29 @@ const SearchResultsFeedCard: React.FC<{ data: any; onAction: (q: string) => void
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
       {data.results.slice(0, visibleCount).map((res: any, idx: number) => (
-        <Paper key={idx} sx={{ p: 1.5, background: 'rgba(255,255,255,0.01)', borderColor: 'rgba(255,255,255,0.04)', borderRadius: '12px', animation: 'cardFadeIn 0.3s ease-in-out forwards' }} variant="outlined">
+        <Paper key={idx} sx={{ p: 1.5, background: surface.sunken, borderColor: surface.border, borderRadius: '12px', animation: 'cardFadeIn 0.3s ease-in-out forwards' }} variant="outlined">
           <Box
             sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer', mb: 1 }}
             onClick={() => onAction(`Read file ${res.file} in ${data.workspace}`)}
           >
-            <CodeIcon sx={{ mr: 1, color: '#7f5af0', fontSize: 16 }} />
-            <Typography variant="caption" sx={{ fontFamily: 'monospace', fontWeight: 600, textDecoration: 'underline', color: '#cbd5e1' }}>
+            <CodeIcon sx={{ mr: 1, color: accent.violet, fontSize: 16 }} />
+            <Typography variant="caption" sx={{ fontFamily: typography.mono, fontWeight: 600, textDecoration: 'underline', color: ink.secondary }}>
               {res.file}
             </Typography>
           </Box>
-          <Divider sx={{ my: 0.75, borderColor: 'rgba(255,255,255,0.03)' }} />
+          <Divider sx={{ my: 0.75, borderColor: surface.border }} />
           {res.matches.map((match: string, matchIdx: number) => (
             <Box
               key={matchIdx}
               sx={{
-                fontFamily: 'monospace',
-                color: '#94a3b8',
+                fontFamily: typography.mono,
+                color: ink.secondary,
                 pl: 1.5,
                 py: 0.25,
-                borderLeft: '2px solid #7f5af0',
+                borderLeft: `2px solid ${accent.violet}`,
                 fontSize: '0.75rem',
                 my: 0.5,
-                background: 'rgba(127, 85, 240, 0.01)',
+                background: accent.violetMuted,
                 borderRadius: '6px',
                 overflowX: 'auto',
                 whiteSpace: 'pre'
@@ -511,8 +530,8 @@ const SearchResultsFeedCard: React.FC<{ data: any; onAction: (q: string) => void
 const WorkflowsFeedCard: React.FC<{ data: any }> = ({ data }) => {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-      <Typography variant="caption" sx={{ color: '#8e8e93', fontFamily: 'monospace' }}>
-        Workflow execution history for workspace: {data.workspace}
+      <Typography variant="caption" sx={{ color: ink.secondary, fontFamily: typography.mono }}>
+        Workflow history for project: {data.workspace}
       </Typography>
       {data.workflows.map((wf: any, idx: number) => (
         <Paper
@@ -520,8 +539,8 @@ const WorkflowsFeedCard: React.FC<{ data: any }> = ({ data }) => {
           variant="outlined"
           sx={{
             p: 2,
-            background: 'rgba(255, 255, 255, 0.01)',
-            borderColor: 'rgba(255, 255, 255, 0.04)',
+            background: surface.sunken,
+            borderColor: surface.border,
             borderRadius: '12px',
             display: 'flex',
             alignItems: 'center',
@@ -535,24 +554,23 @@ const WorkflowsFeedCard: React.FC<{ data: any }> = ({ data }) => {
                 width: 8,
                 height: 8,
                 borderRadius: '50%',
-                backgroundColor: wf.status === 'success' ? '#22c55e' : '#ef4444',
-                boxShadow: wf.status === 'success' ? '0 0 8px #22c55e' : '0 0 8px #ef4444'
+                backgroundColor: wf.status === 'success' ? statusToken.success : statusToken.danger,
               }}
             />
             <Box>
-              <Typography variant="body2" sx={{ fontWeight: 700, color: '#f4f4f5' }}>
+              <Typography variant="body2" sx={{ fontWeight: 700, color: ink.primary }}>
                 {wf.name}
               </Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
-                <Typography variant="caption" sx={{ fontFamily: 'monospace', color: '#a0aec0', fontSize: '0.65rem' }}>
+                <Typography variant="caption" sx={{ fontFamily: typography.mono, color: ink.secondary, fontSize: '0.65rem' }}>
                   Run {wf.lastRun}
                 </Typography>
-                <Divider orientation="vertical" flexItem sx={{ borderColor: 'rgba(255,255,255,0.08)', mx: 0.5 }} />
-                <Typography variant="caption" sx={{ color: '#71717a', fontSize: '0.65rem' }}>
+                <Divider orientation="vertical" flexItem sx={{ borderColor: surface.border, mx: 0.5 }} />
+                <Typography variant="caption" sx={{ color: ink.muted, fontSize: '0.65rem' }}>
                   {wf.date}
                 </Typography>
-                <Divider orientation="vertical" flexItem sx={{ borderColor: 'rgba(255,255,255,0.08)', mx: 0.5 }} />
-                <Typography variant="caption" sx={{ fontFamily: 'monospace', color: '#7f5af0', fontSize: '0.65rem' }}>
+                <Divider orientation="vertical" flexItem sx={{ borderColor: surface.border, mx: 0.5 }} />
+                <Typography variant="caption" sx={{ fontFamily: typography.mono, color: accent.violet, fontSize: '0.65rem' }}>
                   {wf.branch} ({wf.commit})
                 </Typography>
               </Box>
@@ -560,7 +578,7 @@ const WorkflowsFeedCard: React.FC<{ data: any }> = ({ data }) => {
           </Box>
 
           <Box sx={{ textAlign: 'right' }}>
-            <Typography variant="caption" sx={{ display: 'block', fontWeight: 600, color: '#cbd5e1', fontSize: '0.7rem' }}>
+            <Typography variant="caption" sx={{ display: 'block', fontWeight: 600, color: ink.secondary, fontSize: '0.7rem' }}>
               {wf.duration}
             </Typography>
             <Chip
@@ -570,9 +588,9 @@ const WorkflowsFeedCard: React.FC<{ data: any }> = ({ data }) => {
                 height: 18,
                 fontSize: '0.55rem',
                 fontWeight: 700,
-                background: wf.status === 'success' ? 'rgba(34, 197, 94, 0.08)' : 'rgba(239, 68, 68, 0.08)',
-                color: wf.status === 'success' ? '#22c55e' : '#ef4444',
-                border: wf.status === 'success' ? '1px solid rgba(34, 197, 94, 0.15)' : '1px solid rgba(239, 68, 68, 0.15)',
+                background: wf.status === 'success' ? statusToken.successMuted : statusToken.dangerMuted,
+                color: wf.status === 'success' ? statusToken.success : statusToken.danger,
+                border: wf.status === 'success' ? `1px solid ${statusToken.successMuted}` : `1px solid ${statusToken.dangerMuted}`,
                 mt: 0.5
               }}
             />
@@ -640,7 +658,7 @@ const ExecutionLogsFeedCard: React.FC<{ data: any; procId: string; token: string
   const hasEvidence = exitCode !== null && completedAt !== null;
 
   const evidenceText = hasEvidence
-    ? `${passed ? 'PASSED' : 'FAILED'} — ${data.workspaceName || 'workspace'}: "${data.command}" (exit code ${exitCode}) — confirmed ${completedAt}`
+    ? `${passed ? 'PASSED' : 'FAILED'} — ${data.workspaceName || 'this project'}: "${data.command}" (exit code ${exitCode}) — confirmed ${completedAt}`
     : '';
 
   const handleCopyEvidence = () => {
@@ -661,21 +679,21 @@ const ExecutionLogsFeedCard: React.FC<{ data: any; procId: string; token: string
   return (
     <Box
       sx={{
-        background: '#040405',
+        background: surface.base,
         p: 2,
         borderRadius: '12px',
-        border: '1px solid rgba(127, 85, 240, 0.12)'
+        border: `1px solid ${accent.violetMuted}`
       }}
     >
       {/* Status-first: this is the thing a non-dev user actually came for */}
       {isRunning && (
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
-            <CircularProgress size={14} sx={{ color: '#7f5af0' }} />
-            <Typography variant="body2" sx={{ color: '#f4f4f5' }}>
+            <CircularProgress size={14} sx={{ color: accent.violet }} />
+            <Typography variant="body2" sx={{ color: ink.primary }}>
               Running{' '}
-              <Box component="span" sx={{ fontFamily: 'monospace', color: '#7f5af0', fontWeight: 700 }}>{data.command}</Box>{' '}
-              in <Box component="span" sx={{ fontWeight: 700 }}>{data.workspaceName || 'workspace'}</Box>
+              <Box component="span" sx={{ fontFamily: typography.mono, color: accent.violet, fontWeight: 700 }}>{data.command}</Box>{' '}
+              in <Box component="span" sx={{ fontWeight: 700 }}>{data.workspaceName || 'this project'}</Box>
             </Typography>
           </Box>
           <Button
@@ -685,9 +703,9 @@ const ExecutionLogsFeedCard: React.FC<{ data: any; procId: string; token: string
               fontSize: '0.6rem',
               py: 0.25,
               px: 1.5,
-              background: 'rgba(239, 68, 68, 0.1)',
-              color: '#ef4444',
-              border: '1px solid rgba(239, 68, 68, 0.2)',
+              background: statusToken.dangerMuted,
+              color: statusToken.danger,
+              border: `1px solid ${statusToken.dangerMuted}`,
               borderRadius: '4px'
             }}
           >
@@ -698,8 +716,8 @@ const ExecutionLogsFeedCard: React.FC<{ data: any; procId: string; token: string
 
       {!isRunning && failedToStart && (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Box sx={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#ef4444', boxShadow: '0 0 6px #ef4444' }} />
-          <Typography variant="body2" sx={{ color: '#ef4444', fontWeight: 700 }}>
+          <Box sx={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: statusToken.danger }} />
+          <Typography variant="body2" sx={{ color: statusToken.danger, fontWeight: 700 }}>
             Couldn't start — see technical output below for why.
           </Typography>
         </Box>
@@ -713,16 +731,15 @@ const ExecutionLogsFeedCard: React.FC<{ data: any; procId: string; token: string
                 width: 10,
                 height: 10,
                 borderRadius: '50%',
-                backgroundColor: passed ? '#22c55e' : '#ef4444',
-                boxShadow: passed ? '0 0 6px #22c55e' : '0 0 6px #ef4444',
+                backgroundColor: passed ? statusToken.success : statusToken.danger,
                 flexShrink: 0
               }}
             />
             <Box>
-              <Typography variant="body2" sx={{ color: passed ? '#22c55e' : '#ef4444', fontWeight: 700 }}>
-                {passed ? 'Passed' : 'Failed'} — {data.workspaceName || 'workspace'}: "{data.command}"
+              <Typography variant="body2" sx={{ color: passed ? statusToken.success : statusToken.danger, fontWeight: 700 }}>
+                {passed ? 'Passed' : 'Failed'} — {data.workspaceName || 'this project'}: "{data.command}"
               </Typography>
-              <Typography variant="caption" sx={{ color: '#71717a', fontSize: '0.68rem' }}>
+              <Typography variant="caption" sx={{ color: ink.muted, fontSize: '0.68rem' }}>
                 exit code {exitCode} — confirmed {completedAt}
               </Typography>
             </Box>
@@ -734,9 +751,9 @@ const ExecutionLogsFeedCard: React.FC<{ data: any; procId: string; token: string
               fontSize: '0.65rem',
               py: 0.25,
               px: 1.5,
-              background: 'rgba(127, 85, 240, 0.1)',
-              color: '#b794f4',
-              border: '1px solid rgba(127, 85, 240, 0.2)',
+              background: accent.violetMuted,
+              color: accent.violet,
+              border: `1px solid ${accent.violetBorder}`,
               borderRadius: '4px',
               flexShrink: 0
             }}
@@ -761,12 +778,12 @@ const ExecutionLogsFeedCard: React.FC<{ data: any; procId: string; token: string
         sx={{
           mt: 1.25,
           fontSize: '0.65rem',
-          color: '#71717a',
+          color: ink.muted,
           textTransform: 'none',
           px: 0,
           minWidth: 0,
           transition: 'color 0.2s ease',
-          '&:hover': { background: 'transparent', color: '#a1a1aa' }
+          '&:hover': { background: 'transparent', color: ink.secondary }
         }}
       >
         {showRawOutput ? 'Hide technical output' : 'View technical output'}
@@ -778,10 +795,10 @@ const ExecutionLogsFeedCard: React.FC<{ data: any; procId: string; token: string
           sx={{
             mt: 1,
             pt: 1,
-            borderTop: '1px solid rgba(255,255,255,0.06)',
-            fontFamily: 'monospace',
+            borderTop: `1px solid ${surface.border}`,
+            fontFamily: typography.mono,
             fontSize: '0.75rem',
-            color: '#cbd5e1',
+            color: ink.secondary,
             lineHeight: 1.5,
             maxHeight: 220,
             overflowY: 'auto',
@@ -808,20 +825,20 @@ const ExecutionLogsFeedCard: React.FC<{ data: any; procId: string; token: string
 const GitHistoryFeedCard: React.FC<{ data: any }> = ({ data }) => {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-      <Paper variant="outlined" sx={{ p: 2, background: 'rgba(0,0,0,0.15)', borderColor: 'rgba(255,255,255,0.04)', borderRadius: '12px' }}>
-        <Typography variant="caption" sx={{ color: '#b794f4', fontWeight: 700, display: 'block', mb: 1, letterSpacing: '0.05em' }}>
+      <Paper variant="outlined" sx={{ p: 2, background: surface.sunken, borderColor: surface.border, borderRadius: '12px' }}>
+        <Typography variant="caption" sx={{ color: accent.violet, fontWeight: 700, display: 'block', mb: 1, letterSpacing: '0.05em' }}>
           WORKING TREE STATUS
         </Typography>
-        <Typography component="pre" sx={{ fontFamily: 'monospace', fontSize: '0.75rem', color: '#94a3b8', m: 0, overflowX: 'auto', whiteSpace: 'pre-wrap' }}>
+        <Typography component="pre" sx={{ fontFamily: typography.mono, fontSize: '0.75rem', color: ink.secondary, m: 0, overflowX: 'auto', whiteSpace: 'pre-wrap' }}>
           {data.status || 'Clean working tree.'}
         </Typography>
       </Paper>
 
-      <Paper variant="outlined" sx={{ p: 2, background: 'rgba(0,0,0,0.15)', borderColor: 'rgba(255,255,255,0.04)', borderRadius: '12px' }}>
-        <Typography variant="caption" sx={{ color: '#b794f4', fontWeight: 700, display: 'block', mb: 1, letterSpacing: '0.05em' }}>
-          RECENT WORKSPACE COMMITS
+      <Paper variant="outlined" sx={{ p: 2, background: surface.sunken, borderColor: surface.border, borderRadius: '12px' }}>
+        <Typography variant="caption" sx={{ color: accent.violet, fontWeight: 700, display: 'block', mb: 1, letterSpacing: '0.05em' }}>
+          RECENT PROJECT COMMITS
         </Typography>
-        <Typography component="pre" sx={{ fontFamily: 'monospace', fontSize: '0.75rem', color: '#cbd5e1', m: 0, overflowX: 'auto', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+        <Typography component="pre" sx={{ fontFamily: typography.mono, fontSize: '0.75rem', color: ink.secondary, m: 0, overflowX: 'auto', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
           {data.log || 'No commit logs available.'}
         </Typography>
       </Paper>
@@ -854,7 +871,7 @@ const DesktopAppsFeedCard: React.FC<{ token: string }> = ({ token }) => {
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-      <Typography variant="caption" sx={{ color: '#8e8e93', fontFamily: 'monospace', mb: 0.5 }}>
+      <Typography variant="caption" sx={{ color: ink.secondary, fontFamily: typography.mono, mb: 0.5 }}>
         Running developer desktop applications checklist
       </Typography>
       {apps.map((app, idx) => (
@@ -863,8 +880,8 @@ const DesktopAppsFeedCard: React.FC<{ token: string }> = ({ token }) => {
           variant="outlined"
           sx={{
             p: 1.5,
-            background: 'rgba(255,255,255,0.01)',
-            borderColor: 'rgba(255,255,255,0.04)',
+            background: surface.sunken,
+            borderColor: surface.border,
             borderRadius: '12px',
             display: 'flex',
             alignItems: 'center',
@@ -872,7 +889,7 @@ const DesktopAppsFeedCard: React.FC<{ token: string }> = ({ token }) => {
             animation: 'cardFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards'
           }}
         >
-          <Typography variant="body2" sx={{ fontWeight: 700, color: '#cbd5e1' }}>
+          <Typography variant="body2" sx={{ fontWeight: 700, color: ink.secondary }}>
             {app.name}
           </Typography>
           <Chip
@@ -882,9 +899,9 @@ const DesktopAppsFeedCard: React.FC<{ token: string }> = ({ token }) => {
               height: 18,
               fontSize: '0.55rem',
               fontWeight: 700,
-              background: app.status === 'Running' ? 'rgba(34, 197, 94, 0.08)' : 'rgba(255, 255, 255, 0.03)',
-              color: app.status === 'Running' ? '#22c55e' : '#71717a',
-              border: app.status === 'Running' ? '1px solid rgba(34, 197, 94, 0.15)' : '1px solid rgba(255,255,255,0.06)'
+              background: app.status === 'Running' ? statusToken.successMuted : surface.border,
+              color: app.status === 'Running' ? statusToken.success : ink.muted,
+              border: app.status === 'Running' ? `1px solid ${statusToken.successMuted}` : `1px solid ${surface.border}`
             }}
           />
         </Paper>
@@ -913,7 +930,9 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
   };
 
   useEffect(() => {
-    feedEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // Activity auto-scrolls on every new item, so it is the drawer's most
+    // repeated motion. Under reduced motion it jumps rather than glides.
+    feedEndRef.current?.scrollIntoView({ behavior: scrollBehavior() });
   }, [previewFeed]);
 
   return (
@@ -923,8 +942,8 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
         height: '100%',
         display: 'flex',
         flexDirection: 'column',
-        background: 'rgba(9, 9, 11, 0.35)',
-        borderLeft: '1px solid rgba(255, 255, 255, 0.08)',
+        background: surface.sunken,
+        borderLeft: `1px solid ${surface.border}`,
         borderRadius: 0,
         overflow: 'hidden',
       }}
@@ -937,25 +956,25 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
           justifyContent: 'space-between',
           px: 2.5,
           py: 1.5,
-          borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-          background: 'rgba(9, 9, 11, 0.2)'
+          borderBottom: `1px solid ${surface.border}`,
+          background: surface.sunken
         }}
       >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <ViewStreamIcon sx={{ color: '#7f5af0', fontSize: 16 }} />
-          <Typography variant="caption" sx={{ fontWeight: 800, color: '#f4f4f5', letterSpacing: '0.04em' }}>
-            INTELLIGENCE FEED
+          <ViewStreamIcon sx={{ color: accent.violet, fontSize: 16 }} />
+          <Typography variant="caption" sx={{ fontWeight: 800, color: ink.primary, letterSpacing: '0.04em' }}>
+            Activity
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           {previewFeed.length > 0 && (
             <Tooltip title="Clear Feed">
-              <IconButton size="small" onClick={onClearFeed} sx={{ color: '#a0aec0' }}>
+              <IconButton size="small" onClick={onClearFeed} sx={{ color: ink.secondary }}>
                 <ClearAllIcon fontSize="small" />
               </IconButton>
             </Tooltip>
           )}
-          <IconButton size="small" onClick={onClose} sx={{ color: '#a0aec0' }}>
+          <IconButton size="small" onClick={onClose} sx={{ color: ink.secondary }} aria-label="Close Activity">
             <CloseIcon fontSize="small" />
           </IconButton>
         </Box>
@@ -966,7 +985,7 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
           sx={{
             height: 2,
             background: 'transparent',
-            '& .MuiLinearProgress-bar': { background: '#7f5af0' }
+            '& .MuiLinearProgress-bar': { background: accent.violet }
           }}
         />
       )}
@@ -981,7 +1000,7 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              border: '1px dashed rgba(255, 255, 255, 0.05)',
+              border: `1px dashed ${surface.border}`,
               borderRadius: '8px',
               p: 3,
               textAlign: 'center',
@@ -994,8 +1013,8 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
                 width: 56,
                 height: 56,
                 borderRadius: '50%',
-                background: 'rgba(127, 85, 240, 0.04)',
-                border: '1px solid rgba(127, 85, 240, 0.12)',
+                background: accent.violetMuted,
+                border: `1px solid ${accent.violetMuted}`,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -1003,13 +1022,13 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
               }}
             >
               {loading ? (
-                <CircularProgress size={20} sx={{ color: '#7f5af0' }} />
+                <CircularProgress size={20} sx={{ color: accent.violet }} />
               ) : (
-                <TerminalIcon sx={{ fontSize: 24, color: '#7f5af0' }} />
+                <TerminalIcon sx={{ fontSize: 24, color: accent.violet }} />
               )}
             </Box>
-            <Typography variant="caption" sx={{ color: '#f4f4f5', fontWeight: 700, display: 'block', mb: 0.5 }}>
-              {loading ? 'WAITING FOR INSPECTION TRACE' : 'INTELLIGENCE FEED'}
+            <Typography variant="caption" sx={{ color: ink.primary, fontWeight: 700, display: 'block', mb: 0.5 }}>
+              {loading ? 'WAITING FOR INSPECTION TRACE' : 'NO ACTIVITY YET'}
             </Typography>
             <Typography variant="caption" color="text.secondary" sx={{ maxWidth: 220, fontSize: '0.75rem', lineHeight: 1.4, display: 'block' }}>
               {loading
@@ -1040,11 +1059,11 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
                   elevation={0}
                   className="feed-card-animation"
                   sx={{
-                    background: 'rgba(255, 255, 255, 0.02)',
+                    background: surface.sunken,
                     border: pinnedCards[item.id]
-                      ? '1.5px solid #7f5af0'
-                      : '1px solid rgba(255, 255, 255, 0.06)',
-                    boxShadow: pinnedCards[item.id] ? '0 0 12px rgba(127, 85, 240, 0.2)' : 'none',
+                      ? `1.5px solid ${accent.violet}`
+                      : `1px solid ${surface.border}`,
+                    boxShadow: pinnedCards[item.id] ? `0 0 12px ${accent.violetBorder}` : 'none',
                     borderRadius: '8px',
                     overflow: 'hidden',
                     display: 'flex',
@@ -1062,18 +1081,18 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
                       justifyContent: 'space-between',
                       px: 2,
                       py: 1,
-                      background: 'rgba(255, 255, 255, 0.005)',
-                      borderBottom: isExpanded ? '1px solid rgba(255, 255, 255, 0.04)' : 'none',
+                      background: surface.sunken,
+                      borderBottom: isExpanded ? `1px solid ${surface.border}` : 'none',
                       cursor: 'pointer',
                       userSelect: 'none',
                       transition: 'background 0.2s',
-                      '&:hover': { background: 'rgba(255, 255, 255, 0.02)' }
+                      '&:hover': { background: surface.sunken }
                     }}
                   >
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      {isExpanded ? <ExpandLessIcon sx={{ fontSize: 13, color: '#7f5af0' }} /> : <ExpandMoreIcon sx={{ fontSize: 13, color: '#a0aec0' }} />}
-                      <Typography variant="caption" sx={{ color: '#b794f4', fontWeight: 700, fontSize: '0.7rem', letterSpacing: '0.05em' }}>
-                        {item.type === 'WorkspaceList' && 'WORKSPACES'}
+                      {isExpanded ? <ExpandLessIcon sx={{ fontSize: 13, color: accent.violet }} /> : <ExpandMoreIcon sx={{ fontSize: 13, color: ink.secondary }} />}
+                      <Typography variant="caption" sx={{ color: accent.violet, fontWeight: 700, fontSize: '0.7rem', letterSpacing: '0.05em' }}>
+                        {item.type === 'WorkspaceList' && 'PROJECTS'}
                         {item.type === 'FileList' && `FILE INDEX: ${item.data.workspace}`}
                         {item.type === 'CodePreview' && `CODE: ${item.data.workspace}/${item.data.path}`}
                         {item.type === 'SearchResults' && `SEARCH: "${item.data.keyword}"`}
@@ -1098,7 +1117,7 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
                           <IconButton
                             size="small"
                             onClick={() => onOpenInWorkbench?.(item)}
-                            sx={{ color: '#cbd5e1', p: 0.25 }}
+                            sx={{ color: ink.secondary, p: 0.25 }}
                           >
                             <LaunchIcon sx={{ fontSize: 13 }} />
                           </IconButton>
@@ -1108,22 +1127,22 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
                         <IconButton
                           size="small"
                           onClick={() => setPinnedCards(prev => ({ ...prev, [item.id]: !prev[item.id] }))}
-                          sx={{ color: pinnedCards[item.id] ? '#7f5af0' : '#a0aec0', p: 0.25 }}
+                          sx={{ color: pinnedCards[item.id] ? accent.violet : ink.secondary, p: 0.25 }}
                         >
                           <PushPinIcon sx={{ fontSize: 13 }} />
                         </IconButton>
                       </Tooltip>
-                      <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem', fontFamily: 'monospace' }}>
+                      <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem', fontFamily: typography.mono }}>
                         {item.timestamp}
                       </Typography>
                       {item.type === 'CodePreview' && (
                         <Tooltip title={copiedId === item.id ? "Copied!" : "Copy code"}>
-                          <IconButton size="small" onClick={() => handleCopy(item.data.content, item.id)} sx={{ color: '#a0aec0', p: 0.25 }}>
+                          <IconButton size="small" onClick={() => handleCopy(item.data.content, item.id)} sx={{ color: ink.secondary, p: 0.25 }}>
                             <ContentCopyIcon sx={{ fontSize: 13 }} />
                           </IconButton>
                         </Tooltip>
                       )}
-                      <IconButton size="small" onClick={() => onRemoveItem(item.id)} sx={{ color: '#a0aec0', p: 0.25 }}>
+                      <IconButton size="small" onClick={() => onRemoveItem(item.id)} sx={{ color: ink.secondary, p: 0.25 }}>
                         <CloseIcon sx={{ fontSize: 13 }} />
                       </IconButton>
                     </Box>
@@ -1140,16 +1159,16 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
                         <Grid container spacing={1.5}>
                           {item.data.map((ws: any, idx: number) => (
                             <Grid item xs={12} key={idx}>
-                              <Card sx={{ background: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.04)', borderRadius: '12px' }}>
+                              <Card sx={{ background: surface.sunken, border: `1px solid ${surface.border}`, borderRadius: '12px' }}>
                                 <CardActionArea onClick={() => onAction(`List files in ${ws.name}`)}>
                                   <CardContent sx={{ p: 1.5 }}>
                                     <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
                                       <FolderIcon color="primary" sx={{ mr: 1, fontSize: 18 }} />
-                                      <Typography variant="body2" sx={{ fontWeight: 600, color: '#f4f4f5' }}>
+                                      <Typography variant="body2" sx={{ fontWeight: 600, color: ink.primary }}>
                                         {ws.name}
                                       </Typography>
                                     </Box>
-                                    <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                                    <Typography variant="caption" color="text.secondary" sx={{ fontFamily: typography.mono, display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
                                       {ws.path}
                                     </Typography>
                                   </CardContent>
@@ -1234,20 +1253,20 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
                     {item.type === 'TerminalLogs' && (
                       <Box
                         sx={{
-                          background: '#040405',
+                          background: surface.base,
                           p: 1.5,
                           borderRadius: '12px',
-                          border: '1px solid rgba(127, 85, 240, 0.12)',
+                          border: `1px solid ${accent.violetMuted}`,
                           maxHeight: 280,
                           overflowY: 'auto',
                           overflowX: 'hidden',
                           WebkitOverflowScrolling: 'touch'
                         }}
                       >
-                        <Typography component="div" sx={{ fontFamily: 'monospace', fontSize: '0.75rem', color: '#38bdf8', lineHeight: 1.5 }}>
+                        <Typography component="div" sx={{ fontFamily: typography.mono, fontSize: '0.75rem', color: ink.secondary, lineHeight: 1.5 }}>
                           {(item.data.logs as string[]).map((log: string, lIdx: number) => (
                             <Box key={lIdx} sx={{ mb: 0.5, display: 'flex', alignItems: 'flex-start' }}>
-                              <Box sx={{ color: '#22c55e', mr: 1, userSelect: 'none' }}>❯</Box>
+                              <Box sx={{ color: statusToken.success, mr: 1, userSelect: 'none' }}>❯</Box>
                               <Box sx={{ flexGrow: 1, whiteSpace: 'pre-wrap' }}>{log}</Box>
                             </Box>
                           ))}
@@ -1258,10 +1277,10 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
                     {item.type === 'MemoryRecall' && (
                       <Box
                         sx={{
-                          background: 'linear-gradient(135deg, rgba(109,40,217,0.08) 0%, rgba(15,10,30,0.95) 100%)',
+                          backgroundColor: accent.violetMuted,
                           p: 1.5,
                           borderRadius: '12px',
-                          border: '1px solid rgba(109,40,217,0.25)',
+                          border: `1px solid ${accent.violetMuted}`,
                           maxHeight: 260,
                           overflowY: 'auto',
                         }}
@@ -1269,25 +1288,24 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                           <Box sx={{
                             width: 6, height: 6, borderRadius: '50%',
-                            background: 'linear-gradient(135deg, #7c3aed, #4f46e5)',
-                            boxShadow: '0 0 8px rgba(124,58,237,0.6)',
+                            backgroundColor: accent.violet,
                             flexShrink: 0
                           }} />
-                          <Typography sx={{ fontSize: '0.7rem', color: '#a78bfa', fontFamily: 'monospace', letterSpacing: '0.08em' }}>
-                            SESSION MEMORY — workspace context recalled
+                          <Typography sx={{ fontSize: '0.7rem', color: accent.violet, fontFamily: typography.mono, letterSpacing: '0.08em' }}>
+                            SESSION MEMORY — project context recalled
                           </Typography>
                         </Box>
                         {(item.data.memories as string[]).map((mem: string, mIdx: number) => (
                           <Box key={mIdx} sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mb: 0.75 }}>
-                            <Box sx={{ color: '#7c3aed', fontSize: '0.7rem', mt: '2px', flexShrink: 0 }}>—</Box>
-                            <Typography sx={{ fontSize: '0.78rem', color: '#c4b5fd', lineHeight: 1.5, fontFamily: 'monospace' }}>
+                            <Box sx={{ color: accent.violet, fontSize: '0.7rem', mt: '2px', flexShrink: 0 }}>—</Box>
+                            <Typography sx={{ fontSize: '0.78rem', color: accent.violet, lineHeight: 1.5, fontFamily: typography.mono }}>
                               {mem}
                             </Typography>
                           </Box>
                         ))}
                         {(item.data.memories as string[]).length === 0 && (
-                          <Typography sx={{ fontSize: '0.75rem', color: '#6b7280', fontFamily: 'monospace', fontStyle: 'italic' }}>
-                            No prior context found. Memory will populate as you explore workspaces.
+                          <Typography sx={{ fontSize: '0.75rem', color: ink.secondary, fontFamily: typography.mono, fontStyle: 'italic' }}>
+                            No prior context found. Memory will populate as you explore projects.
                           </Typography>
                         )}
                       </Box>

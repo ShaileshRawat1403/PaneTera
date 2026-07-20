@@ -6,3 +6,19 @@ dist/
 *.log
 .dax/
 config/local-apps.local.json
+tessera-test-*/
+
+# Local browser-debug artifacts. Canonical visual evidence belongs in
+# docs/evidence/; ad-hoc captures and scripts may contain local credentials.
+dump_html.html
+public/debug.html
+test_*.png
+test_blocker.js
+test_browser.js
+test_center.js
+test_dump.js
+test_js_click.js
+test_overlay*.js
+test_real.js
+test_with_ext.js
+workspace-test-*/

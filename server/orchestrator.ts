@@ -173,15 +173,13 @@ export async function handleOrchestratorQuery(
   
   if (!workspaceId) {
     return {
-      answer: 'Select a workspace to let the orchestrator inspect files safely.',
+      answer: 'This request needs project context. Choose a workspace from the top bar, then ask again. Website previews do not require a workspace—ask PaneTera to open or show a web address.',
       mode: 'read-only-orchestrator',
       intent: 'needs_clarification',
       toolsUsed: [],
       filesInspected: [],
       citations: [],
-      suggestedActions: [
-        { label: 'List workspaces', message: 'List workspaces' }
-      ],
+      suggestedActions: [],
       warnings: ['No workspace is currently selected.']
     };
   }

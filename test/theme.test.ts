@@ -1,0 +1,334 @@
+// test/theme.test.ts
+// Keeps the design language honest.
+//
+// The contract states warm graphite, parchment text, restrained violet, brass
+// attention, green only for meaningful success, WCAG AA contrast, and reduced
+// motion support. Each of those is checkable, so each is checked. Design
+// intentions stated only in prose drift; these assertions are what stop
+// "warm graphite" quietly becoming Tailwind slate again.
+
+process.env.NODE_ENV = 'test';
+
+import { describe, it } from 'node:test';
+import assert from 'node:assert';
+import { accent, ink, status, surface, typography } from '../src/theme/tokens';
+import { chipEnterStyles, duration, easing, enterStyles, scrollBehavior, transition } from '../src/theme/motion';
+import { paneteraTheme } from '../src/theme/paneteraTheme';
+import { statusColour as liveAppStatusColour } from '../src/components/workbench/LiveWorkbenchToolbar';
+import { riskColours } from '../src/components/ProposedActionCard';
+import { toolColour } from '../src/components/transcript/TranscriptTurn';
+import { workflowStatusColour, workflowStatusLabel } from '../src/components/ContentWorkflowCard';
+
+// --- WCAG relative luminance and contrast -----------------------------------
+
+function channel(value: number): number {
+  const c = value / 255;
+  return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+}
+
+function rgb(hex: string): [number, number, number] {
+  const clean = hex.replace('#', '');
+  return [
+    parseInt(clean.slice(0, 2), 16),
+    parseInt(clean.slice(2, 4), 16),
+    parseInt(clean.slice(4, 6), 16),
+  ];
+}
+
+function luminance(hex: string): number {
+  const [r, g, b] = rgb(hex);
+  return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+}
+
+function contrast(a: string, b: string): number {
+  const [light, dark] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (light + 0.05) / (dark + 0.05);
+}
+
+describe('surfaces are warm graphite, not cool grey', () => {
+  // The tell: in a cool grey the blue channel exceeds the red. Every PaneTera
+  // surface must lean the other way, which is what "warm" means in practice.
+  const surfaces = Object.entries(surface);
+
+  for (const [name, hex] of surfaces) {
+    it(`${name} is warm`, () => {
+      const [r, , b] = rgb(hex);
+      assert.ok(r >= b, `${name} (${hex}) has more blue than red, which reads as cool grey`);
+    });
+  }
+
+  it('parchment text is warm too', () => {
+    const [r, , b] = rgb(ink.primary);
+    assert.ok(r > b, 'parchment white must be warmer than neutral white');
+  });
+
+  it('rejects the previous cool palette', () => {
+    // The values the composer used before the theme existed.
+    for (const oldHex of ['#171d27', '#a0aec0', '#e2e8f0']) {
+      const [r, , b] = rgb(oldHex);
+      assert.ok(b > r, `${oldHex} was cool, which is why it was replaced`);
+    }
+  });
+});
+
+describe('contrast meets WCAG AA', () => {
+  const backgrounds = [surface.base, surface.raised, surface.overlay, surface.sunken];
+
+  for (const background of backgrounds) {
+    it(`primary text is AA on ${background}`, () => {
+      const ratio = contrast(ink.primary, background);
+      assert.ok(ratio >= 4.5, `ratio ${ratio.toFixed(2)} is below 4.5:1`);
+    });
+
+    it(`secondary text is AA on ${background}`, () => {
+      const ratio = contrast(ink.secondary, background);
+      assert.ok(ratio >= 4.5, `ratio ${ratio.toFixed(2)} is below 4.5:1`);
+    });
+  }
+
+  for (const background of backgrounds) {
+    it(`muted text is AA on ${background}`, () => {
+      // Held to full AA, not 3:1. Every real use of this token is 10 to 12.5px
+      // helper text, so "large text only" was a rule the code did not follow.
+      const ratio = contrast(ink.muted, background);
+      assert.ok(ratio >= 4.5, `ratio ${ratio.toFixed(2)} is below 4.5:1`);
+    });
+  }
+
+  it('keeps a separate disabled token that is not used for readable text', () => {
+    // WCAG exempts disabled elements from contrast minimums, which is what
+    // makes a dimmer value legitimate here and nowhere else.
+    assert.notStrictEqual(ink.disabled, ink.muted);
+    assert.ok(contrast(ink.muted, surface.overlay) > contrast(ink.disabled, surface.overlay));
+  });
+
+  it('accent and status colours are legible on raised surfaces', () => {
+    for (const [name, colour] of [
+      ['violet', accent.violet],
+      ['brass', status.brass],
+      ['success', status.success],
+      ['danger', status.danger],
+    ] as const) {
+      const ratio = contrast(colour, surface.raised);
+      assert.ok(ratio >= 3, `${name} ratio ${ratio.toFixed(2)} is below 3:1`);
+    }
+  });
+
+  it('text on accent fills is legible', () => {
+    assert.ok(contrast(ink.onAccent, accent.violet) >= 4.5);
+    assert.ok(contrast(ink.onAccent, status.brass) >= 4.5);
+  });
+});
+
+describe('green means meaningful success only', () => {
+  it('provides a neutral that is not green', () => {
+    // Healthy-and-unremarkable must have somewhere to go that is not the
+    // success colour, or green becomes ambient decoration.
+    assert.notStrictEqual(status.neutral, status.success);
+    const [r, g, b] = rgb(status.neutral);
+    assert.ok(!(g > r && g > b), 'the neutral status colour must not read as green');
+  });
+
+  it('keeps success distinct from attention and failure', () => {
+    assert.notStrictEqual(status.success, status.brass);
+    assert.notStrictEqual(status.success, status.danger);
+  });
+});
+
+describe('typography', () => {
+  it('leads with a system humanist sans stack', () => {
+    assert.ok(/ui-sans-serif|system-ui/i.test(typography.sans));
+    assert.ok(!/ui-monospace|Menlo|Consolas/i.test(typography.sans));
+  });
+
+  it('names no font PaneTera does not ship', () => {
+    // The tokens once named Inter and JetBrains Mono while index.css loaded
+    // Plus Jakarta Sans and Fira Code from Google Fonts, so the declared
+    // typeface was never the rendered one. Local-first means system-resident.
+    for (const stack of [typography.sans, typography.mono]) {
+      for (const webFont of ['Inter', 'JetBrains', 'Jakarta', 'Fira']) {
+        assert.ok(!stack.includes(webFont), `${webFont} is not shipped with the app`);
+      }
+    }
+  });
+
+  it('keeps monospace separate rather than a variant', () => {
+    assert.ok(/mono|Menlo|Cascadia/i.test(typography.mono));
+    assert.notStrictEqual(typography.sans, typography.mono);
+  });
+
+  it('does not shout: no weight above 700', () => {
+    const weights = Object.values(paneteraTheme.typography as Record<string, any>)
+      .filter((entry) => entry && typeof entry === 'object' && 'fontWeight' in entry)
+      .map((entry) => Number(entry.fontWeight))
+      .filter((weight) => Number.isFinite(weight));
+    for (const weight of weights) {
+      assert.ok(weight <= 700, `font weight ${weight} exceeds 700`);
+    }
+  });
+
+  it('does not uppercase button labels', () => {
+    assert.strictEqual((paneteraTheme.typography as any).button.textTransform, 'none');
+  });
+});
+
+describe('spacing follows the 8px system', () => {
+  it('uses 8 as the base unit', () => {
+    assert.strictEqual(paneteraTheme.spacing(1), '8px');
+    assert.strictEqual(paneteraTheme.spacing(2), '16px');
+  });
+});
+
+describe('reduced motion is honoured', () => {
+  it('returns no transition at all, not a shorter one', () => {
+    // A 40ms version of the same movement is still movement. The request is to
+    // not move.
+    assert.strictEqual(transition(['opacity'], duration.quick, easing.standard, true), 'none');
+  });
+
+  it('still animates when motion is not reduced', () => {
+    const value = transition(['opacity'], duration.quick, easing.standard, false);
+    assert.ok(value.includes('opacity'));
+    assert.ok(value.includes(`${duration.quick}ms`));
+  });
+
+  it('applies no animation at all when reduced', () => {
+    // One policy, stated in three places that must agree: this helper, the
+    // theme's CssBaseline override, and index.css. An earlier version kept a
+    // 90ms fade here while both stylesheets cancelled it, so the tests
+    // documented an intention the app never performed.
+    assert.deepStrictEqual(enterStyles(true), {});
+    assert.deepStrictEqual(chipEnterStyles(true), {});
+    assert.ok(JSON.stringify(enterStyles(false)).includes('translateY'));
+  });
+
+  it('defaults to reduced when no matchMedia exists', () => {
+    // Server rendering has no matchMedia. Guessing "full motion" would flash
+    // movement at exactly the people who asked for none.
+    const value = transition(['opacity']);
+    assert.strictEqual(value, 'none');
+  });
+
+  it('carries a global reduced-motion override in the baseline', () => {
+    const baseline = JSON.stringify(paneteraTheme.components?.MuiCssBaseline?.styleOverrides);
+    assert.ok(baseline.includes('prefers-reduced-motion'));
+    assert.ok(baseline.includes('none !important'), 'the override must cancel, not shorten');
+  });
+
+  it('publishes tokens as CSS variables for plain stylesheets', () => {
+    const baseline = JSON.stringify(paneteraTheme.components?.MuiCssBaseline?.styleOverrides);
+    for (const variable of ['--panetera-surface-base', '--panetera-font-sans']) {
+      assert.ok(baseline.includes(variable), `${variable} must be published`);
+    }
+  });
+
+  it('keeps durations short enough to feel like feedback, not animation', () => {
+    for (const value of Object.values(duration)) {
+      assert.ok(value <= 200, `${value}ms is long for a working surface`);
+    }
+  });
+});
+
+describe('theme palette matches the tokens', () => {
+  it('uses violet as the interaction colour', () => {
+    assert.strictEqual(paneteraTheme.palette.primary.main, accent.violet);
+  });
+
+  it('maps attention to brass rather than a second brand colour', () => {
+    assert.strictEqual(paneteraTheme.palette.warning.main, status.brass);
+  });
+
+  it('sets warm graphite as the default background', () => {
+    assert.strictEqual(paneteraTheme.palette.background.default, surface.base);
+  });
+});
+
+describe('scroll behaviour honours reduced motion', () => {
+  it('jumps when motion is reduced', () => {
+    assert.strictEqual(scrollBehavior(true), 'auto');
+  });
+
+  it('glides when motion is not reduced', () => {
+    assert.strictEqual(scrollBehavior(false), 'smooth');
+  });
+
+  it('defaults to jumping when no preference can be read', () => {
+    // Server rendering has no matchMedia. Auto-scroll repeats on every reply,
+    // so guessing "smooth" would animate at exactly the people who opted out.
+    assert.strictEqual(scrollBehavior(), 'auto');
+  });
+});
+
+describe('status colour is decided by outcome, not by file', () => {
+  // Replaces a file-scoped check that asserted four named files contained no
+  // `status.success`. That was the wrong shape twice over: a fifth surface
+  // could colour a routine state green and pass, and a legitimate completed
+  // outcome inside those four would have failed for the wrong reason.
+  //
+  // These call the real decision functions instead, so the rule travels with
+  // the behaviour rather than with a list of paths.
+
+  it('a connected gateway is neutral, never success', () => {
+    // WorkstationShell renders this inline, so the property is asserted
+    // through its rendered output in workstationShell.test.tsx. Here we pin
+    // the token relationship it depends on.
+    assert.notStrictEqual(status.neutral, status.success);
+  });
+
+  it('a reachable live application is neutral', () => {
+    assert.strictEqual(liveAppStatusColour('reachable'), status.neutral);
+    assert.notStrictEqual(liveAppStatusColour('reachable'), status.success);
+  });
+
+  it('a live application needing attention is brass, not danger', () => {
+    assert.strictEqual(liveAppStatusColour('framing-likely-blocked'), status.brass);
+    assert.strictEqual(liveAppStatusColour('invalid-configuration'), status.brass);
+  });
+
+  it('an unreachable live application is a failure', () => {
+    assert.strictEqual(liveAppStatusColour('unavailable'), status.danger);
+  });
+
+  it('a low-risk classification is neutral, not success', () => {
+    // "Safe" describes what a command is, not that anything succeeded.
+    assert.strictEqual(riskColours('safe').colour, status.neutral);
+  });
+
+  it('a risky classification escalates through brass to danger', () => {
+    assert.strictEqual(riskColours('review').colour, status.brass);
+    assert.strictEqual(riskColours('dangerous').colour, status.danger);
+  });
+
+  it('a completed tool call does resolve to success', () => {
+    // The rule is that green is reserved, not unusable. A tool that actually
+    // finished is the case it exists for.
+    assert.strictEqual(toolColour('success'), status.success);
+    assert.strictEqual(toolColour('denied'), status.danger);
+    assert.strictEqual(toolColour('failed'), status.brass);
+  });
+
+  it('workflow colour follows outcome and attention semantics', () => {
+    assert.strictEqual(workflowStatusColour('completed'), status.success);
+    assert.strictEqual(workflowStatusColour('rejected'), status.danger);
+    assert.strictEqual(workflowStatusColour('awaiting_review'), status.brass);
+    assert.strictEqual(workflowStatusColour('running'), accent.violet);
+    assert.strictEqual(workflowStatusColour('draft'), accent.violet);
+  });
+
+  it('workflow statuses are translated into plain language', () => {
+    assert.strictEqual(workflowStatusLabel('awaiting_review'), 'Waiting for your review');
+    assert.strictEqual(workflowStatusLabel('unknown_internal_state'), 'Run status unavailable');
+    assert.ok(!workflowStatusLabel('awaiting_review').includes('_'));
+  });
+
+  it('no routine state resolves to success anywhere', () => {
+    const routine = [
+      liveAppStatusColour('reachable'),
+      liveAppStatusColour('checking'),
+      riskColours('safe').colour,
+    ];
+    for (const colour of routine) {
+      assert.notStrictEqual(colour, status.success, 'routine states must stay quiet');
+    }
+  });
+});

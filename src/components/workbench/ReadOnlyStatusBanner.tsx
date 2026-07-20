@@ -8,7 +8,7 @@ interface BannerProps {
   activeWorkspaceName: string | null;
   policyActive: boolean;
   onOpenAuditLogs?: () => void;
-  // Bounded statuses for MyAI controlled testing
+  // Bounded statuses for PaneTera controlled testing
   portalAuthValid: boolean;
   workspaceCatalogCount: number;
   localAdapterActive: boolean;

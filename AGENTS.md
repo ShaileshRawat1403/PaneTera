@@ -1,13 +1,27 @@
-# MyAI Portal Agent Instructions
+# PaneTera Agent Instructions
 
 This repository is a POC for a governed, single-door workbench. Treat this file
 as the first orientation layer before making code changes.
 
+## Current Coordination Gate
+
+Before starting work, read `docs/PANETERA_WORKSTATION_CONTRACT.md`. It is the
+canonical product, design, intent-routing, surface, and implementation contract.
+Read `docs/CURRENT_IMPLEMENTATION_CHECKPOINT.md` before proposing the next
+phase; it distinguishes shipped capability from the V1 destination.
+`docs/NEXT_AGENT_DIRECTIVE.md` is a historical Shell 3A record and must not be
+treated as an active assignment.
+
 ## Product Intent
 
-MyAI Portal is not a generic chat app. It is a single-window work surface where
+PaneTera is not a generic chat app. It is a single-window work surface where
 users can explore projects, inspect live applications, preview proposed work,
 and approve governed execution.
+
+The product is domain-agnostic and is not limited to developers. Software is the
+current proving environment, not the audience boundary. Read
+`docs/PRODUCT_SCOPE_AND_INFORMATION_ARCHITECTURE.md` for the canonical audience,
+object model, six-question information architecture, and product sequence.
 
 The core promise is:
 
@@ -51,8 +65,10 @@ unavailable/degraded state.
   `ProposedAction` or app-native proposal action with explicit operator review.
 - Do not broaden command allowlists unless a narrow test-backed use case
   requires it.
-- Do not allow iframe embeds from arbitrary origins. Live embed origins must
-  match the configured app origin and fail closed otherwise.
+- Registered live applications must match their configured origins and fail
+  closed otherwise. A user-requested public website may use the separate strict
+  web-preview surface defined in `docs/PANETERA_WORKSTATION_CONTRACT.md`; it is
+  untrusted visual content and never application authority.
 
 ## UX Rules
 
@@ -60,9 +76,8 @@ unavailable/degraded state.
 - Feed variants must stay compact. Never render a full iframe in the feed.
 - Main variants may render live iframes, schema forms, draft previews, status
   boards, and proposal cards.
-- Keep rails and feed resizable/collapsible so the operator can give the active
-  UI enough space.
-- Do not add landing-page style hero sections. This is an operator cockpit.
+- Keep contextual drawers overlay-based so the active canvas does not resize.
+- Do not add landing-page style hero sections. This is a working surface.
 - Avoid cosmetic-only churn unless the task is explicitly UI polish.
 
 ## Current Reference Flows

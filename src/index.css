@@ -1,81 +1,93 @@
-/* src/index.css */
-@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+/* src/index.css
+ *
+ * Global styles only. Colour lives in src/theme/tokens.ts and reaches the DOM
+ * through the CSS variables below, which paneteraTheme writes at :root.
+ *
+ * Deliberately removed in the Phase 0 pass:
+ *   - the Google Fonts @import. PaneTera is local-first, and a stylesheet that
+ *     blocks first paint on a third-party request contradicts that. The type
+ *     stack is now system-resident.
+ *   - the cool #08090b ground and the violet/green radial glows, which fought
+ *     the warm graphite surfaces and put ambient green on screen at all times.
+ *   - looping blink and pulse animations. Continuous motion with no state
+ *     change behind it is decoration, and it never stops asking for attention.
+ */
 
-html, body, #root {
+html,
+body,
+#root {
   height: 100%;
   margin: 0;
-  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  background: #08090b;
-  color: #f4f4f5;
   overflow: hidden;
   position: relative;
+  /* Values come from the theme; the fallbacks keep the page sane before the
+     provider mounts. */
+  font-family: var(--panetera-font-sans, ui-sans-serif, system-ui, sans-serif);
+  background: var(--panetera-surface-base, #181614);
+  color: var(--panetera-ink-primary, #f2ede4);
 }
 
 * {
   box-sizing: border-box;
 }
 
-/* Subtle dark Vercel/Codex radial backdrop glow */
-body::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: 
-    radial-gradient(circle at 50% -10%, rgba(127, 85, 240, 0.05), transparent 60%),
-    radial-gradient(circle at 10% 90%, rgba(34, 197, 94, 0.015), transparent 40%);
-  pointer-events: none;
-  z-index: 0;
+code,
+pre,
+kbd,
+samp {
+  font-family: var(--panetera-font-mono, ui-monospace, monospace);
 }
 
-/* Apple-style spring animations for card loads */
-@keyframes appleSpringIn {
-  0% {
+/* Entrance for cards arriving in the canvas. Governed by the motion tokens:
+   one pass, no loop, and disabled entirely under reduced motion. */
+@keyframes paneteraCardEnter {
+  from {
     opacity: 0;
-    transform: scale(0.98) translateY(6px);
+    transform: translateY(4px);
   }
-  100% {
+  to {
     opacity: 1;
-    transform: scale(1) translateY(0);
+    transform: translateY(0);
   }
 }
 
 .feed-card-animation {
-  animation: appleSpringIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: paneteraCardEnter var(--panetera-duration-settled, 200ms)
+    var(--panetera-easing-enter, cubic-bezier(0.16, 0.84, 0.44, 1)) forwards;
 }
 
-/* Flashing text cursor for terminal logging */
-@keyframes blink {
-  50% { opacity: 0; }
-}
-
+/* A caret marks an active stream, so it should exist only while that is true.
+   The looping blink is gone; callers add and remove the element. */
 .terminal-cursor {
   display: inline-block;
   width: 6px;
   height: 14px;
-  background-color: #7f5af0;
   margin-left: 2px;
-  animation: blink 1s step-end infinite;
   border-radius: 1px;
+  background-color: var(--panetera-accent-violet, #b9a5e8);
 }
 
-/* Custom premium scrollbar styling */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
+
 ::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.005);
-  border-radius: 99px;
+  background: transparent;
 }
+
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--panetera-surface-border, #3a3430);
   border-radius: 99px;
 }
+
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(127, 85, 240, 0.4);
+  background: var(--panetera-surface-border-strong, #4c443e);
+}
+
+* {
+  scrollbar-color: var(--panetera-surface-border, #3a3430) transparent;
+  scrollbar-width: thin;
 }
 
 .scroll-container {
@@ -84,15 +96,14 @@ body::before {
   overscroll-behavior-y: contain;
 }
 
-@keyframes pulseGlow {
-  0%, 100% {
-    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.12);
+/* One reduced-motion policy, matching src/theme/motion.ts: no animation, not a
+   faster one. Elements appear rather than arrive. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
   }
-  50% {
-    box-shadow: 0 0 0 4px rgba(245, 158, 11, 0);
-  }
-}
-
-.pulse-glow {
-  animation: pulseGlow 2.4s ease-in-out infinite;
 }

@@ -1,32 +1,30 @@
 // src/App.tsx
 import React, { useState, useEffect, useRef } from 'react';
-import { Box, CssBaseline, ThemeProvider, createTheme, Paper, Typography, TextField, Button, CircularProgress, Chip, IconButton, Dialog, DialogTitle, DialogContent, DialogActions, Grid, Stack, Divider, Tooltip, Snackbar, Alert } from '@mui/material';
-import ChatMessage from './components/ChatMessage';
-import ChatInput from './components/ChatInput';
+import { Box, Paper, Typography, TextField, Button, CircularProgress, Chip, IconButton, Dialog, Grid, Stack, Tooltip, Snackbar, Alert, Menu, MenuItem } from '@mui/material';
+import TranscriptTurn from './components/transcript/TranscriptTurn';
+import type { TranscriptMessage } from './components/transcript/TranscriptTurn';
+import { Composer } from './components/composer/Composer';
+import { AttachmentPicker } from './components/composer/AttachmentPicker';
+import type { PickerKind } from './components/composer/AttachmentPicker';
+import type { AttachRequest } from './composer/contextTray';
+import { PickerCoordinator } from './composer/pickerCoordinator';
+import type { AttachableWorkspace, ContextKind } from './composer/contextTypes';
+import type { ComposerSubmission } from './components/composer/Composer';
+import { resolveIntent } from './composer/intentResolver';
+import { alpha } from '@mui/material/styles';
+import { scrollBehavior } from './theme/motion';
+import { accent, elevation, ink, radius, status, surface } from './theme/tokens';
+import { planSubmission } from './composer/submissionPlan';
+import { capabilitiesFrom, executePlan } from './composer/capabilities';
+import type { PlanExecutors } from './composer/capabilities';
+import { describeResolution, resolveAppName } from './composer/appRegistry';
 import { PreviewPanel, FeedItem } from './components/PreviewPanel';
 import { InteractiveComponent } from './components/InteractiveComponent';
+import { WorkstationShell } from './components/workstation/WorkstationShell';
 import type { UiComponent } from '../shared/uiComponent';
-import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
-import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
-import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
-import CloseIcon from '@mui/icons-material/Close';
-import EditNoteIcon from '@mui/icons-material/EditNote';
-import DnsIcon from '@mui/icons-material/Dns';
-import TerminalIcon from '@mui/icons-material/Terminal';
-import FolderIcon from '@mui/icons-material/Folder';
-import MemoryIcon from '@mui/icons-material/Memory';
-import LaptopMacIcon from '@mui/icons-material/LaptopMac';
 import SearchIcon from '@mui/icons-material/Search';
-import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
-import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
-import ChevronRightIcon from '@mui/icons-material/ChevronRight';
-import ViewSidebarIcon from '@mui/icons-material/ViewSidebar';
-import CodeIcon from '@mui/icons-material/Code';
-import ForumIcon from '@mui/icons-material/Forum';
-import AddIcon from '@mui/icons-material/Add';
-import FolderOpenIcon from '@mui/icons-material/FolderOpen';
-import { WorkbenchShell } from './components/workbench/WorkbenchShell';
-import { WorkbenchModeToggle, WorkbenchMode } from './components/workbench/WorkbenchModeToggle';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import type { WorkbenchMode } from './components/workbench/WorkbenchModeToggle';
 import { WorkspaceNavigator, Workspace } from './components/workbench/WorkspaceNavigator';
 import { WorkspaceFileTree } from './components/workbench/WorkspaceFileTree';
 import { AuditLogsView } from './components/workbench/AuditLogsView';
@@ -35,69 +33,36 @@ import { WorkspaceIntelligenceCard } from './components/workbench/WorkspaceIntel
 import { QuickActionsDeck } from './components/workbench/QuickActionsDeck';
 import { FilePreviewPanel } from './components/workbench/FilePreviewPanel';
 import { InspectionTracePanel } from './components/workbench/InspectionTracePanel';
-import { TestingCockpit } from './components/workbench/TestingCockpit';
 import { StaticStructureCard } from './components/workbench/StaticStructureCard';
 import { DependencyMapCard } from './components/workbench/DependencyMapCard';
 import DeviceHubIcon from '@mui/icons-material/DeviceHub';
 
 import { useWorkbenchPreferences } from './hooks/useWorkbenchPreferences';
-import { WorkbenchLayout } from './components/workbench/WorkbenchLayout';
 import { WorkbenchEmptyState } from './components/workbench/WorkbenchEmptyState';
 import { WorkbenchFailureState } from './components/workbench/WorkbenchFailureState';
 import { LiveWorkbenchSurface } from './components/workbench/LiveWorkbenchSurface';
 import { LiveWorkbenchToolbar } from './components/workbench/LiveWorkbenchToolbar';
+import { WebPreviewSurface } from './components/workbench/WebPreviewSurface';
+// Web-preview and workspace-route matching now happen inside the single
+// resolver. App consumes resolved envelopes and does not classify.
+import type { WebPreviewRequest } from './utils/webPreviewIntent';
 
 
-// Codex developer-cockpit styling presets
-const codexTheme = createTheme({
-  typography: {
-    fontFamily: '"Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-    button: {
-      textTransform: 'none',
-      fontWeight: 600,
-    },
-  },
-  palette: {
-    mode: 'dark',
-    background: {
-      default: '#08090b',
-      paper: 'rgba(255, 255, 255, 0.035)',
-    },
-    primary: { main: '#7f5af0' },
-  },
-  components: {
-    MuiPaper: {
-      styleOverrides: {
-        root: {
-          background: 'rgba(255, 255, 255, 0.035)',
-          backdropFilter: 'blur(16px)',
-          borderRadius: '12px',
-          border: '1px solid rgba(255, 255, 255, 0.08)',
-        },
-      },
-    },
-    MuiButton: {
-      styleOverrides: {
-        root: {
-          borderRadius: '8px',
-          padding: '6px 16px',
-        },
-      },
-    },
-  },
-});
+// Canonical PaneTera workstation theme.
+// The canonical theme lives in src/theme/paneteraTheme.ts and is mounted once
+// in main.tsx. A second createTheme here previously overrode it, so the app
+// rendered the old cool palette while the contract's warm tokens sat unused.
+// test/themeCanonical.test.ts prevents that from returning.
 
-interface Message {
-  role: 'user' | 'assistant';
-  content: string;
-  uiComponent?: UiComponent;
-  intent?: string;
-  toolsUsed?: { tool: string; status: 'success' | 'denied' | 'failed'; reason?: string }[];
-  filesInspected?: { path: string; purpose: string }[];
-  citations?: { path: string; label: string }[];
-  suggestedActions?: { label: string; message: string }[];
-  warnings?: string[];
-}
+/**
+ * A turn in the transcript.
+ *
+ * Aliased to the component's own type rather than restated, so the two cannot
+ * drift. It carries no `uiComponent`: the canvas is authoritative, so a
+ * returned component goes to `setActiveComponent` and renders there. Storing a
+ * copy on the message made it dead data that nothing read.
+ */
+type Message = TranscriptMessage;
 
 const App: React.FC = () => {
 
@@ -108,9 +73,6 @@ const App: React.FC = () => {
   const [tokenError, setTokenError] = useState<string>('');
   const [previewFeed, setPreviewFeed] = useState<FeedItem[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
-  const [isCmdKOpen, setIsCmdKOpen] = useState<boolean>(false);
-  const [cmdKQuery, setCmdKQuery] = useState<string>('');
-  const [isHelpOpen, setIsHelpOpen] = useState<boolean>(false);
 
   // Active workspace state overlays
   const [activeComponent, setActiveComponent] = useState<UiComponent | null>(null);
@@ -121,37 +83,17 @@ const App: React.FC = () => {
   const [soothsayerStatus, setSoothsayerStatus] = useState<'online' | 'offline' | 'checking' | 'unconfigured' | 'degraded'>('checking');
   const [backendHealth, setBackendHealth] = useState<{ status: string; mode: string; workspaceCount: number; memoryBridgeReady: boolean } | null>(null);
 
-  // Collapsible panels state with localStorage persistence
-  const [isLeftRailCollapsed, setIsLeftRailCollapsed] = useState<boolean>(() => {
-    return localStorage.getItem('portal-left-collapsed') === 'true';
-  });
-  const [isRightFeedCollapsed, setIsRightFeedCollapsed] = useState<boolean>(() => {
-    const stored = localStorage.getItem('portal-right-collapsed');
-    if (stored !== null) return stored === 'true';
-    return window.innerWidth < 1280;
-  });
-  const [showAllHistory, setShowAllHistory] = useState<boolean>(false);
-
-  const [leftRailWidth, setLeftRailWidth] = useState<number>(() => {
-    const stored = localStorage.getItem('portal-left-width');
-    const val = stored ? parseInt(stored, 10) : 280;
-    return isNaN(val) ? 280 : val;
-  });
-
-  const [rightFeedWidth, setRightFeedWidth] = useState<number>(() => {
-    const stored = localStorage.getItem('portal-right-width');
-    const val = stored ? parseInt(stored, 10) : 380;
-    return isNaN(val) ? 380 : val;
-  });
-
   const [workbenchMode, setWorkbenchMode] = useState<WorkbenchMode>(() => {
-    const stored = localStorage.getItem('portal-workbench-mode');
+    const stored = localStorage.getItem('panetera-workbench-mode')
+      || localStorage.getItem('portal-workbench-mode');
     return (stored as WorkbenchMode) || 'native-focus';
   });
 
-  const { prefs, setAppId, setLeftPanelWidth } = useWorkbenchPreferences();
+  const { prefs, setAppId } = useWorkbenchPreferences();
   const [localAppStatus, setLocalAppStatus] = React.useState<string>('checking');
   const [localAppDef, setLocalAppDef] = React.useState<any>(null);
+  const [webPreview, setWebPreview] = useState<WebPreviewRequest | null>(null);
+  const [webPreviewRevision, setWebPreviewRevision] = useState(0);
 
   React.useEffect(() => {
     if (prefs.activeAppId && workbenchMode === 'local-app') {
@@ -180,7 +122,7 @@ const App: React.FC = () => {
   const handleSelectLocalApp = (appId: string) => {
     setAppId(appId);
   };
-  
+
   const handleClearLocalApp = () => {
     setAppId(null);
     setLocalAppDef(null);
@@ -195,7 +137,6 @@ const App: React.FC = () => {
 
   const [activeWorkspace, setActiveWorkspace] = useState<Workspace | null>(null);
   const [isAuditLogsOpen, setIsAuditLogsOpen] = useState(false);
-  const [isTestingCockpitOpen, setIsTestingCockpitOpen] = useState(false);
 
   const [workspaceFiles, setWorkspaceFiles] = useState<any[]>([]);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
@@ -493,25 +434,10 @@ const App: React.FC = () => {
     }
   };
 
-  const handleLeftResize = (deltaX: number) => {
-    setLeftRailWidth(prev => {
-      const next = Math.max(240, Math.min(340, prev + deltaX));
-      localStorage.setItem('portal-left-width', String(next));
-      return next;
-    });
-  };
-
-  const handleRightResize = (deltaX: number) => {
-    setRightFeedWidth(prev => {
-      const next = Math.max(320, Math.min(1100, prev + deltaX));
-      localStorage.setItem('portal-right-width', String(next));
-      return next;
-    });
-  };
-
   const handleWorkbenchModeChange = (nextMode: WorkbenchMode) => {
     setWorkbenchMode(nextMode);
-    localStorage.setItem('portal-workbench-mode', nextMode);
+    localStorage.setItem('panetera-workbench-mode', nextMode);
+    localStorage.removeItem('portal-workbench-mode');
   };
 
   const isSoothsayerLivePlaneActive = Boolean(
@@ -519,33 +445,6 @@ const App: React.FC = () => {
     (activeComponent.data as any)?.embed?.allowed &&
     (activeComponent.data as any)?.embedUrl
   );
-
-  useEffect(() => {
-    if (isSoothsayerLivePlaneActive && isRightFeedCollapsed) {
-      setIsRightFeedCollapsed(false);
-      localStorage.setItem('portal-right-collapsed', 'false');
-    }
-    if (isSoothsayerLivePlaneActive && rightFeedWidth < 760) {
-      setRightFeedWidth(760);
-      localStorage.setItem('portal-right-width', '760');
-    }
-  }, [isSoothsayerLivePlaneActive, isRightFeedCollapsed, rightFeedWidth]);
-
-  const toggleLeftRail = () => {
-    setIsLeftRailCollapsed(prev => {
-      const next = !prev;
-      localStorage.setItem('portal-left-collapsed', String(next));
-      return next;
-    });
-  };
-
-  const toggleRightFeed = () => {
-    setIsRightFeedCollapsed(prev => {
-      const next = !prev;
-      localStorage.setItem('portal-right-collapsed', String(next));
-      return next;
-    });
-  };
 
   // Governed content workflow (flowright) input state
   const [isContentDialogOpen, setIsContentDialogOpen] = useState<boolean>(false);
@@ -557,13 +456,17 @@ const App: React.FC = () => {
     seoRequirements: '',
     publishConstraints: 'No autonomous publishing. Operator must approve before CMS or deploy handoff.'
   });
-  
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Load token from localStorage on mount
   useEffect(() => {
-    const stored = localStorage.getItem('portalToken') || '';
+    const stored = localStorage.getItem('panetera-token')
+      || localStorage.getItem('portalToken')
+      || '';
     if (stored) {
+      localStorage.setItem('panetera-token', stored);
+      localStorage.removeItem('portalToken');
       setToken(stored);
     } else {
       setShowTokenPrompt(true);
@@ -677,21 +580,11 @@ const App: React.FC = () => {
       .catch(() => {});
   }, [token]);
 
-  // Cmd+K palette listener
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        setIsCmdKOpen(prev => !prev);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
-
   // Auto-scroll to bottom of chat when new messages arrive
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // Auto-scroll fires on every reply, so it is the most repeated motion in
+    // the product. Under reduced motion it jumps rather than glides.
+    messagesEndRef.current?.scrollIntoView({ behavior: scrollBehavior() });
   }, [messages, loading]);
 
   // Poll browser observations periodically to feed the Intelligence Feed
@@ -713,9 +606,9 @@ const App: React.FC = () => {
           setPreviewFeed(prev => {
             const newItems = obsData.filter((obs: any) => !prev.some(item => item.id === obs.captureId));
             const newExtractions = extData.filter((ext: any) => !prev.some(item => item.id === ext.extractionId || item.id === ext.parentCaptureId));
-            
+
             if (newItems.length === 0 && newExtractions.length === 0) return prev;
-            
+
             const convertedObs = newItems.map((obs: any) => ({
               id: obs.captureId,
               type: 'BrowserObservation' as const,
@@ -757,13 +650,13 @@ const App: React.FC = () => {
         const err = await response.json();
         throw new Error(err.error || 'Failed to add workspace');
       }
-      
+
       fetch('/api/workspaces')
         .then(res => res.json())
         .then(data => {
           if (Array.isArray(data)) setWorkspacesList(data);
         });
-      
+
       setSnackbarMessage(`Added workspace: ${folderName}`);
       setSnackbarOpen(true);
     } catch (err: any) {
@@ -774,60 +667,298 @@ const App: React.FC = () => {
   };
 
 
-  const handleSend = async (text: string) => {
-    addMessage({ role: 'user', content: text });
-    setLoading(true);
+  // --- Governed attachment picker -----------------------------------------
+  //
+  // The composer never reads the filesystem. It asks for an attachment; this
+  // host opens the picker, confines selection to the registered project
+  // allowlist, and resolves an AttachRequest or null.
+  //
+  // Every pending promise is settled: on choose, on cancel, when a second
+  // request replaces the first, and on unmount. A composer left awaiting
+  // forever would silently stop responding to the `+` menu.
+  const [pickerKind, setPickerKind] = useState<PickerKind | null>(null);
+  const picker = useRef(new PickerCoordinator<AttachRequest>());
+  const pendingPickerResult = useRef<AttachRequest | null | undefined>(undefined);
 
-    const loadingId = Math.random().toString(36).substr(2, 9);
-    const currentTimestamp = new Date().toLocaleTimeString();
+  const settlePicker = (request: AttachRequest | null) => picker.current.settle(request);
 
-    const apiPromise = fetch('/api/orchestrator/chat', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        message: text,
-        workspaceId: activeWorkspace ? activeWorkspace.id : null,
-        selectedFile: selectedFile,
-        persona: activeLens,
-        captureId: activeComponent?.type === 'BrowserObservation' ? activeComponent.data.captureId : undefined
-      }),
-    }).then(async (resp) => {
-      if (resp.status === 401) {
-        throw new Error('Unauthorized');
+  useEffect(() => {
+    const coordinator = picker.current;
+    return () => coordinator.dispose();
+  }, []);
+
+  /**
+   * The registered project allowlist.
+   *
+   * `/api/workspaces` returns no `id`, so the name is the identity. Deriving it
+   * here rather than inventing one keeps the tray's workspaceId meaningful, and
+   * this list is the only source a selection may come from.
+   */
+  const attachableProjects: AttachableWorkspace[] = React.useMemo(
+    () =>
+      workspacesList
+        .filter((entry: any) => typeof entry?.name === 'string' && typeof entry?.path === 'string')
+        .map((entry: any) => ({ id: entry.name, name: entry.name, path: entry.path })),
+    [workspacesList],
+  );
+
+  /**
+   * List attachable paths inside a project.
+   *
+   * Stable across renders so the picker's effect does not refetch on every
+   * parent update. Authenticated, status-checked, and validated as an array of
+   * strings before it reaches the dialog.
+   */
+  const listProjectPaths = React.useCallback(
+    async (project: AttachableWorkspace): Promise<string[]> => {
+      const response = await fetch(
+        `/api/files?workspace=${encodeURIComponent(project.name)}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!response.ok) throw new Error(`Listing failed (${response.status})`);
+      const payload = await response.json();
+      if (!Array.isArray(payload)) return [];
+      return payload.filter((entry): entry is string => typeof entry === 'string');
+    },
+    [token],
+  );
+
+  const requestAttachment = React.useCallback(
+    (kind: ContextKind): Promise<AttachRequest | null> => {
+      if (kind !== 'project' && kind !== 'file' && kind !== 'folder') {
+        return Promise.resolve(null);
       }
-      return resp.json();
-    });
+      // The coordinator supersedes any earlier request, settling it as null.
+      setPickerKind(kind);
+      return picker.current.request();
+    },
+    [],
+  );
 
-    try {
-      const data = await apiPromise;
-
+  /**
+   * Handlers for every plan this app can carry out.
+   *
+   * Capabilities are derived from this object rather than listed separately, so
+   * a capability cannot be claimed without the function that performs it. That
+   * is what previously allowed `live-app` to be declared while its handler was
+   * being passed an application name where an application id was required.
+   */
+  const planExecutors: PlanExecutors = {
+    webOpen: (plan) => {
+      setWebPreview({ url: plan.url, name: plan.label });
+      setActiveComponent(null);
+      setActiveReply(`Opened ${plan.label} in the canvas.`);
       addMessage({
         role: 'assistant',
-        content: data.answer ?? 'No response',
-        intent: data.intent,
-        toolsUsed: data.toolsUsed,
-        filesInspected: data.filesInspected,
-        citations: data.citations,
-        suggestedActions: data.suggestedActions,
-        warnings: data.warnings
+        content: `I opened ${plan.url} in the canvas as an untrusted web preview. It receives no PaneTera authority or credentials. If the site refuses embedded viewing, use “Open in browser” above the preview.`,
+        intent: 'web_preview',
+      });
+    },
+    webClose: () => {
+      setWebPreview(null);
+      addMessage({ role: 'assistant', content: 'I closed the web preview.', intent: 'web_preview' });
+    },
+    webReload: () => {
+      setWebPreviewRevision(current => current + 1);
+      addMessage({ role: 'assistant', content: 'I reloaded the web preview.', intent: 'web_preview' });
+    },
+    selectProject: (plan) => {
+      // `/api/workspaces` returns no id, so the name is the identity. Mapping
+      // `appId: workspace.id` produced empty strings and made every project
+      // unresolvable by name.
+      const resolution = resolveAppName(
+        plan.target,
+        attachableProjects.map((project) => ({ appId: project.name, name: project.name })),
+      );
+      if (resolution.kind !== 'resolved') {
+        addMessage({
+          role: 'assistant',
+          content: describeResolution(resolution).replace(/application/g, 'project'),
+          intent: 'needs_clarification',
+        });
+        return;
+      }
+      const match = workspacesList.find((workspace: any) => workspace?.name === resolution.appId);
+      if (!match) return;
+      setActiveWorkspace(match);
+      addMessage({ role: 'assistant', content: `Switched to ${match.name}.`, intent: 'project' });
+    },
+    openLiveApp: async (plan) => {
+      // The registry keys on appId; the composer produced whatever the person
+      // typed. Resolving here, and refusing honestly when it does not resolve,
+      // is what keeps a naming mistake from surfacing as an unavailable app.
+      let apps: any[] = [];
+      try {
+        const response = await fetch('/api/workbench/apps');
+        const data = await response.json();
+        apps = Array.isArray(data?.apps) ? data.apps : [];
+      } catch {
+        addMessage({
+          role: 'assistant',
+          content: 'I could not reach the application registry, so nothing was opened.',
+          intent: 'needs_capability',
+        });
+        return;
+      }
+
+      const resolution = resolveAppName(plan.target, apps);
+      if (resolution.kind !== 'resolved') {
+        addMessage({
+          role: 'assistant',
+          content: describeResolution(resolution),
+          intent: 'needs_clarification',
+        });
+        return;
+      }
+
+      handleSelectLocalApp(resolution.appId);
+      handleWorkbenchModeChange('local-app');
+      addMessage({
+        role: 'assistant',
+        content: describeResolution(resolution),
+        intent: 'live_app',
+      });
+    },
+    // `clearContext` is deliberately absent. The composer owns the tray and
+    // performs that effect itself, so declaring a no-op here would be exactly
+    // the placeholder the derivation is meant to prevent. The composer
+    // declares that capability for itself.
+    chat: async (plan) => {
+    setLoading(true);
+
+      const useWorkspaceOrchestrator = plan.endpoint === 'orchestrator';
+      const endpoint = useWorkspaceOrchestrator ? '/api/orchestrator/chat' : '/api/chat';
+      // plan.message carries the attached material and references. Sending
+      // `text` here instead would drop everything the user attached, which is
+      // what the chips promise to include.
+      const requestBody = useWorkspaceOrchestrator
+        ? {
+            message: plan.message,
+            workspaceId: activeWorkspace ? activeWorkspace.id : null,
+            selectedFile,
+            persona: activeLens,
+            captureId: activeComponent?.type === 'BrowserObservation' ? activeComponent.data.captureId : undefined,
+            attachedContext: plan.context,
+          }
+        : {
+            query: plan.message,
+            history: messages.slice(-12).map(message => ({
+              role: message.role === 'assistant' ? 'model' : 'user',
+              parts: [{ text: message.content }],
+            })),
+            attachedContext: plan.context,
+          };
+
+      const apiPromise = fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(requestBody),
+      }).then(async (resp) => {
+        if (resp.status === 401) {
+          throw new Error('Unauthorized');
+        }
+        const data = await resp.json();
+        if (!resp.ok) {
+          throw new Error(data.error || `Request failed (${resp.status})`);
+        }
+        return data;
       });
 
-      setActiveReply(data.answer ?? null);
-      setActiveQuery(text);
-    } catch (err: any) {
-      if (err.message === 'Unauthorized') {
-        addMessage({ role: 'assistant', content: 'Unauthorized. Please check your token settings.' });
-        setShowTokenPrompt(true);
-      } else {
-        addMessage({ role: 'assistant', content: 'Error contacting backend. Please verify that the server is running.' });
+      try {
+        const data = await apiPromise;
+
+        const answer = useWorkspaceOrchestrator ? data.answer : data.reply;
+        if (data.uiComponent) {
+          setActiveComponent(data.uiComponent);
+          setWebPreview(null);
+        }
+
+        addMessage({
+          role: 'assistant',
+          content: answer ?? 'I could not produce a response.',
+          intent: data.intent || plan.intentFamily,
+          // data.uiComponent is routed to the canvas above, not stored here.
+          toolsUsed: data.toolsUsed,
+          filesInspected: data.filesInspected,
+          citations: data.citations,
+          suggestedActions: data.suggestedActions,
+          warnings: data.warnings
+        });
+
+        setActiveReply(answer ?? null);
+        setActiveQuery(plan.rawInput);
+      } catch (err: any) {
+        if (err.message === 'Unauthorized') {
+          addMessage({ role: 'assistant', content: 'Unauthorized. Please check your token settings.' });
+          setShowTokenPrompt(true);
+        } else {
+          addMessage({ role: 'assistant', content: 'Error contacting backend. Please verify that the server is running.' });
+        }
+      } finally {
+        setLoading(false);
       }
-    } finally {
-      setLoading(false);
+    },
+  };
+
+  // Context supplied to the one resolver. Every entry point uses this, so a
+  // suggestion chip and a typed message are classified identically.
+  const composerResolverContext = {
+    hasWorkspace: Boolean(activeWorkspace),
+    hasSelectedFile: Boolean(selectedFile),
+    hasOpenWebPreview: Boolean(webPreview),
+    supportedCapabilities: capabilitiesFrom(planExecutors),
+  };
+
+  /**
+   * Consume an already-resolved intent.
+   *
+   * This must not reclassify. The composer resolved the envelope; re-running a
+   * matcher here would recreate the parallel routing the composer contract
+   * exists to remove.
+   */
+  const handleSubmission = async (submission: ComposerSubmission) => {
+    const { intent } = submission;
+
+    addMessage({ role: 'user', content: intent.rawInput });
+
+    // The plan is the execution boundary. App never inspects readiness or
+    // family itself, so a non-ready envelope cannot reach a backend by
+    // omission here.
+    const plan = planSubmission(submission);
+
+    if (plan.kind === 'blocked') {
+      addMessage({
+        role: 'assistant',
+        content: plan.reason,
+        intent: plan.readiness === 'needs-approval' ? 'needs_approval' : 'needs_clarification',
+      });
+      return;
+    }
+
+    const outcome = await executePlan(plan, planExecutors);
+    if (outcome.kind === 'unhandled') {
+      addMessage({
+        role: 'assistant',
+        content: 'That action has no handler connected, so nothing was done.',
+        intent: 'needs_capability',
+      });
     }
   };
+
+  /**
+   * Text entry points other than the composer: suggestion chips, card actions,
+   * "explain this file". They resolve through the same resolver rather than
+   * carrying their own routing, so there is one classification path in the app.
+   */
+  const handleSend = (text: string) =>
+    handleSubmission({
+      intent: resolveIntent(text, { ...composerResolverContext, includedContextCount: 0 }),
+      context: [],
+      material: {},
+    });
 
   const handleTokenSave = async () => {
     const trimmed = tokenInput.trim();
@@ -841,7 +972,8 @@ const App: React.FC = () => {
           setTokenError('Invalid token. Please try again.');
           return;
         }
-        localStorage.setItem('portalToken', trimmed);
+        localStorage.setItem('panetera-token', trimmed);
+        localStorage.removeItem('portalToken');
         setToken(trimmed);
         setShowTokenPrompt(false);
       } catch (e) {
@@ -1056,169 +1188,81 @@ const App: React.FC = () => {
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
         {/* Orchestrator Header Banner */}
-        <Box sx={{ p: 1.5, background: 'rgba(127, 85, 240, 0.04)', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-          <Typography variant="caption" sx={{ color: '#cbd5e1', fontWeight: 700, letterSpacing: '0.05em' }}>
-            ORCHESTRATOR MODE: <span style={{ color: '#a78bfa' }}>READ-ONLY</span>
+        <Box sx={{ px: 2.5, py: 1.75, borderBottom: `1px solid ${surface.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+          <Typography variant="caption" sx={{ color: ink.primary, fontWeight: 650, fontSize: '0.8rem' }}>
+            Conversation
           </Typography>
-          <Chip label="Grounded Inspection Trace" size="small" sx={{ height: 16, fontSize: '0.55rem', background: 'rgba(255,255,255,0.04)', color: '#a1a1aa', border: '1px solid rgba(255,255,255,0.05)' }} />
+          <Chip label="Safe inspection" size="small" sx={{ height: 22, fontSize: '0.62rem', backgroundColor: surface.sunken, color: status.neutral, border: `1px solid ${surface.border}` }} />
         </Box>
 
         {/* Scrollable messages container */}
-        <Box 
-          sx={{ 
-            flexGrow: 1, 
-            overflowY: 'auto', 
-            p: 3, 
-            display: 'flex', 
-            flexDirection: 'column', 
+        <Box
+          sx={{
+            flexGrow: 1,
+            overflowY: 'auto',
+            p: 2.5,
+            display: 'flex',
+            flexDirection: 'column',
             gap: 2.5,
             minHeight: 0
           }}
         >
           {messages.length === 0 ? (
-            !activeWorkspace ? (
-              <Box sx={{ m: 'auto', textAlign: 'center', opacity: 0.8, py: 4, maxWidth: '280px' }}>
-                <FolderOpenIcon sx={{ fontSize: 44, color: '#fbbf24', mb: 1.5, opacity: 0.8 }} />
-                <Typography variant="subtitle2" sx={{ color: '#e4e4e7', fontWeight: 700, mb: 0.5, fontSize: '0.85rem' }}>
-                  Select a Workspace
-                </Typography>
-                <Typography variant="caption" sx={{ color: '#71717a', display: 'block', lineHeight: 1.4, fontSize: '0.72rem' }}>
-                  Select a workspace folder from the catalog in the left rail to let the orchestrator inspect files safely.
-                </Typography>
-              </Box>
-            ) : (
-              <Box sx={{ m: 'auto', textAlign: 'center', opacity: 0.35, py: 4 }}>
-                <ForumIcon sx={{ fontSize: 48, color: '#7f5af0', mb: 1 }} />
-                <Typography variant="body2" sx={{ color: '#cbd5e1', fontSize: '0.8rem' }}>
-                  Start a governed conversation with Tessera Workbench.
-                </Typography>
-              </Box>
-            )
-          ) : (
-            messages.map((msg, idx) => (
-              <Box 
-                key={idx} 
-                sx={{ 
-                  display: 'flex', 
-                  flexDirection: 'column', 
-                  alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
-                  maxWidth: '85%',
-                  alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start'
-                }}
+            // One empty state, not two near-identical ones. The heading is the
+            // same question either way; only the hint changes with whether a
+            // project is open, which is the part that actually differs.
+            <Box sx={{ m: 'auto', textAlign: 'left', py: 4, maxWidth: 300 }}>
+              <Typography
+                variant="subtitle2"
+                sx={{ color: ink.primary, fontWeight: 600, mb: 0.75, fontSize: '0.9375rem' }}
               >
-                <Paper 
-                  elevation={0}
-                  sx={{ 
-                    p: 2, 
-                    background: msg.role === 'user' ? 'rgba(127, 85, 240, 0.1)' : 'rgba(255, 255, 255, 0.02)', 
-                    border: msg.role === 'user' ? '1px solid rgba(127, 85, 240, 0.25)' : '1px solid rgba(255, 255, 255, 0.05)',
-                    borderRadius: msg.role === 'user' ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
-                  }}
-                >
-                  <Typography variant="caption" sx={{ color: msg.role === 'user' ? '#b794f4' : '#71717a', fontWeight: 800, display: 'block', mb: 0.5 }}>
-                    {msg.role === 'user' ? 'YOU' : `PORTAL ORCHESTRATOR${msg.intent ? ` (${msg.intent.toUpperCase()})` : ''}`}
-                  </Typography>
-                  <Typography variant="body2" sx={{ color: '#f4f4f5', lineHeight: 1.5, whiteSpace: 'pre-wrap', fontSize: '0.78rem' }}>
-                    {msg.content}
-                  </Typography>
-
-                  {/* Collapsible inspected files log */}
-                  {msg.filesInspected && msg.filesInspected.length > 0 && (
-                    <Box sx={{ mt: 1.5 }}>
-                      <details style={{ cursor: 'pointer', outline: 'none' }}>
-                        <summary style={{ fontSize: '11px', color: '#a78bfa', fontWeight: 600, userSelect: 'none' }}>
-                          What I inspected ({msg.filesInspected.length} files)
-                        </summary>
-                        <Box sx={{ pl: 1.5, mt: 0.5, borderLeft: '1px solid rgba(255,255,255,0.06)' }}>
-                          {msg.filesInspected.map((f, fi) => (
-                            <Typography key={fi} variant="caption" sx={{ color: '#cbd5e1', display: 'block', fontFamily: 'monospace', fontSize: '10px' }}>
-                              🔍 {f.path} ({f.purpose})
-                            </Typography>
-                          ))}
-                        </Box>
-                      </details>
-                    </Box>
-                  )}
-
-                  {/* Collapsible tool execution trace */}
-                  {msg.toolsUsed && msg.toolsUsed.length > 0 && (
-                    <Box sx={{ mt: 1 }}>
-                      <details style={{ cursor: 'pointer', outline: 'none' }}>
-                        <summary style={{ fontSize: '11px', color: '#a78bfa', fontWeight: 600, userSelect: 'none' }}>
-                          Tool execution trace ({msg.toolsUsed.length} calls)
-                        </summary>
-                        <Box sx={{ pl: 1.5, mt: 0.5, borderLeft: '1px solid rgba(255,255,255,0.06)' }}>
-                          {msg.toolsUsed.map((t, ti) => (
-                            <Typography key={ti} variant="caption" sx={{ color: t.status === 'success' ? '#22c55e' : t.status === 'denied' ? '#ef4444' : '#fbbf24', display: 'block', fontFamily: 'monospace', fontSize: '10px' }}>
-                              🛠️ {t.tool} : {t.status.toUpperCase()} {t.reason ? `(${t.reason})` : ''}
-                            </Typography>
-                          ))}
-                        </Box>
-                      </details>
-                    </Box>
-                  )}
-
-                  {/* Citations list */}
-                  {msg.citations && msg.citations.length > 0 && (
-                    <Box sx={{ mt: 1.5, pt: 1, borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-                      <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 700, display: 'block', mb: 0.5 }}>
-                        CITATIONS:
-                      </Typography>
-                      <Stack direction="row" spacing={0.8} flexWrap="wrap" useFlexGap>
-                        {msg.citations.map((c, ci) => (
-                          <Chip
-                            key={ci}
-                            label={c.label}
-                            onClick={() => handleSelectFile(c.path)}
-                            size="small"
-                            sx={{ height: 16, fontSize: '9px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', color: '#cbd5e1', cursor: 'pointer' }}
-                          />
-                        ))}
-                      </Stack>
-                    </Box>
-                  )}
-
-                  {/* Policy Warnings list */}
-                  {msg.warnings && msg.warnings.length > 0 && (
-                    <Box sx={{ mt: 1.5, p: 1, background: 'rgba(239, 68, 68, 0.05)', border: '1px solid rgba(239, 68, 68, 0.15)', borderRadius: '6px' }}>
-                      {msg.warnings.map((w, wi) => (
-                        <Typography key={wi} variant="caption" sx={{ color: '#f87171', display: 'block', fontSize: '10px' }}>
-                          ⚠️ {w}
-                        </Typography>
-                      ))}
-                    </Box>
-                  )}
-                </Paper>
-
-                {/* Suggested actions list */}
-                {msg.suggestedActions && msg.suggestedActions.length > 0 && (
-                  <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: 'wrap', gap: 0.8, alignSelf: 'flex-start' }}>
-                    {msg.suggestedActions.map((act, ai) => (
-                      <Chip
-                        key={ai}
-                        label={act.label}
-                        onClick={() => handleSend(act.message)}
-                        size="small"
-                        sx={{
-                          height: 20,
-                          fontSize: '10px',
-                          background: 'rgba(127, 85, 240, 0.08)',
-                          color: '#b794f4',
-                          border: '1px solid rgba(127, 85, 240, 0.25)',
-                          cursor: 'pointer',
-                          '&:hover': { background: 'rgba(127, 85, 240, 0.15)' }
-                        }}
-                      />
-                    ))}
-                  </Stack>
-                )}
-              </Box>
-            ))
+                What would you like to work on?
+              </Typography>
+              <Typography
+                variant="caption"
+                sx={{ color: ink.secondary, display: 'block', lineHeight: 1.6, fontSize: '0.78rem' }}
+              >
+                {activeWorkspace
+                  ? 'Ask about this project, open a website, or describe what you want to accomplish.'
+                  : 'Choose a project above, open a website, or describe what you want to accomplish.'}
+              </Typography>
+            </Box>
+          ) : (
+            // Turns are list items, so they need a list. Only the turns belong
+            // inside it: the loading indicator and the scroll sentinel are not
+            // transcript entries and sit outside.
+            <Box
+              component="ol"
+              aria-label="Conversation transcript"
+              sx={{
+                listStyle: 'none',
+                m: 0,
+                p: 0,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 2.5,
+              }}
+            >
+              {messages.map((msg, idx) => (
+                <TranscriptTurn
+                  key={idx}
+                  message={msg}
+                  onSelectFile={handleSelectFile}
+                  onSuggestedAction={handleSend}
+                />
+              ))}
+            </Box>
           )}
           {loading && (
-            <Box sx={{ display: 'flex', justifyContent: 'flex-start', p: 1 }}>
-              <CircularProgress size={12} sx={{ color: '#7f5af0', mr: 1.5 }} />
-              <Typography variant="caption" sx={{ color: '#71717a' }}>Inspecting and summarizing...</Typography>
+            <Box
+              role="status"
+              aria-live="polite"
+              sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', p: 1 }}
+            >
+              <CircularProgress size={12} sx={{ color: accent.violet, mr: 1.5 }} />
+              <Typography variant="caption" sx={{ color: ink.secondary }}>
+                Inspecting and summarising
+              </Typography>
             </Box>
           )}
           <div ref={messagesEndRef} />
@@ -1234,7 +1278,7 @@ const App: React.FC = () => {
       <Box sx={{ flexGrow: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <Grid container spacing={3} sx={{ flexGrow: 1, minHeight: 0, height: '100%', p: 3, overflow: 'hidden' }}>
           {/* Left panel: FileTree navigation only */}
-          <Grid item xs={12} md={4} sx={{ height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0, borderRight: { md: '1px solid rgba(255,255,255,0.06)' }, pr: { md: 2 } }}>
+          <Grid item xs={12} md={4} sx={{ height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0, borderRight: { md: `1px solid ${surface.border}` }, pr: { md: 2 } }}>
             <WorkspaceFileTree
               token={token}
               workspace={activeWorkspace}
@@ -1260,9 +1304,9 @@ const App: React.FC = () => {
               variant="outlined"
               sx={{
                 p: 2.5,
-                background: 'rgba(9, 9, 11, 0.25)',
-                borderColor: 'rgba(255,255,255,0.06)',
-                borderRadius: '10px',
+                backgroundColor: surface.raised,
+                borderColor: surface.border,
+                borderRadius: `${radius.md}px`,
                 display: 'flex',
                 flexDirection: 'column',
                 flexShrink: 0,
@@ -1289,7 +1333,7 @@ const App: React.FC = () => {
                     // Trigger scroll or action
                   }}
                 />
-                
+
                 {structureData && (
                   <Box sx={{ display: 'flex', justifyContent: 'flex-start' }}>
                     <Button
@@ -1299,9 +1343,10 @@ const App: React.FC = () => {
                       onClick={() => handleMapDependencies(selectedFile)}
                       disabled={loadingDependencies}
                       sx={{
-                        background: 'rgba(127, 85, 240, 0.8)',
-                        '&:hover': { background: '#7f5af0' },
-                        borderRadius: '6px',
+                        backgroundColor: accent.violet,
+                        color: ink.onAccent,
+                        '&:hover': { backgroundColor: accent.violetHover },
+                        borderRadius: `${radius.sm}px`,
                         textTransform: 'none',
                         fontWeight: 600
                       }}
@@ -1332,60 +1377,6 @@ const App: React.FC = () => {
     );
   };
 
-  const renderEmptyState = () => {
-    return (
-      <Box 
-        sx={{ 
-          display: 'flex', 
-          flexDirection: 'column', 
-          alignItems: 'center', 
-          justifyContent: 'center', 
-          height: '100%', 
-          p: 4, 
-          textAlign: 'center',
-          background: 'rgba(9, 9, 11, 0.2)',
-          borderRadius: '12px',
-          border: '1px dashed rgba(255, 255, 255, 0.08)',
-          m: 3
-        }}
-      >
-        <FolderOpenIcon sx={{ fontSize: 48, color: '#7f5af0', mb: 2, opacity: 0.8 }} />
-        <Typography variant="h6" sx={{ color: '#e4e4e7', fontWeight: 700, mb: 1, fontSize: '1rem' }}>
-          Select a workspace to begin
-        </Typography>
-        <Typography variant="caption" sx={{ color: '#ef4444', fontWeight: 800, mb: 3.5, textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '0.62rem' }}>
-          Read-only mode is active. No files will be changed.
-        </Typography>
-
-        <Box sx={{ maxWidth: '380px', textAlign: 'left' }}>
-          <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, display: 'block', mb: 1.5, letterSpacing: '0.05em' }}>
-            GETTING STARTED:
-          </Typography>
-          <Stack spacing={2}>
-            <Box sx={{ display: 'flex', gap: 1.5 }}>
-              <Chip label="1" size="small" sx={{ background: 'rgba(127, 85, 240, 0.1)', color: '#b794f4', fontWeight: 700, height: 20, width: 20, minWidth: 20 }} />
-              <Typography variant="body2" sx={{ color: '#cbd5e1', fontSize: '0.78rem', lineHeight: 1.4 }}>
-                Choose or enable a workspace folder from the catalog in the left rail.
-              </Typography>
-            </Box>
-            <Box sx={{ display: 'flex', gap: 1.5 }}>
-              <Chip label="2" size="small" sx={{ background: 'rgba(127, 85, 240, 0.1)', color: '#b794f4', fontWeight: 700, height: 20, width: 20, minWidth: 20 }} />
-              <Typography variant="body2" sx={{ color: '#cbd5e1', fontSize: '0.78rem', lineHeight: 1.4 }}>
-                Inspect directories and safe code files recursively inside the sandbox canvas.
-              </Typography>
-            </Box>
-            <Box sx={{ display: 'flex', gap: 1.5 }}>
-              <Chip label="3" size="small" sx={{ background: 'rgba(127, 85, 240, 0.1)', color: '#b794f4', fontWeight: 700, height: 20, width: 20, minWidth: 20 }} />
-              <Typography variant="body2" sx={{ color: '#cbd5e1', fontSize: '0.78rem', lineHeight: 1.4 }}>
-                Run Static Structure Scans or Map Dependency Routes to explore the code context.
-              </Typography>
-            </Box>
-          </Stack>
-        </Box>
-      </Box>
-    );
-  };
-
   const renderActiveCard = () => {
     if (!activeComponent) return null;
     return (
@@ -1400,11 +1391,11 @@ const App: React.FC = () => {
           variant={isSoothsayerLivePlaneActive ? 'native-plane' : 'main'}
         />
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
-          <Button 
-            size="small" 
-            variant="outlined" 
+          <Button
+            size="small"
+            variant="outlined"
             onClick={() => { setActiveComponent(null); setActiveReply(null); setActiveQuery(null); }}
-            sx={{ borderColor: 'rgba(255,255,255,0.1)', color: '#71717a', borderRadius: '6px' }}
+            sx={{ borderColor: surface.border, color: ink.secondary, borderRadius: `${radius.sm}px` }}
           >
             Clear Active Card
           </Button>
@@ -1413,1027 +1404,283 @@ const App: React.FC = () => {
     );
   };
 
-  const mainWorkbenchContent = (
-    <>
-      <CssBaseline />
+  const [suggestionsAnchorEl, setSuggestionsAnchorEl] = useState<null | HTMLElement>(null);
+  const handleOpenSuggestions = (event: React.MouseEvent<HTMLElement>) => setSuggestionsAnchorEl(event.currentTarget);
+  const handleCloseSuggestions = () => setSuggestionsAnchorEl(null);
+  const suggestionItems = [
+    { label: 'Explain this repo', message: 'Explain this repo' },
+    { label: 'Show important files', message: 'Show important files' },
+    { label: 'Find entry points', message: 'Find entry points' },
+    { label: 'Find TODOs', message: 'Find TODOs' },
+    { label: 'Show git status', message: 'Show git status' },
+    ...(selectedFile ? [
+      { label: `Map dependencies from ${selectedFile.split('/').pop()}`, message: `Map dependencies from ${selectedFile}` },
+      { label: `Explain ${selectedFile.split('/').pop()}`, message: `Explain ${selectedFile}` }
+    ] : []),
+    { label: 'Why was access blocked?', message: 'Why was access blocked?' }
+  ];
 
-      {/* Cmd+K spotlight search overlay */}
-      {isCmdKOpen && (
-        <Box
-          onClick={() => setIsCmdKOpen(false)}
-          sx={{
-            position: 'fixed',
-            top: 0, left: 0, right: 0, bottom: 0,
-            backgroundColor: 'rgba(9, 9, 11, 0.82)',
-            backdropFilter: 'blur(12px)',
-            zIndex: 9999,
-            display: 'flex',
-            alignItems: 'flex-start',
-            justifyContent: 'center',
-            pt: '15vh'
-          }}
-        >
-          <Paper
-            onClick={(e) => e.stopPropagation()}
-            elevation={24}
-            sx={{
-              width: '100%',
-              maxWidth: '600px',
-              mx: 2,
-              background: 'rgba(20, 20, 25, 0.8)',
-              border: '1px solid rgba(127, 85, 240, 0.3)',
-              borderRadius: '12px',
-              overflow: 'hidden',
-              boxShadow: '0 20px 50px rgba(0, 0, 0, 0.65), 0 0 40px rgba(127, 85, 240, 0.12)',
-              animation: 'appleSpringIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards'
-            }}
-          >
-            <Box sx={{ p: 2.5, borderBottom: '1px solid rgba(255, 255, 255, 0.08)' }}>
-              <TextField
-                fullWidth
-                autoFocus
-                variant="standard"
-                placeholder="Type a command or query..."
-                value={cmdKQuery}
-                onChange={(e) => setCmdKQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && cmdKQuery.trim()) {
-                    handleSend(cmdKQuery);
-                    setIsCmdKOpen(false);
-                    setCmdKQuery('');
-                  } else if (e.key === 'Escape') {
-                    setIsCmdKOpen(false);
-                  }
-                }}
-                InputProps={{
-                  disableUnderline: true,
-                  sx: {
-                    fontSize: '1.05rem',
-                    color: '#f4f4f5',
-                    fontFamily: '"Plus Jakarta Sans", sans-serif'
-                  }
-                }}
-              />
-            </Box>
 
-            <Box sx={{ p: 1.5, maxHeight: '320px', overflowY: 'auto' }}>
-              <Typography variant="caption" sx={{ px: 2, py: 1, display: 'block', color: '#71717a', fontWeight: 700, letterSpacing: '0.05em' }}>
-                SUGGESTED COMMANDS
-              </Typography>
-              {[
-                { title: 'Connected systems', cmd: 'List workspaces', desc: 'See everything the portal can currently observe' },
-                { title: "What's changed in flowright", cmd: 'git status in flowright', desc: 'Recent activity and working state' },
-                { title: 'Summarize flowright', cmd: 'Read README.md in flowright', desc: 'Plain-language overview of the project' },
-                { title: 'Inspect Soothsayer', cmd: 'inspect soothsayer', desc: 'Inspect live app manifest and metrics' }
-              ]
-                .filter(item => item.title.toLowerCase().includes(cmdKQuery.toLowerCase()) || item.cmd.toLowerCase().includes(cmdKQuery.toLowerCase()))
-                .map((item, idx) => (
-                  <Box
-                    key={idx}
-                    onClick={() => {
-                      handleSend(item.cmd);
-                      setIsCmdKOpen(false);
-                      setCmdKQuery('');
-                    }}
-                    sx={{
-                      p: 1.5,
-                      px: 2.5,
-                      borderRadius: '8px',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s ease',
-                      '&:hover': {
-                        background: 'rgba(127, 85, 240, 0.08)',
-                        '& .cmd-title': { color: '#b794f4' }
-                      }
-                    }}
-                  >
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Typography className="cmd-title" variant="body2" sx={{ fontWeight: 600, color: '#f4f4f5', transition: 'color 0.2s' }}>
-                        {item.title}
-                      </Typography>
-                      <Typography variant="caption" sx={{ fontFamily: 'monospace', color: '#7f5af0', fontSize: '0.7rem', background: 'rgba(127, 85, 240, 0.1)', px: 1, py: 0.25, borderRadius: '4px' }}>
-                        Enter
-                      </Typography>
-                    </Box>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
-                      {item.desc}
-                    </Typography>
-                  </Box>
-                ))}
-            </Box>
-            
-            <Box sx={{ px: 3, py: 1.5, background: 'rgba(0,0,0,0.2)', borderTop: '1px solid rgba(255, 255, 255, 0.04)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography variant="caption" color="text.secondary">
-                Select command or press ESC to dismiss
-              </Typography>
-              <Chip label="ESC" size="small" sx={{ height: 16, fontSize: '0.6rem', color: '#71717a', background: 'rgba(255,255,255,0.05)' }} />
-            </Box>
-          </Paper>
-        </Box>
-      )}
-
-      {/* Governed run Dialog */}
-      <Dialog
-        open={isContentDialogOpen}
-        onClose={() => setIsContentDialogOpen(false)}
-        maxWidth="sm"
-        fullWidth
-        PaperProps={{
-          sx: {
-            background: 'rgba(20, 20, 25, 0.92)',
-            border: '1px solid rgba(127, 85, 240, 0.22)',
-            backdropFilter: 'blur(16px)'
-          }
-        }}
+  // A real modal, not a positioned overlay.
+  //
+  // The previous version was a fixed Box with a scrim: focus could tab out to
+  // the blurred workstation behind it, Escape did nothing, and focus was not
+  // restored on close. Dialog provides the focus trap, the Escape handler, the
+  // aria wiring, and focus restoration, none of which is worth reimplementing.
+  //
+  // It is deliberately not dismissible by backdrop click or Escape while the
+  // app is locked: there is nothing usable behind it, so closing it would only
+  // strand the person on a dead surface.
+  const tokenPromptNode = (
+    <Dialog
+      open={showTokenPrompt}
+      disableEscapeKeyDown
+      aria-labelledby="unlock-title"
+      aria-describedby="unlock-description"
+      slotProps={{
+        backdrop: { sx: { backgroundColor: alpha(surface.base, 0.72) } },
+      }}
+      PaperProps={{
+        sx: {
+          width: '90%',
+          maxWidth: 420,
+          p: 3.5,
+          backgroundColor: surface.raised,
+          border: `1px solid ${surface.border}`,
+          borderRadius: `${radius.lg}px`,
+          boxShadow: elevation.overlay,
+        },
+      }}
+    >
+      <Typography
+        id="unlock-title"
+        component="h2"
+        variant="subtitle1"
+        sx={{ fontWeight: 650, color: ink.primary, mb: 0.75 }}
       >
-        <DialogTitle sx={{ color: '#f4f4f5', fontWeight: 800 }}>
-          Draft a real content update
-        </DialogTitle>
-        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
-          <Typography variant="caption" sx={{ color: '#94a3b8', lineHeight: 1.6 }}>
-            This starts a real, governed flowright run against pruningmypothos.com.
-            It drafts and validates a packet and stops at human review — nothing
-            publishes automatically.
-          </Typography>
-          <TextField label="Site goal" required value={contentForm.siteGoal}
-            onChange={(e) => setContentForm(f => ({ ...f, siteGoal: e.target.value }))}
-            size="small" multiline minRows={2} />
-          <TextField label="Target pages" required value={contentForm.targetPages}
-            onChange={(e) => setContentForm(f => ({ ...f, targetPages: e.target.value }))}
-            size="small" placeholder="e.g. Homepage, blog index" />
-          <TextField label="Content brief" required value={contentForm.contentBrief}
-            onChange={(e) => setContentForm(f => ({ ...f, contentBrief: e.target.value }))}
-            size="small" multiline minRows={2} />
-        </DialogContent>
-        <DialogActions sx={{ p: 2.5, pt: 1 }}>
-          <Button onClick={() => setIsContentDialogOpen(false)} sx={{ color: '#a1a1aa' }}>
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
-            disabled={!contentForm.siteGoal || !contentForm.targetPages || !contentForm.contentBrief}
-            onClick={() => {
-              setIsContentDialogOpen(false);
-              handleStartContentWorkflow(contentForm);
-            }}
-            sx={{ background: '#7f5af0', fontWeight: 700, '&:hover': { background: '#6d47dd' } }}
-          >
-            Start governed run
-          </Button>
-        </DialogActions>
-      </Dialog>
+        Unlock PaneTera
+      </Typography>
+      <Typography
+        id="unlock-description"
+        variant="body2"
+        sx={{ color: ink.secondary, mb: 2.5, lineHeight: 1.55 }}
+      >
+        Enter your local token. It stays on this machine and is never sent anywhere
+        but your own PaneTera server.
+      </Typography>
 
-      {/* "What can I ask?" Guide popup */}
-      {isHelpOpen && (
-        <Box
-          onClick={() => setIsHelpOpen(false)}
-          sx={{
-            position: 'fixed',
-            top: 0, left: 0, right: 0, bottom: 0,
-            backgroundColor: 'rgba(9, 9, 11, 0.75)',
-            backdropFilter: 'blur(8px)',
-            zIndex: 1300,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            p: 2
+      <Box sx={{ display: 'flex', gap: 1.5 }}>
+        <TextField
+          fullWidth
+          size="small"
+          type="password"
+          variant="outlined"
+          placeholder="Local token"
+          value={tokenInput}
+          autoFocus
+          error={Boolean(tokenError)}
+          inputProps={{ 'aria-label': 'Local token' }}
+          onChange={e => setTokenInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') handleTokenSave();
           }}
-        >
-          <Paper
-            onClick={(e) => e.stopPropagation()}
-            elevation={0}
-            sx={{
-              width: '100%',
-              maxWidth: 460,
-              p: 3.5,
-              background: 'rgba(20, 20, 25, 0.9)',
-              border: '1px solid rgba(127, 85, 240, 0.22)',
-              boxShadow: '0 24px 60px rgba(0,0,0,0.6), 0 0 40px rgba(127, 85, 240, 0.1)',
-              animation: 'appleSpringIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards'
-            }}
-          >
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#f4f4f5' }}>
-                What can I ask?
-              </Typography>
-              <IconButton size="small" onClick={() => setIsHelpOpen(false)} sx={{ color: '#a1a1aa' }}>
-                <CloseIcon fontSize="small" />
-              </IconButton>
-            </Box>
-            <Typography variant="body2" sx={{ color: '#a1a1aa', mb: 2.5, lineHeight: 1.6 }}>
-              Everything here is read-only until you approve something. A few places to start:
-            </Typography>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-              {[
-                { label: "See what's connected", cmd: 'List workspaces' },
-                { label: 'Check recent activity', cmd: 'git status in flowright' },
-                { label: 'Open a plain-language summary', cmd: 'Read README.md in flowright' },
-                { label: 'Propose a check — nothing runs until you approve', cmd: 'run npm run verify in flowright' }
-              ].map((item, idx) => (
-                <Box
-                  key={idx}
-                  onClick={() => { setIsHelpOpen(false); handleSend(item.cmd); }}
-                  sx={{
-                    p: 1.5,
-                    px: 2,
-                    borderRadius: '8px',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
-                    '&:hover': { background: 'rgba(127, 85, 240, 0.08)' }
-                  }}
-                >
-                  <Typography variant="body2" sx={{ fontWeight: 600, color: '#f4f4f5' }}>
-                    {item.label}
-                  </Typography>
-                  <Typography variant="caption" sx={{ color: '#71717a', fontFamily: 'monospace' }}>
-                    {item.cmd}
-                  </Typography>
-                </Box>
-              ))}
-            </Box>
-          </Paper>
-        </Box>
-      )}
-      <Box sx={{ display: 'flex', height: '100vh', width: '100vw', overflow: 'hidden', position: 'relative' }}>
-        
-        {/* Token auth prompt centered over skeleton background if showTokenPrompt is true */}
-        {showTokenPrompt && (
-          <Box
-            sx={{
-              position: 'absolute',
-              top: 0, left: 0, right: 0, bottom: 0,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 999,
-              backgroundColor: 'rgba(8,9,11,0.65)',
-              backdropFilter: 'blur(3px)',
-            }}
-          >
-            <Paper
-              elevation={24}
-              sx={{
-                width: '90%',
-                maxWidth: '400px',
-                p: 3.5,
-                background: 'rgba(20, 20, 25, 0.95)',
-                border: '1px solid rgba(127, 85, 240, 0.22)',
-                borderRadius: '12px',
-                boxShadow: '0 24px 50px rgba(0,0,0,0.6)',
-              }}
-            >
-              <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#f4f4f5', mb: 1 }}>
-                Access Authentication
-              </Typography>
-              <Typography variant="body2" sx={{ color: '#a1a1aa', mb: 2.5, lineHeight: 1.5 }}>
-                Enter local portal token to unlock the workbench.
-              </Typography>
-              <Box sx={{ display: 'flex', gap: 1.5 }}>
-                <TextField
-                  fullWidth
-                  size="small"
-                  variant="outlined"
-                  placeholder="Secure token"
-                  value={tokenInput}
-                  onChange={e => setTokenInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      handleTokenSave();
-                    }
-                  }}
-                  sx={{
-                    '& .MuiOutlinedInput-root': {
-                      borderRadius: '8px',
-                      background: 'rgba(255,255,255,0.03)',
-                      '& fieldset': { borderColor: 'rgba(255,255,255,0.1)' }
-                    }
-                  }}
-                />
-                <Button
-                  variant="contained"
-                  onClick={handleTokenSave}
-                  sx={{
-                    borderRadius: '8px',
-                    background: '#7f5af0',
-                    fontWeight: 700,
-                    '&:hover': { background: '#6d47dd' }
-                  }}
-                >
-                  Unlock
-                </Button>
-              </Box>
-              {tokenError && (
-                <Typography variant="body2" sx={{ color: '#ef4444', mt: 1.5 }}>
-                  {tokenError}
-                </Typography>
-              )}
-            </Paper>
-          </Box>
-        )}
-
-        {/* Global layout container applying blur filter in pre-auth mode */}
-        <Box
           sx={{
-            display: 'flex',
-            flexGrow: 1,
-            height: '100%',
-            width: '100%',
-            minWidth: 0,
-            filter: showTokenPrompt ? 'blur(2px)' : 'none',
-            opacity: showTokenPrompt ? 0.45 : 1,
-            pointerEvents: showTokenPrompt ? 'none' : 'auto',
-            transition: 'filter 0.3s, opacity 0.3s',
+            '& .MuiOutlinedInput-root': {
+              borderRadius: `${radius.sm}px`,
+              backgroundColor: surface.sunken,
+              color: ink.primary,
+              '& fieldset': { borderColor: surface.border },
+              '&:hover fieldset': { borderColor: surface.borderStrong },
+              '&.Mui-focused fieldset': { borderColor: accent.violetBorder },
+            },
           }}
+        />
+        <Button
+          variant="contained"
+          onClick={handleTokenSave}
+          disabled={!tokenInput.trim()}
+          sx={{ borderRadius: `${radius.sm}px`, px: 2.5, whiteSpace: 'nowrap' }}
         >
-            <WorkbenchShell
-            leftRailWidth={leftRailWidth}
-            rightFeedWidth={rightFeedWidth}
-            isLeftRailCollapsed={isLeftRailCollapsed}
-            isRightFeedCollapsed={isRightFeedCollapsed}
-            onLeftResize={handleLeftResize}
-            onRightResize={handleRightResize}
-            leftRailContent={
-              <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%', overflowY: 'auto', overflowX: 'hidden' }}>
-                {isLeftRailCollapsed ? (
-                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3.5, height: '100%' }}>
-                    {/* 1. Gateway Indicator */}
-                    <Tooltip title={`Express Gateway: ${token ? 'Connected' : 'Offline'}`} placement="right">
-                      <Box sx={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <Box
-                          sx={{
-                            width: 10,
-                            height: 10,
-                            borderRadius: '50%',
-                            backgroundColor: token ? '#22c55e' : '#ef4444',
-                            boxShadow: token ? '0 0 8px #22c55e' : '0 0 8px #ef4444'
-                          }}
-                        />
-                      </Box>
-                    </Tooltip>
-
-                    {/* 2. Connected Systems Stack */}
-                    <Stack spacing={1.8} alignItems="center">
-                      <Tooltip title="Postgres DB: Configured" placement="right">
-                        <DnsIcon sx={{ fontSize: 16, color: '#71717a' }} />
-                      </Tooltip>
-                      <Tooltip title="Redis DB: Configured" placement="right">
-                        <DnsIcon sx={{ fontSize: 16, color: '#71717a' }} />
-                      </Tooltip>
-                      <Tooltip title="DAX Control: No signal" placement="right">
-                        <DnsIcon sx={{ fontSize: 16, color: '#71717a', opacity: 0.3 }} />
-                      </Tooltip>
-                      <Tooltip title="Local Adapter: Sandboxed" placement="right">
-                        <TerminalIcon sx={{ fontSize: 16, color: '#7f5af0' }} />
-                      </Tooltip>
-                      <Tooltip title={`Rook Memory: ${backendHealth?.memoryBridgeReady ? 'Connected' : 'No signal'}`} placement="right">
-                        <MemoryIcon sx={{ fontSize: 16, color: backendHealth?.memoryBridgeReady ? '#22c55e' : '#71717a' }} />
-                      </Tooltip>
-                    </Stack>
-
-                    <Divider sx={{ width: '60%', borderColor: 'rgba(255,255,255,0.06)' }} />
-
-                    {/* 3. Workspaces shortcut */}
-                    <Stack direction="row" spacing={0.5} alignItems="center">
-                      <Tooltip title={`Workspaces (${workspacesList.length} registered)`} placement="right">
-                        <IconButton onClick={() => handleSend('List workspaces')} size="small" sx={{ color: '#7f5af0', p: 0.5 }}>
-                          <FolderIcon sx={{ fontSize: 18 }} />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Add Local Project Folder" placement="right">
-                        <IconButton onClick={handleAddWorkspace} size="small" sx={{ color: '#7f5af0', p: 0.5 }}>
-                          <AddIcon sx={{ fontSize: 18 }} />
-                        </IconButton>
-                      </Tooltip>
-                    </Stack>
-
-                    {/* 4. Live Deployed Apps */}
-                    <Tooltip title={`Soothsayer Live: ${soothsayerStatus.toUpperCase()}`} placement="right">
-                      <IconButton onClick={() => handleSend('inspect soothsayer')} size="small" sx={{ color: soothsayerStatus === 'online' ? '#22c55e' : '#71717a', p: 0.5 }}>
-                        <LaptopMacIcon sx={{ fontSize: 18 }} />
-                      </IconButton>
-                    </Tooltip>
-
-                    <Divider sx={{ width: '60%', borderColor: 'rgba(255,255,255,0.06)' }} />
-
-                    {/* 5. Persona Lenses */}
-                    <Stack spacing={1.5} alignItems="center" sx={{ mt: 'auto', pb: 2 }}>
-                      {(['engineer', 'pm', 'ba', 'qa', 'exec'] as const).map(lens => (
-                        <Tooltip key={lens} title={`Lens: ${lens.toUpperCase()}`} placement="right">
-                          <Box
-                            onClick={() => setActiveLens(lens)}
-                            sx={{
-                              width: 24,
-                              height: 24,
-                              borderRadius: '50%',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              cursor: 'pointer',
-                              background: activeLens === lens ? 'rgba(127, 85, 240, 0.15)' : 'transparent',
-                              border: activeLens === lens ? '1px solid rgba(127, 85, 240, 0.3)' : '1px solid transparent',
-                              color: activeLens === lens ? '#b794f4' : '#71717a',
-                              fontSize: '0.65rem',
-                              fontWeight: 'bold',
-                              transition: 'all 0.2s',
-                              '&:hover': { background: 'rgba(255,255,255,0.02)' }
-                            }}
-                          >
-                            {lens[0].toUpperCase()}
-                          </Box>
-                        </Tooltip>
-                      ))}
-                    </Stack>
-                  </Box>
-                ) : (
-                  <>
-                    {/* Session status info */}
-                    <Box sx={{ mb: 3 }}>
-                      <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, letterSpacing: '0.05em', display: 'block', mb: 1.5 }}>
-                        SESSION STATUS
-                      </Typography>
-                      <Paper variant="outlined" sx={{ p: 1.5, background: 'rgba(255,255,255,0.01)', borderColor: 'rgba(255,255,255,0.05)' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-                          <Typography variant="caption" sx={{ color: '#a1a1aa', fontWeight: 600 }}>Access Type</Typography>
-                          <Chip label="GOVERNED" size="small" sx={{ height: 16, fontSize: '0.55rem', fontWeight: 800, background: 'rgba(34, 197, 94, 0.08)', color: '#22c55e', border: '1px solid rgba(34, 197, 94, 0.15)' }} />
-                        </Box>
-                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <Typography variant="caption" sx={{ color: '#a1a1aa', fontWeight: 600 }}>Express Gateway</Typography>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            <Box sx={{ width: 5, height: 5, borderRadius: '50%', backgroundColor: token ? '#22c55e' : '#ef4444' }} />
-                            <Typography variant="caption" sx={{ color: '#f4f4f5', fontWeight: 700, fontSize: '0.65rem' }}>
-                              {token ? 'Connected' : 'Offline'}
-                            </Typography>
-                          </Box>
-                        </Box>
-                      </Paper>
-                    </Box>
-
-                    {/* Connected systems section */}
-                    <Box sx={{ mb: 3 }}>
-                      <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, letterSpacing: '0.05em', display: 'block', mb: 1.5 }}>
-                        CONNECTED SYSTEMS
-                      </Typography>
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                        {/* Redis */}
-                        <Box sx={{ display: 'flex', alignItems: 'center', p: 0.75, borderBottom: '1px solid rgba(255,255,255,0.03)', justifyContent: 'space-between' }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <DnsIcon sx={{ fontSize: 13, color: '#71717a' }} />
-                            <Typography variant="caption" sx={{ color: '#e2e8f0', fontWeight: 600 }}>Redis DB</Typography>
-                          </Box>
-                          <Chip label="Configured" size="small" sx={{ height: 16, fontSize: '0.55rem', background: 'rgba(255,255,255,0.03)', color: '#a1a1aa' }} />
-                        </Box>
-                        {/* Postgres */}
-                        <Box sx={{ display: 'flex', alignItems: 'center', p: 0.75, borderBottom: '1px solid rgba(255,255,255,0.03)', justifyContent: 'space-between' }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <DnsIcon sx={{ fontSize: 13, color: '#71717a' }} />
-                            <Typography variant="caption" sx={{ color: '#e2e8f0', fontWeight: 600 }}>Postgres DB</Typography>
-                          </Box>
-                          <Chip label="Configured" size="small" sx={{ height: 16, fontSize: '0.55rem', background: 'rgba(255,255,255,0.03)', color: '#a1a1aa' }} />
-                        </Box>
-                        {/* DAX */}
-                        <Box sx={{ display: 'flex', alignItems: 'center', p: 0.75, borderBottom: '1px solid rgba(255,255,255,0.03)', justifyContent: 'space-between' }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <DnsIcon sx={{ fontSize: 13, color: '#71717a' }} />
-                            <Typography variant="caption" sx={{ color: '#e2e8f0', fontWeight: 600 }}>DAX Control</Typography>
-                          </Box>
-                          <Chip label="No signal" size="small" sx={{ height: 16, fontSize: '0.55rem', background: 'rgba(255,255,255,0.03)', color: '#a1a1aa' }} />
-                        </Box>
-                        {/* Local Shell */}
-                        <Box sx={{ display: 'flex', alignItems: 'center', p: 0.75, borderBottom: '1px solid rgba(255,255,255,0.03)', justifyContent: 'space-between' }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <TerminalIcon sx={{ fontSize: 13, color: '#7f5af0' }} />
-                            <Typography variant="caption" sx={{ color: '#e2e8f0', fontWeight: 600 }}>Local Adapter</Typography>
-                          </Box>
-                          <Chip label="Sandboxed" size="small" sx={{ height: 16, fontSize: '0.55rem', background: 'rgba(127, 85, 240, 0.1)', color: '#b794f4' }} />
-                        </Box>
-                        {/* Rook Memory Bridge */}
-                        <Box sx={{ display: 'flex', alignItems: 'center', p: 0.75, justifyContent: 'space-between' }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <MemoryIcon sx={{ fontSize: 13, color: backendHealth?.memoryBridgeReady ? '#22c55e' : '#71717a' }} />
-                            <Typography variant="caption" sx={{ color: '#e2e8f0', fontWeight: 600 }}>Rook Memory</Typography>
-                          </Box>
-                          <Chip 
-                            label={backendHealth?.memoryBridgeReady ? 'Connected' : 'No signal'} 
-                            size="small" 
-                            sx={{ 
-                              height: 16, 
-                              fontSize: '0.55rem', 
-                              background: backendHealth?.memoryBridgeReady ? 'rgba(34,197,94,0.08)' : 'rgba(255,255,255,0.03)', 
-                              color: backendHealth?.memoryBridgeReady ? '#22c55e' : '#a1a1aa' 
-                            }} 
-                          />
-                        </Box>
-                      </Box>
-                    </Box>
-
-                    {/* Workspaces list */}
-                    {/* Workspace Navigator */}
-                    <Box sx={{ mb: 3 }}>
-                      <WorkspaceNavigator
-                        token={token}
-                        activeWorkspace={activeWorkspace}
-                        onSelectWorkspace={(ws) => {
-                          setActiveWorkspace(ws);
-                          if (ws) {
-                            handleWorkbenchModeChange('native-focus');
-                          }
-                        }}
-                        onAuditLogsClick={() => setIsAuditLogsOpen(true)}
-                        onTestingCockpitClick={() => setIsTestingCockpitOpen(true)}
-                      />
-                    </Box>
-
-                    {/* Live Apps status list */}
-                    <Box sx={{ mb: 3 }}>
-                      <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, letterSpacing: '0.05em', display: 'block', mb: 1.5 }}>
-                        LIVE DEPLOYED APPS
-                      </Typography>
-                      <Box
-                        onClick={() => handleSend('inspect soothsayer')}
-                        sx={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          p: 1,
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          transition: 'background 0.2s',
-                          '&:hover': { background: 'rgba(255,255,255,0.03)' }
-                        }}
-                      >
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <LaptopMacIcon sx={{ fontSize: 14, color: soothsayerStatus === 'online' ? '#22c55e' : soothsayerStatus === 'degraded' ? '#fbbf24' : '#71717a' }} />
-                          <Typography variant="caption" sx={{ color: '#cbd5e1', fontWeight: 600 }}>
-                            Soothsayer
-                          </Typography>
-                        </Box>
-                        <Chip 
-                          label={soothsayerStatus === 'degraded' ? 'NO MANIFEST' : soothsayerStatus.toUpperCase()} 
-                          size="small" 
-                          sx={{ 
-                            height: 16, 
-                            fontSize: '0.55rem', 
-                            fontWeight: 800, 
-                            background: soothsayerStatus === 'online' ? 'rgba(34,197,94,0.08)' : soothsayerStatus === 'degraded' ? 'rgba(251, 191, 36, 0.08)' : 'rgba(255,255,255,0.03)', 
-                            color: soothsayerStatus === 'online' ? '#22c55e' : soothsayerStatus === 'degraded' ? '#fbbf24' : '#a1a1aa' 
-                          }} 
-                        />
-                      </Box>
-                    </Box>
-
-                    {/* Persona lenses selectors */}
-                    <Box sx={{ mt: 'auto', pt: 2, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                      <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, letterSpacing: '0.05em', display: 'block', mb: 1.5 }}>
-                        PERSONA VIEW LENS
-                      </Typography>
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                        {(['engineer', 'pm', 'ba', 'qa', 'exec'] as const).map(lens => (
-                          <Box
-                            key={lens}
-                            onClick={() => setActiveLens(lens)}
-                            sx={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 1,
-                              p: 0.75,
-                              px: 1.5,
-                              borderRadius: '6px',
-                              cursor: 'pointer',
-                              background: activeLens === lens ? 'rgba(127, 85, 240, 0.08)' : 'transparent',
-                              border: activeLens === lens ? '1px solid rgba(127, 85, 240, 0.2)' : '1px solid transparent',
-                              transition: 'all 0.2s',
-                              '&:hover': { background: activeLens === lens ? 'rgba(127, 85, 240, 0.12)' : 'rgba(255,255,255,0.02)' }
-                            }}
-                          >
-                            <PersonOutlineIcon sx={{ fontSize: 13, color: activeLens === lens ? '#b794f4' : '#71717a' }} />
-                            <Typography variant="caption" sx={{ color: activeLens === lens ? '#b794f4' : '#cbd5e1', fontWeight: activeLens === lens ? 700 : 500 }}>
-                              {lens.toUpperCase()}
-                            </Typography>
-                          </Box>
-                        ))}
-                      </Box>
-                    </Box>
-                  </>
-                )}
-              </Box>
-            }
-            rightFeedContent={
-              isSoothsayerLivePlaneActive && activeComponent ? (
-                <InteractiveComponent
-                  uiComponent={activeComponent}
-                  onAction={handleSend}
-                  onApproveAction={handleApproveAction}
-                  onCancelAction={handleRemoveItem}
-                  onStartContentWorkflow={handleStartContentWorkflow}
-                  activeLens={activeLens}
-                  variant="live-plane"
-                />
-              ) : isRightFeedCollapsed ? (
-                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', pt: 2, gap: 2, height: '100%', overflowY: 'auto' }}>
-                  <IconButton
-                    onClick={toggleRightFeed}
-                    size="small"
-                    sx={{
-                      color: '#cbd5e1',
-                      border: '1px solid rgba(255, 255, 255, 0.06)',
-                      background: 'rgba(255, 255, 255, 0.02)',
-                    }}
-                  >
-                    <ViewSidebarIcon sx={{ fontSize: 16 }} />
-                  </IconButton>
-                  
-                  <Divider sx={{ width: '65%', borderColor: 'rgba(255,255,255,0.06)' }} />
-
-                  <Stack spacing={1.5} alignItems="center" sx={{ overflowY: 'auto', width: '100%', pb: 2 }}>
-                    {previewFeed.map((item) => (
-                      <Tooltip key={item.id} title={`${item.type.replace(/([A-Z])/g, ' $1').trim()} (${item.timestamp})`} placement="left">
-                        <IconButton
-                          onClick={toggleRightFeed}
-                          size="small"
-                          sx={{
-                            color: '#b794f4',
-                            background: 'rgba(127, 85, 240, 0.04)',
-                            '&:hover': { background: 'rgba(127, 85, 240, 0.1)' }
-                          }}
-                        >
-                          {item.type === 'WorkspaceList' && <FolderIcon sx={{ fontSize: 16 }} />}
-                          {item.type === 'FileList' && <FolderIcon sx={{ fontSize: 16 }} />}
-                          {item.type === 'CodePreview' && <CodeIcon sx={{ fontSize: 16 }} />}
-                          {item.type === 'SearchResults' && <SearchIcon sx={{ fontSize: 16 }} />}
-                          {item.type === 'WorkflowsList' && <FolderIcon sx={{ fontSize: 16 }} />}
-                          {item.type === 'ProposedAction' && <CheckCircleOutlineIcon sx={{ fontSize: 16 }} />}
-                          {item.type === 'ExecutionLogs' && <TerminalIcon sx={{ fontSize: 16 }} />}
-                          {item.type === 'TerminalLogs' && <TerminalIcon sx={{ fontSize: 16 }} />}
-                          {item.type === 'MemoryRecall' && <MemoryIcon sx={{ fontSize: 16 }} />}
-                          {item.type === 'ContentWorkflow' && <EditNoteIcon sx={{ fontSize: 16 }} />}
-                          {item.type === 'SoothsayerWorkbench' && <LaptopMacIcon sx={{ fontSize: 16 }} />}
-                          {item.type === 'BrowserObservation' && <LaptopMacIcon sx={{ fontSize: 16 }} />}
-                        </IconButton>
-                      </Tooltip>
-                    ))}
-                  </Stack>
-                </Box>
-              ) : (
-                <PreviewPanel
-                  previewFeed={previewFeed}
-                  onClose={toggleRightFeed}
-                  onAction={handleSend}
-                  onRemoveItem={handleRemoveItem}
-                  onClearFeed={handleClearFeed}
-                  onApproveAction={handleApproveAction}
-                  onContentWorkflowReview={handleContentWorkflowReview}
-                  onOpenInWorkbench={(item) => {
-                    setActiveComponent({ type: item.type as any, data: item.data });
-                    setActiveReply(null);
-                    setActiveQuery(null);
-                    handleWorkbenchModeChange('native-focus');
-                  }}
-                  token={token}
-                  loading={loading}
-                />
-              )
-            }
-          >
-            {/* Top Command Bar */}
-            <Box
-              sx={{
-                height: 60,
-                minHeight: 60,
-                borderBottom: '1px solid rgba(255,255,255,0.08)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 2,
-                px: { xs: 2, md: 3 },
-                background: 'rgba(9, 9, 11, 0.2)'
-              }}
-            >
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0 }}>
-                <IconButton onClick={toggleLeftRail} size="small" sx={{ color: '#cbd5e1', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  {isLeftRailCollapsed ? <ChevronRightIcon sx={{ fontSize: 16 }} /> : <ChevronLeftIcon sx={{ fontSize: 16 }} />}
-                </IconButton>
-                <Typography variant="body2" sx={{ fontWeight: 800, color: '#f4f4f5', letterSpacing: '-0.01em' }}>
-                  MyAI Portal
-                </Typography>
-                <Divider orientation="vertical" variant="middle" flexItem sx={{ borderColor: 'rgba(255, 255, 255, 0.12)', height: '12px', my: 'auto' }} />
-                <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 600 }}>
-                  Governed Workbench
-                </Typography>
-              </Box>
-
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1, md: 2 }, flexShrink: 0 }}>
-                {/* Search box trigger */}
-                <Chip 
-                  label="Cmd+K for commands" 
-                  onClick={() => setIsCmdKOpen(true)}
-                  icon={<SearchIcon style={{ fontSize: 12, color: '#b794f4' }} />}
-                  size="small" 
-                  sx={{ 
-                    height: 24, 
-                    fontSize: '0.65rem', 
-                    background: 'rgba(127, 85, 240, 0.05)', 
-                    color: '#b794f4',
-                    border: '1px solid rgba(127, 85, 240, 0.15)',
-                    cursor: 'pointer',
-                    '&:hover': { background: 'rgba(127, 85, 240, 0.1)' }
-                  }}
-                />
-
-                {/* Workflow run helper */}
-                <IconButton size="small" onClick={() => setIsContentDialogOpen(true)} aria-label="Draft content run" sx={{ color: '#a1a1aa', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  <EditNoteIcon sx={{ fontSize: '0.95rem' }} />
-                </IconButton>
-
-                {/* Right feed toggle */}
-                <IconButton onClick={toggleRightFeed} size="small" sx={{ color: '#cbd5e1', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  <ViewSidebarIcon sx={{ fontSize: 16 }} />
-                </IconButton>
-
-                {/* Guide helper */}
-                <IconButton size="small" onClick={() => setIsHelpOpen(true)} aria-label="Ask help guide" sx={{ color: '#a1a1aa', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  <HelpOutlineIcon sx={{ fontSize: '0.95rem' }} />
-                </IconButton>
-              </Box>
-            </Box>
-
-            {/* Workbench Mode Select Toggle Bar */}
-            <WorkbenchModeToggle
-              mode={workbenchMode}
-              onModeChange={handleWorkbenchModeChange}
-              hasActiveWorkspace={!!activeWorkspace}
-              hasFeedItems={previewFeed.length > 0}
-              hasActiveComponent={!!activeComponent}
-            />
-
-            {/* Middle Main Content Dispatcher */}
-            <Box sx={{ flexGrow: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-              {(workbenchMode === 'native-focus' || workbenchMode === 'split') && (
-                <ReadOnlyStatusBanner
-                  gatewayConnected={backendHealth?.status === 'ok'}
-                  activeWorkspaceName={activeWorkspace?.name || null}
-                  policyActive={true}
-                  onOpenAuditLogs={() => setIsAuditLogsOpen(true)}
-                  portalAuthValid={!!token}
-                  workspaceCatalogCount={workspacesList.length}
-                  localAdapterActive={backendHealth?.status === 'ok'}
-                  liveAppUrlReachable={soothsayerStatus === 'online' || soothsayerStatus === 'degraded'}
-                  liveAppManifestAvailable={soothsayerStatus === 'online'}
-                />
-              )}
-              {activeWorkspace ? (
-                workbenchMode === 'native-focus' ? (
-                  renderActiveWorkspaceWorkbench()
-                ) : workbenchMode === 'split' ? (
-                  <Grid container sx={{ flexGrow: 1, minHeight: 0, height: '100%' }}>
-                    <Grid item xs={6} sx={{ height: '100%', display: 'flex', flexDirection: 'column', borderRight: '1px solid rgba(255,255,255,0.08)', minHeight: 0, overflow: 'hidden' }}>
-                      {renderChatTranscript()}
-                    </Grid>
-                    <Grid item xs={6} sx={{ height: '100%', minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                      {renderActiveWorkspaceWorkbench()}
-                    </Grid>
-                  </Grid>
-                ) : (
-                  <Box sx={{ flexGrow: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                    {renderChatTranscript()}
-                  </Box>
-                )
-              ) : workbenchMode === 'native-focus' ? (
-                activeComponent ? renderActiveCard() : renderEmptyState()
-              ) : workbenchMode === 'split' && activeComponent ? (
-                <Grid container sx={{ flexGrow: 1, minHeight: 0, height: '100%' }}>
-                  <Grid item xs={6} sx={{ height: '100%', display: 'flex', flexDirection: 'column', borderRight: '1px solid rgba(255,255,255,0.08)', minHeight: 0, overflow: 'hidden' }}>
-                    {renderChatTranscript()}
-                  </Grid>
-                  <Grid item xs={6} sx={{ height: '100%', minHeight: 0, overflow: 'hidden' }}>
-                    {renderActiveCard()}
-                  </Grid>
-                </Grid>
-              ) : (
-                <Box sx={{ flexGrow: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                  {messages.length === 0 ? (
-                    <Box sx={{ flexGrow: 1, overflowY: 'auto', p: 3 }}>
-                      {activeComponent && (
-                        <Paper variant="outlined" sx={{ p: 1.5, mb: 3, background: 'rgba(127, 85, 240, 0.04)', borderColor: 'rgba(127, 85, 240, 0.25)', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <Typography variant="body2" sx={{ color: '#cbd5e1' }}>
-                            An active UI component is loaded in the background: <strong>{activeComponent.type}</strong>
-                          </Typography>
-                          <Button size="small" variant="contained" onClick={() => handleWorkbenchModeChange('native-focus')} sx={{ background: '#7f5af0', textTransform: 'none', borderRadius: '6px', fontSize: '0.7rem' }}>
-                            Open Canvas
-                          </Button>
-                        </Paper>
-                      )}
-                      
-                      <Box sx={{ animation: 'appleSpringIn 0.3s ease' }}>
-                        <Box sx={{ mb: 3 }}>
-                          <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#f4f4f5', mb: 0.5 }}>
-                            Workbench Overview
-                          </Typography>
-                          <Typography variant="caption" sx={{ color: '#71717a' }}>
-                            Select an app connection or trigger context commands to populate workspace inspection trace cards.
-                          </Typography>
-                        </Box>
-
-                        <Grid container spacing={2.5} sx={{ mb: 4 }}>
-                          <Grid item xs={12} sm={4}>
-                            <Paper variant="outlined" sx={{ p: 2, background: 'rgba(255,255,255,0.01)', borderColor: 'rgba(255,255,255,0.05)', borderRadius: '10px' }}>
-                              <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, display: 'block', mb: 1 }}>SYSTEM STATUS</Typography>
-                              <Typography variant="h5" sx={{ fontWeight: 800, color: '#22c55e' }}>ONLINE</Typography>
-                            </Paper>
-                          </Grid>
-                          <Grid item xs={12} sm={4}>
-                            <Paper variant="outlined" sx={{ p: 2, background: 'rgba(255,255,255,0.01)', borderColor: 'rgba(255,255,255,0.05)', borderRadius: '10px' }}>
-                              <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, display: 'block', mb: 1 }}>WORKSPACES</Typography>
-                              <Typography variant="h5" sx={{ fontWeight: 800, color: '#b794f4' }}>{workspacesList.length}</Typography>
-                            </Paper>
-                          </Grid>
-                          <Grid item xs={12} sm={4}>
-                            <Paper variant="outlined" sx={{ p: 2, background: 'rgba(255,255,255,0.01)', borderColor: 'rgba(255,255,255,0.05)', borderRadius: '10px' }}>
-                              <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, display: 'block', mb: 1 }}>ACTIVE TASKS</Typography>
-                              <Typography variant="h5" sx={{ fontWeight: 800, color: '#38bdf8' }}>{previewFeed.filter(f => f.type === 'ExecutionLogs').length}</Typography>
-                            </Paper>
-                          </Grid>
-                        </Grid>
-
-                        <Box sx={{ mb: 4 }}>
-                          <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, display: 'block', mb: 2 }}>QUICK ACTION PROMPTS</Typography>
-                          <Stack spacing={1}>
-                            <Paper 
-                              onClick={() => handleSend('List workspaces')}
-                              variant="outlined" 
-                              sx={{ 
-                                p: 1.5, 
-                                background: 'rgba(255,255,255,0.01)', 
-                                borderColor: 'rgba(255,255,255,0.05)', 
-                                borderRadius: '8px', 
-                                cursor: 'pointer',
-                                transition: 'all 0.2s',
-                                '&:hover': { background: 'rgba(127, 85, 240, 0.04)', borderColor: 'rgba(127, 85, 240, 0.2)' }
-                              }}
-                            >
-                              <Typography variant="body2" sx={{ color: '#cbd5e1' }}>🔍 Check available workspaces and Git state</Typography>
-                            </Paper>
-                            <Paper 
-                              onClick={() => handleSend('inspect soothsayer')}
-                              variant="outlined" 
-                              sx={{ 
-                                p: 1.5, 
-                                background: 'rgba(255,255,255,0.01)', 
-                                borderColor: 'rgba(255,255,255,0.05)', 
-                                borderRadius: '8px', 
-                                cursor: 'pointer',
-                                transition: 'all 0.2s',
-                                '&:hover': { background: 'rgba(127, 85, 240, 0.04)', borderColor: 'rgba(127, 85, 240, 0.2)' }
-                              }}
-                            >
-                              <Typography variant="body2" sx={{ color: '#cbd5e1' }}>🚀 Inspect live Soothsayer deployed app workbench</Typography>
-                            </Paper>
-                          </Stack>
-                        </Box>
-                      </Box>
-                    </Box>
-                  ) : (
-                    renderChatTranscript()
-                  )}
-                </Box>
-              )}
-            </Box>
-
-            {/* Bottom Chat Input Dock with suggestions bar above it */}
-            <Box
-              sx={{
-                p: 2.5,
-                borderTop: '1px solid rgba(255,255,255,0.08)',
-                background: 'rgba(9, 9, 11, 0.3)'
-              }}
-            >
-              <Stack direction="row" spacing={1} sx={{ mb: 1.5, overflowX: 'auto', pb: 0.5 }}>
-                <Chip 
-                  label="Explain this repo" 
-                  onClick={() => handleSend('Explain this repo')} 
-                  size="small" 
-                  sx={{ height: 22, fontSize: '0.65rem', background: 'rgba(255,255,255,0.03)', color: '#cbd5e1', cursor: 'pointer' }} 
-                />
-                <Chip 
-                  label="Show important files" 
-                  onClick={() => handleSend('Show important files')} 
-                  size="small" 
-                  sx={{ height: 22, fontSize: '0.65rem', background: 'rgba(255,255,255,0.03)', color: '#cbd5e1', cursor: 'pointer' }} 
-                />
-                <Chip 
-                  label="Find entry points" 
-                  onClick={() => handleSend('Find entry points')} 
-                  size="small" 
-                  sx={{ height: 22, fontSize: '0.65rem', background: 'rgba(255,255,255,0.03)', color: '#cbd5e1', cursor: 'pointer' }} 
-                />
-                <Chip 
-                  label="Find TODOs" 
-                  onClick={() => handleSend('Find TODOs')} 
-                  size="small" 
-                  sx={{ height: 22, fontSize: '0.65rem', background: 'rgba(255,255,255,0.03)', color: '#cbd5e1', cursor: 'pointer' }} 
-                />
-                <Chip 
-                  label="Show git status" 
-                  onClick={() => handleSend('Show git status')} 
-                  size="small" 
-                  sx={{ height: 22, fontSize: '0.65rem', background: 'rgba(255,255,255,0.03)', color: '#cbd5e1', cursor: 'pointer' }} 
-                />
-                {selectedFile && (
-                  <>
-                    <Chip 
-                      label={`Map dependencies from ${selectedFile.split('/').pop()}`} 
-                      onClick={() => handleSend(`Map dependencies from ${selectedFile}`)} 
-                      size="small" 
-                      sx={{ height: 22, fontSize: '0.65rem', background: 'rgba(127, 85, 240, 0.06)', border: '1px solid rgba(127, 85, 240, 0.15)', color: '#b794f4', cursor: 'pointer' }} 
-                    />
-                    <Chip 
-                      label={`Explain ${selectedFile.split('/').pop()}`} 
-                      onClick={() => handleSend(`Explain ${selectedFile}`)} 
-                      size="small" 
-                      sx={{ height: 22, fontSize: '0.65rem', background: 'rgba(127, 85, 240, 0.06)', border: '1px solid rgba(127, 85, 240, 0.15)', color: '#b794f4', cursor: 'pointer' }} 
-                    />
-                  </>
-                )}
-                <Chip 
-                  label="Why was access blocked?" 
-                  onClick={() => handleSend('Why was access blocked?')} 
-                  size="small" 
-                  sx={{ height: 22, fontSize: '0.65rem', background: 'rgba(239, 68, 68, 0.05)', border: '1px solid rgba(239, 68, 68, 0.15)', color: '#f87171', cursor: 'pointer' }} 
-                />
-              </Stack>
-              <ChatInput onSend={handleSend} />
-            </Box>
-          </WorkbenchShell>
-        </Box>
+          Unlock
+        </Button>
       </Box>
-      {/* System Access Audit Logs Viewer Dialog */}
-      <AuditLogsView
-        token={token}
-        open={isAuditLogsOpen}
-        onClose={() => setIsAuditLogsOpen(false)}
-      />
 
-      {/* User Testing Cockpit Drawer Dialog */}
-      <Dialog
-        open={isTestingCockpitOpen}
-        onClose={() => setIsTestingCockpitOpen(false)}
-        PaperProps={{
-          sx: {
-            background: '#0e0f12',
-            border: '1px solid rgba(255,255,255,0.08)',
-            borderRadius: '12px',
-            maxWidth: '520px',
-            width: '100%'
-          }
-        }}
-      >
-        <Box sx={{ p: 1, position: 'relative' }}>
-          <IconButton
-            onClick={() => setIsTestingCockpitOpen(false)}
-            sx={{ position: 'absolute', right: 8, top: 8, color: '#71717a' }}
-            size="small"
-          >
-            <CloseIcon fontSize="small" />
-          </IconButton>
-          <TestingCockpit
-            gatewayConnected={backendHealth?.status === 'ok'}
-            activeWorkspaceId={activeWorkspace?.id || null}
-            token={token}
-          />
-        </Box>
-      </Dialog>
-      {/* Transient Alert Snackbar */}
-      <Snackbar
-        open={snackbarOpen}
-        autoHideDuration={6000}
-        onClose={() => setSnackbarOpen(false)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-      >
-        <Alert 
-          onClose={() => setSnackbarOpen(false)} 
-          severity={snackbarSeverity} 
-          variant="filled"
-          sx={{ 
-            width: '100%', 
-            fontSize: '0.75rem', 
-            background: snackbarSeverity === 'success' ? '#7f5af0' : '#f59e0b',
-            color: '#fff',
-            fontFamily: 'monospace'
-          }}
-        >
-          {snackbarMessage}
-        </Alert>
-      </Snackbar>
-    </>
+      {tokenError && (
+        <Typography role="alert" variant="body2" sx={{ color: status.danger, mt: 1.5 }}>
+          {tokenError}
+        </Typography>
+      )}
+    </Dialog>
   );
 
+
   return (
-    <ThemeProvider theme={codexTheme}>
-      {workbenchMode === 'local-app' ? (
-        <WorkbenchLayout
-          leftPanelWidth={prefs.leftPanelWidth}
-          onWidthChange={setLeftPanelWidth}
-          renderLeft={mainWorkbenchContent}
-          renderRight={
+    <>
+      {tokenPromptNode}
+
+      <AttachmentPicker
+        kind={pickerKind}
+        projects={attachableProjects}
+        listPaths={listProjectPaths}
+        onCancel={() => {
+          pendingPickerResult.current = null;
+          setPickerKind(null);
+        }}
+        onChoose={({ kind, project, relativePath }) => {
+          // The picker returns a path relative to the project. App owns the
+          // registered root, so App is where the absolute locator is built and
+          // where attachContextItem's confinement check gets a real path.
+          const locator = relativePath ? `${project.path}/${relativePath}` : project.path;
+          pendingPickerResult.current = {
+            kind,
+            label: relativePath ? relativePath.split('/').pop() || relativePath : project.name,
+            locator,
+            workspace: project,
+          };
+          setPickerKind(null);
+        }}
+        onExited={() => {
+          const result = pendingPickerResult.current;
+          if (result === undefined) return;
+          pendingPickerResult.current = undefined;
+          settlePicker(result);
+        }}
+      />
+      {/*
+        No blur, opacity or pointer-events juggling here. Dialog renders in a
+        portal with its own backdrop, marks the rest of the app aria-hidden, and
+        blocks interaction. The previous treatment double-dimmed against that
+        backdrop and animated with a hardcoded 0.3s transition that ignored
+        reduced motion.
+      */}
+      <Box sx={{ height: '100vh', width: '100vw' }}>
+      {(() => {
+          const conversationNode = (
+            <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+              <Box sx={{ flexGrow: 1, overflowY: 'auto' }}>
+                {renderChatTranscript()}
+              </Box>
+              {/* Bottom Chat Input Dock with suggestions bar above it */}
+              <Box
+                sx={{
+                  px: 2,
+                  pt: 1.5,
+                  pb: 2,
+                  borderTop: `1px solid ${surface.border}`,
+                  backgroundColor: surface.base,
+                }}
+              >
+                <Stack direction="row" spacing={1} sx={{ mb: 1, alignItems: 'center' }}>
+                  <Button
+                    size="small"
+                    startIcon={<AutoAwesomeIcon sx={{ fontSize: '14px !important' }} />}
+                    onClick={handleOpenSuggestions}
+                    aria-label="Open prompt ideas"
+                    aria-haspopup="true"
+                    aria-expanded={Boolean(suggestionsAnchorEl)}
+                    sx={{ minHeight: 30, px: 1.1, textTransform: 'none', borderRadius: `${radius.sm}px`, color: ink.secondary, fontSize: '0.72rem', '&:hover': { color: ink.primary, backgroundColor: surface.sunken }, '&:focus-visible': { outline: `2px solid ${accent.violet}`, outlineOffset: 2 } }}
+                  >
+                    Prompt ideas
+                  </Button>
+                  <Menu
+                    anchorEl={suggestionsAnchorEl}
+                    open={Boolean(suggestionsAnchorEl)}
+                    onClose={handleCloseSuggestions}
+                    PaperProps={{ sx: { mt: 0.75, minWidth: 240, backgroundColor: surface.overlay, color: ink.primary, border: `1px solid ${surface.border}`, boxShadow: elevation.overlay } }}
+                  >
+                    {suggestionItems.map(item => (
+                      <MenuItem key={item.message} onClick={() => { handleSend(item.message); handleCloseSuggestions(); }}>
+                        {item.label}
+                      </MenuItem>
+                    ))}
+                  </Menu>
+                </Stack>
+                <Composer
+                  onSubmit={handleSubmission}
+                  resolverContext={composerResolverContext}
+                  onRequestAttachment={requestAttachment}
+                  availability={{
+                    hasWorkspacePicker: true,
+                    hasProjects: attachableProjects.length > 0,
+                    hasWebLinks: true,
+                  }}
+                />
+              </Box>
+            </Box>
+          );
+
+
+          const governanceSummary = {
+            gatewayConnected: backendHealth?.status === 'ok',
+            activeWorkspaceName: activeWorkspace?.name || null,
+            policyActive: true,
+            portalAuthValid: !!token,
+            workspaceCatalogCount: workspacesList.length,
+            localAdapterActive: backendHealth?.status === 'ok',
+            liveAppUrlReachable: localAppStatus === 'reachable',
+            liveAppManifestAvailable: !!localAppDef
+          };
+
+          const emptyCanvasNode = (
+            <Box
+              sx={{
+                flexGrow: 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                p: { xs: 3, md: 6 },
+              }}
+            >
+              {/*
+                No card, no border, no inset highlight. An empty canvas has
+                nothing authoritative in it yet, so framing emptiness in a
+                container gives it a presence it has not earned. The words sit
+                directly on the canvas and leave when work arrives.
+              */}
+              <Box
+                sx={{
+                  width: '100%',
+                  maxWidth: 620,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 1.5,
+                }}
+              >
+                <Typography
+                  variant="overline"
+                  sx={{ color: ink.muted, fontWeight: 600, fontSize: '0.6875rem' }}
+                >
+                  Ready when you are
+                </Typography>
+                <Typography
+                  variant="h4"
+                  component="h1"
+                  sx={{
+                    color: ink.primary,
+                    fontSize: { xs: '1.5rem', md: '1.75rem' },
+                    lineHeight: 1.25,
+                    letterSpacing: '-0.02em',
+                    fontWeight: 600,
+                  }}
+                >
+                  Choose a project or describe your goal
+                </Typography>
+                <Typography variant="body2" sx={{ color: ink.secondary, lineHeight: 1.7 }}>
+                  Whatever you start will take shape here: a live application, a document,
+                  a result, or evidence you can inspect.
+                </Typography>
+              </Box>
+            </Box>
+          );
+
+          const canvasNode = webPreview ? (
+            <WebPreviewSurface
+              key={`${webPreview.url}:${webPreviewRevision}`}
+              name={webPreview.name}
+              url={webPreview.url}
+              onClose={() => setWebPreview(null)}
+            />
+          ) : workbenchMode === 'local-app' ? (
             !prefs.activeAppId ? (
               <WorkbenchEmptyState onSelectApp={handleSelectLocalApp} onClose={() => handleWorkbenchModeChange('native-focus')} />
             ) : localAppStatus !== 'reachable' ? (
@@ -2446,12 +1693,74 @@ const App: React.FC = () => {
                 </Box>
               </Box>
             )
-          }
-        />
-      ) : (
-        mainWorkbenchContent
-      )}
-    </ThemeProvider>
+          ) : activeComponent ? (
+            renderActiveCard()
+          ) : activeWorkspace ? (
+            renderActiveWorkspaceWorkbench()
+          ) : (
+            emptyCanvasNode
+          );
+
+          return (
+              <WorkstationShell
+                conversation={
+                  <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                    {conversationNode}
+                  </Box>
+                }
+                canvas={canvasNode}
+                renderActivity={(closeActivity) => (
+                  <PreviewPanel
+                    previewFeed={previewFeed}
+                    onClose={closeActivity}
+                    onAction={handleSend}
+                    onRemoveItem={handleRemoveItem}
+                    onClearFeed={() => setPreviewFeed([])}
+                    onApproveAction={handleApproveAction}
+                    token={token}
+                    loading={loading}
+                  />
+                )}
+                renderWorkspaceSelector={(closeWorkspaceSelector) => (
+                  <WorkspaceNavigator
+                    token={token}
+                    activeWorkspace={activeWorkspace}
+                    onSelectWorkspace={(ws) => {
+                      if (ws) {
+                        setActiveWorkspace(ws);
+                        closeWorkspaceSelector();
+                      }
+                    }}
+                    onAuditLogsClick={() => setIsAuditLogsOpen(true)}
+                  />
+                )}
+                governanceStatus={governanceSummary}
+                onOpenAudit={() => setIsAuditLogsOpen(true)}
+              />
+          );
+      })()}
+      </Box>
+      <AuditLogsView
+        token={token}
+        open={isAuditLogsOpen}
+        onClose={() => setIsAuditLogsOpen(false)}
+      />
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={6000}
+        onClose={() => setSnackbarOpen(false)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert
+          onClose={() => setSnackbarOpen(false)}
+          severity={snackbarSeverity}
+          variant="filled"
+          sx={{ width: '100%', fontSize: '0.75rem' }}
+        >
+          {snackbarMessage}
+        </Alert>
+      </Snackbar>
+    </>
   );
 };
 

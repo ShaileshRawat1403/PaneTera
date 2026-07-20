@@ -15,6 +15,14 @@
       "type": "repo",
       "enabled": true,
       "status": "online"
+    },
+    {
+      "id": "panetera",
+      "name": "PaneTera",
+      "path": "/Users/Shailesh/MYAIAGENTS/PaneTera",
+      "type": "repo",
+      "enabled": false,
+      "status": "offline"
     }
   ]
 }

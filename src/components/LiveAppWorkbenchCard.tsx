@@ -335,7 +335,7 @@ export const LiveAppWorkbenchCard: React.FC<LiveAppWorkbenchCardProps> = ({
       {!manifestAvailable && urlReachable && (
         <Box sx={{ p: 1.8, mb: 2, background: 'rgba(127, 85, 240, 0.05)', border: '1px solid rgba(127, 85, 240, 0.25)', borderRadius: '8px' }}>
           <Typography variant="body2" sx={{ color: '#cbd5e1', fontSize: '0.78rem', lineHeight: 1.4 }}>
-            Live app is reachable, but it does not expose a MyAI Portal manifest yet. Local workspace inspection is still available.
+            Live app is reachable, but it does not expose a PaneTera manifest yet. Local project inspection is still available.
           </Typography>
         </Box>
       )}

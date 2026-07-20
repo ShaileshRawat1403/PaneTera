@@ -15,5 +15,10 @@
     "resolveJsonModule": true,
     "types": ["node"]
   },
-  "include": ["src", "server", "shared", "test"]
+  "include": ["src", "server", "shared", "test"],
+  // test/mock-files is written at runtime by staticStructureScan.test.ts and
+  // deliberately contains unresolvable imports, which is the condition under
+  // test. Its cleanup is not guaranteed on early exit, so excluding it keeps
+  // lint deterministic rather than dependent on whether a test finished.
+  "exclude": ["test/mock-files"]
 }

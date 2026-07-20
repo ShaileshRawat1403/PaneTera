@@ -78,7 +78,7 @@ export const TestingCockpit: React.FC<CockpitProps> = ({ gatewayConnected, activ
     // Trigger download in browser
     const link = document.createElement('a');
     link.href = url;
-    link.download = `myai-portal-session-${testerName.toLowerCase().replace(/[^a-z0-9]/g, '-') || 'alpha'}.json`;
+    link.download = `panetera-session-${testerName.toLowerCase().replace(/[^a-z0-9]/g, '-') || 'alpha'}.json`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

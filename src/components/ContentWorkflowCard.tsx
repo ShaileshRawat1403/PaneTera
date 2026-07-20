@@ -9,6 +9,8 @@
 // export — going live is a separate, manual, human action outside this loop.
 import React, { useState } from 'react';
 import { Box, Typography, Button, TextField, CircularProgress, Divider, Collapse } from '@mui/material';
+import { accent, ink, radius, status, surface, typography } from '../theme/tokens';
+import { transition } from '../theme/motion';
 
 export interface ContentWorkflowRun {
   runId: string;
@@ -30,46 +32,58 @@ interface Props {
   busy?: boolean;
 }
 
+export function workflowStatusColour(runStatus: string): string {
+  if (runStatus === 'completed') return status.success;
+  if (runStatus === 'rejected') return status.danger;
+  if (runStatus === 'awaiting_review') return status.brass;
+  return accent.violet;
+}
+
+export function workflowStatusLabel(runStatus: string): string {
+  if (runStatus === 'completed') return 'Run completed';
+  if (runStatus === 'rejected') return 'Run rejected';
+  if (runStatus === 'awaiting_review') return 'Waiting for your review';
+  if (runStatus === 'running') return 'Run in progress';
+  if (runStatus === 'draft') return 'Draft prepared';
+  return 'Run status unavailable';
+}
+
 export const ContentWorkflowCard: React.FC<Props> = ({ run, evidence, onReview, busy }) => {
   const [notes, setNotes] = useState('');
   const [showDraft, setShowDraft] = useState(false);
 
-  const statusColor =
-    run.status === 'completed' ? '#22c55e'
-    : run.status === 'rejected' ? '#ef4444'
-    : run.status === 'awaiting_review' ? '#f59e0b'
-    : '#7f5af0';
+  const statusColor = workflowStatusColour(run.status);
+  const statusLabel = workflowStatusLabel(run.status);
 
   return (
     <Box
-      className={run.status === 'awaiting_review' ? 'pulse-glow' : undefined}
       sx={{
-        background: 'rgba(127, 85, 240, 0.03)',
-        backdropFilter: 'blur(12px)',
-        border: `1px solid ${statusColor}33`,
-        borderRadius: '14px',
+        backgroundColor: surface.raised,
+        border: `1px solid ${surface.border}`,
+        borderLeft: `3px solid ${statusColor}`,
+        borderRadius: `${radius.lg}px`,
         p: 2,
-        transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
+        transition: transition(['border-color', 'background-color']),
       }}
     >
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
         <Typography variant="caption" sx={{ color: statusColor, fontWeight: 700, letterSpacing: '0.06em' }}>
-          {run.status === 'awaiting_review' ? 'WAITING FOR YOUR REVIEW' : `GOVERNED RUN — ${run.status.toUpperCase()}`}
+          {statusLabel}
         </Typography>
         {(run.status === 'draft' || run.status === 'running') && (
           <CircularProgress size={12} sx={{ color: statusColor }} />
         )}
       </Box>
 
-      <Typography variant="body2" sx={{ color: '#f4f4f5', mb: 0.5, lineHeight: 1.4 }}>
+      <Typography variant="body2" sx={{ color: ink.primary, mb: 0.5, lineHeight: 1.4 }}>
         {run.siteGoal || 'Website content update'}
       </Typography>
       {run.targetPages && (
-        <Typography variant="caption" sx={{ color: '#94a3b8', display: 'block', mb: 1 }}>
+        <Typography variant="caption" sx={{ color: ink.secondary, display: 'block', mb: 1 }}>
           Pages: {run.targetPages}
         </Typography>
       )}
-      <Typography variant="caption" sx={{ color: '#71717a', fontFamily: 'monospace', display: 'block', mb: 1.5 }}>
+      <Typography variant="caption" sx={{ color: ink.muted, fontFamily: typography.mono, display: 'block', mb: 1.5 }}>
         flowright run {run.runId.slice(0, 8)} · {run.workflowId}
       </Typography>
 
@@ -78,7 +92,7 @@ export const ContentWorkflowCard: React.FC<Props> = ({ run, evidence, onReview, 
           <Button
             size="small"
             onClick={() => setShowDraft(v => !v)}
-            sx={{ textTransform: 'none', color: '#a78bfa', fontSize: '0.75rem', p: 0, minWidth: 0, '&:hover': { background: 'transparent', textDecoration: 'underline' } }}
+            sx={{ textTransform: 'none', color: accent.violet, fontSize: '0.75rem', p: 0, minWidth: 0, '&:hover': { backgroundColor: 'transparent', textDecoration: 'underline' } }}
           >
             {showDraft ? 'Hide draft ▲' : 'View draft ▼'}
           </Button>
@@ -87,8 +101,8 @@ export const ContentWorkflowCard: React.FC<Props> = ({ run, evidence, onReview, 
               sx={{
                 mt: 1,
                 p: 1.5,
-                background: 'rgba(0,0,0,0.25)',
-                borderRadius: '8px',
+                backgroundColor: surface.sunken,
+                borderRadius: `${radius.sm}px`,
                 maxHeight: 320,
                 overflowY: 'auto'
               }}
@@ -97,9 +111,9 @@ export const ContentWorkflowCard: React.FC<Props> = ({ run, evidence, onReview, 
                 variant="caption"
                 component="pre"
                 sx={{
-                  color: '#d4d4d8',
+                  color: ink.primary,
                   whiteSpace: 'pre-wrap',
-                  fontFamily: 'monospace',
+                  fontFamily: typography.mono,
                   fontSize: '0.72rem',
                   lineHeight: 1.5,
                   m: 0
@@ -112,7 +126,7 @@ export const ContentWorkflowCard: React.FC<Props> = ({ run, evidence, onReview, 
         </Box>
       )}
       {!run.draftContent && run.status === 'awaiting_review' && (
-        <Typography variant="caption" sx={{ color: '#71717a', fontStyle: 'italic', display: 'block', mb: 1.5 }}>
+        <Typography variant="caption" sx={{ color: ink.muted, fontStyle: 'italic', display: 'block', mb: 1.5 }}>
           Draft content isn't available from flowright yet — approving without reading it isn't recommended.
         </Typography>
       )}
@@ -129,7 +143,7 @@ export const ContentWorkflowCard: React.FC<Props> = ({ run, evidence, onReview, 
             size="small"
             sx={{
               mb: 1.5,
-              '& .MuiOutlinedInput-root': { fontSize: '0.85rem', background: 'rgba(0,0,0,0.2)' }
+              '& .MuiOutlinedInput-root': { fontSize: '0.85rem', backgroundColor: surface.sunken }
             }}
           />
           <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
@@ -139,9 +153,8 @@ export const ContentWorkflowCard: React.FC<Props> = ({ run, evidence, onReview, 
               disabled={busy}
               onClick={() => onReview('approve', notes)}
               sx={{
-                background: '#22c55e', textTransform: 'none', fontWeight: 700, borderRadius: '8px',
-                boxShadow: '0 2px 12px rgba(34, 197, 94, 0.25)',
-                '&:hover': { background: '#16a34a', boxShadow: '0 4px 16px rgba(34, 197, 94, 0.35)' }
+                backgroundColor: accent.violet, textTransform: 'none', fontWeight: 650, borderRadius: `${radius.sm}px`,
+                '&:hover': { backgroundColor: accent.violetHover }
               }}
             >
               Approve
@@ -151,7 +164,7 @@ export const ContentWorkflowCard: React.FC<Props> = ({ run, evidence, onReview, 
               variant="outlined"
               disabled={busy}
               onClick={() => onReview('request_revision', notes)}
-              sx={{ color: '#f59e0b', borderColor: 'rgba(245,158,11,0.35)', textTransform: 'none', borderRadius: '8px' }}
+              sx={{ color: status.brass, borderColor: status.brass, textTransform: 'none', borderRadius: `${radius.sm}px` }}
             >
               Request revision
             </Button>
@@ -160,7 +173,7 @@ export const ContentWorkflowCard: React.FC<Props> = ({ run, evidence, onReview, 
               variant="outlined"
               disabled={busy}
               onClick={() => onReview('reject', notes)}
-              sx={{ color: '#ef4444', borderColor: 'rgba(239,68,68,0.35)', textTransform: 'none', borderRadius: '8px' }}
+              sx={{ color: status.danger, borderColor: status.danger, textTransform: 'none', borderRadius: `${radius.sm}px` }}
             >
               Reject
             </Button>
@@ -170,32 +183,32 @@ export const ContentWorkflowCard: React.FC<Props> = ({ run, evidence, onReview, 
 
       {run.status === 'completed' && (
         <Box sx={{ mt: 1 }}>
-          <Divider sx={{ my: 1, borderColor: 'rgba(255,255,255,0.06)' }} />
-          <Typography variant="caption" sx={{ color: '#22c55e', fontWeight: 700, display: 'block', mb: 0.5 }}>
-            EVIDENCE (from flowright's own ledger)
+          <Divider sx={{ my: 1, borderColor: surface.border }} />
+          <Typography variant="caption" sx={{ color: status.success, fontWeight: 650, display: 'block', mb: 0.5 }}>
+            Evidence from Flowright
           </Typography>
           {evidence ? (
             <>
-              <Typography variant="caption" sx={{ color: '#94a3b8', display: 'block' }}>
+              <Typography variant="caption" sx={{ color: ink.secondary, display: 'block' }}>
                 Ledger verified: {String(Boolean(evidence.ledger?.verified))} · {evidence.ledger?.eventCount ?? 0} events
               </Typography>
-              <Typography variant="caption" sx={{ color: '#94a3b8', display: 'block', mb: 1 }}>
+              <Typography variant="caption" sx={{ color: ink.secondary, display: 'block', mb: 1 }}>
                 Steps: {evidence.steps?.filter((s: any) => s.status === 'success').length ?? 0}/{evidence.steps?.length ?? 0} succeeded
               </Typography>
             </>
           ) : (
-            <Typography variant="caption" sx={{ color: '#71717a', display: 'block', mb: 1 }}>
+            <Typography variant="caption" sx={{ color: ink.muted, display: 'block', mb: 1 }}>
               Loading evidence...
             </Typography>
           )}
-          <Typography variant="caption" sx={{ color: '#71717a', fontStyle: 'italic', display: 'block' }}>
+          <Typography variant="caption" sx={{ color: ink.muted, fontStyle: 'italic', display: 'block' }}>
             Flowright prepared and exported this packet. Publishing it live to the actual site is a separate, manual step, not something this portal or flowright does automatically.
           </Typography>
         </Box>
       )}
 
       {run.status === 'rejected' && (
-        <Typography variant="body2" sx={{ color: '#ef4444', fontWeight: 600 }}>
+        <Typography role="alert" variant="body2" sx={{ color: status.danger, fontWeight: 600 }}>
           Rejected — nothing was exported.
         </Typography>
       )}
