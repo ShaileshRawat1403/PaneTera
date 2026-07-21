@@ -39,6 +39,14 @@ describe('capabilities derive from executors', () => {
     assert.ok(!capabilitiesFrom({}).includes('live-app'));
     assert.ok(capabilitiesFrom({ openLiveApp: () => {} }).includes('live-app'));
   });
+
+  it('claims Rig and Headroom only when their real surfaces have handlers', () => {
+    assert.ok(!capabilitiesFrom({}).includes('rig'));
+    assert.ok(!capabilitiesFrom({}).includes('headroom'));
+    const claimed = capabilitiesFrom({ openRig: () => {}, openHeadroom: () => {} });
+    assert.ok(claimed.includes('rig'));
+    assert.ok(claimed.includes('headroom'));
+  });
 });
 
 describe('every ready plan reaches an executor', () => {
@@ -52,6 +60,8 @@ describe('every ready plan reaches an executor', () => {
     selectProject: () => {},
     openLiveApp: () => {},
     clearContext: () => {},
+    openHeadroom: () => {},
+    openRig: () => {},
     chat: () => {},
   };
 
@@ -70,6 +80,8 @@ describe('every ready plan reaches an executor', () => {
     '/project PaneTera',
     '/open Soothsayer',
     '/clear-context',
+    '/headroom',
+    '/rig',
     'hello there',
     'what does the git history show',
   ];

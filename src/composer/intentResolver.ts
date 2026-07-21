@@ -197,8 +197,8 @@ function evaluateReadiness(
 const UNSUPPORTED_PROMPTS: Partial<Record<IntentFamily, string>> = {
   run: 'Governed runs are not connected yet, so nothing was proposed or run.',
   proposal: 'The approval surface is not connected yet.',
-  rig: 'Rig is not built yet.',
-  headroom: 'The Headroom surface is not built yet.',
+  rig: 'Rig is not connected to this surface yet.',
+  headroom: 'Headroom is not connected to this surface yet.',
   evidence: 'Evidence browsing is not connected yet.',
   'live-app': 'No live application is connected yet.',
   project: 'Project selection is not connected yet.',

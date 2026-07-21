@@ -6,8 +6,8 @@ establishment is subject to launch governance for stdio and destination-bound
 egress policy for HTTP.
 
 ## Status
-Proposed. Blocks Stage 6 (Rig registry) of
-`RIG_MCP_CONNECTION_ARCHITECTURE.md`. Does not block Stages 1 to 3.
+Accepted for PaneTera V1 implementation on 2026-07-20. This decision governs
+Stage 6 (Rig registry) and every external MCP connection path.
 
 ## Context
 

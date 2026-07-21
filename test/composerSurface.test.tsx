@@ -105,7 +105,14 @@ describe('attachment availability is truthful', () => {
   // behaviour lives in composerAttachment.test.tsx. What matters here is that
   // the composer renders the menu from computed availability rather than a
   // fixed list.
-  const FULL = { hasWorkspacePicker: true, hasProjects: true, hasWebLinks: true };
+  const FULL = {
+    hasProjectPicker: true,
+    hasLocalFilePicker: true,
+    hasLocalFolderPicker: true,
+    hasProjects: true,
+    hasWebLinks: true,
+    hasMcpResources: false,
+  };
 
   it('offers only options that can be acted on', () => {
     for (const option of attachmentOptions(FULL)) {
@@ -124,9 +131,12 @@ describe('attachment availability is truthful', () => {
 
   it('keeps notes available with no host capability at all', () => {
     const bare = attachmentOptions({
-      hasWorkspacePicker: false,
+      hasProjectPicker: false,
+      hasLocalFilePicker: false,
+      hasLocalFolderPicker: false,
       hasProjects: false,
       hasWebLinks: false,
+      hasMcpResources: false,
     });
     assert.deepStrictEqual(bare.map((option) => option.kind), ['note']);
   });

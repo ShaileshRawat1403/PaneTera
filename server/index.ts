@@ -3,7 +3,8 @@ import express, { Request, Response, NextFunction } from 'express';
 import dotenv from 'dotenv';
 import chokidar from 'chokidar';
 import path from 'path';
-import { exec, spawn, spawn as spawnProc, ChildProcess as CP } from 'child_process';
+import { exec, execFile, spawn, spawn as spawnProc, ChildProcess as CP } from 'child_process';
+import { randomUUID } from 'crypto';
 import readline from 'readline';
 import { readFileSafe, listWorkspaces, listFilesInWorkspace, searchFilesInWorkspace, addWorkspaceToPortalYaml } from './workspaceReader';
 import { executeCommand, type ExecutionMode, validateCommand, buildProposedActionData, parseLocalCommandProposal, selectedExecutionMode } from './execution';
@@ -18,6 +19,11 @@ import { handleOrchestratorQuery } from './orchestrator';
 import { browserRouter } from './browserGateway';
 import { mcpRouter } from './mcp/browserMcpRoute';
 import { workbenchRouter } from './workbench/workbenchRoutes';
+import { rigRouter } from './rig/routes';
+import { headroomRouter } from './headroom/routes';
+import { LocalScopeStore, type LocalSelectionKind, type LocalSelectionGrant } from './headroom/localScopeStore';
+import { PANETERA_ASSISTANT_INSTRUCTION } from './assistantInstruction';
+import { geminiGenerateContentUrl } from './modelConfig';
 
 dotenv.config();
 
@@ -63,6 +69,12 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   }
   next();
 });
+
+// Rig can establish processes and network connections, so every route lives
+// behind the master-token boundary. It must never be mounted with the public
+// browser/workbench routers above.
+app.use('/api/rig', rigRouter);
+app.use('/api/headroom', headroomRouter);
 
 // ── Rook MCP Memory Bridge (optional) ────────────────────────────────────────
 // Spawns `rook mcp memory` as a child process and communicates over stdio
@@ -315,25 +327,137 @@ app.get('/api/workspaces', async (req, res) => {
   }
 });
 
-// Browse native folder dialog
-app.post('/api/workspaces/browse', (req, res) => {
-  exec('osascript -e \'tell application (path to frontmost application as text) to choose folder with prompt "Select Workspace Folder"\' -e \'POSIX path of result\'', (error, stdout, stderr) => {
-    if (error) {
-      if (error.message.includes('User canceled')) {
-        return res.json({ canceled: true });
-      }
-      return res.status(500).json({ error: error.message });
+// A selection grant records exactly what the person chose. It does not grant
+// recursive filesystem access by itself; retrieval remains a separate governed
+// operation. Keeping the record server-side prevents the browser from turning
+// an arbitrary typed path into a claimed native selection.
+const localSelectionGrants = new LocalScopeStore();
+
+function openNativePathPicker(kind: LocalSelectionKind, prompt: string): Promise<string | null> {
+  const command = kind === 'file' ? 'choose file' : 'choose folder';
+  return new Promise((resolve, reject) => {
+    // No shell. The AppleScript source and its arguments are fixed by PaneTera;
+    // no client-controlled path is interpolated into a command line.
+    execFile('osascript', ['-e', `POSIX path of (${command} with prompt "${prompt}")`],
+      (error, stdout) => {
+        if (error) {
+          if (error.message.includes('User canceled') || error.message.includes('-128')) {
+            resolve(null);
+            return;
+          }
+          reject(error);
+          return;
+        }
+        resolve(stdout.trim() || null);
+      });
+  });
+}
+
+// Select one local file or folder from anywhere on the machine. This endpoint
+// is behind the master-token middleware above and accepts only the selection
+// kind; the path comes exclusively from the native operating-system dialog.
+app.post('/api/local-selection', async (req, res) => {
+  const kind = req.body?.kind;
+  const sessionId = req.body?.sessionId;
+  if (kind !== 'file' && kind !== 'folder') {
+    return res.status(400).json({ error: 'Selection kind must be file or folder.' });
+  }
+  if (typeof sessionId !== 'string' || !/^[a-zA-Z0-9_-]{8,128}$/.test(sessionId)) {
+    return res.status(400).json({ error: 'A valid Headroom session is required.' });
+  }
+
+  try {
+    const selected = await openNativePathPicker(
+      kind,
+      kind === 'file' ? 'Choose a file for PaneTera' : 'Choose a folder for PaneTera',
+    );
+    if (!selected) return res.json({ canceled: true });
+
+    const resolvedPath = await fs.promises.realpath(selected);
+    const info = await fs.promises.stat(resolvedPath);
+    if ((kind === 'file' && !info.isFile()) || (kind === 'folder' && !info.isDirectory())) {
+      return res.status(400).json({ error: `The selected path is not a ${kind}.` });
     }
-    const selectedPath = stdout.trim();
-    if (selectedPath) {
-      // Create a default name from the folder path
-      const pathParts = selectedPath.split('/').filter(Boolean);
-      const defaultName = pathParts[pathParts.length - 1] || 'New Workspace';
-      res.json({ canceled: false, path: selectedPath, name: defaultName });
-    } else {
-      res.json({ canceled: true });
+
+    const grant: LocalSelectionGrant = {
+      id: randomUUID(),
+      kind,
+      path: resolvedPath,
+      selectedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 8 * 60 * 60_000).toISOString(),
+      sessionId,
+      recursive: kind === 'folder' && req.body?.recursive === true,
+      revokedAt: null,
+      observedMtimeMs: info.mtimeMs,
+    };
+    await localSelectionGrants.add(grant);
+    logAudit('local_context_selected', {
+      grantId: grant.id,
+      kind: grant.kind,
+      path: grant.path,
+      selectedAt: grant.selectedAt,
+      expiresAt: grant.expiresAt,
+      recursive: grant.recursive,
+      observedMtimeMs: grant.observedMtimeMs,
+      authority: 'reference-only',
+    });
+
+    return res.json({
+      canceled: false,
+      grantId: grant.id,
+      kind: grant.kind,
+      path: grant.path,
+      label: path.basename(grant.path),
+      selectedAt: grant.selectedAt,
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    return res.status(500).json({ error: message });
+  }
+});
+
+app.get('/api/local-selection/scopes', (req, res) => {
+  const sessionId = typeof req.query.sessionId === 'string' ? req.query.sessionId : '';
+  const now = Date.now();
+  const scopes = localSelectionGrants.list(sessionId).filter((grant) => (
+    grant.sessionId === sessionId && !grant.revokedAt && Date.parse(grant.expiresAt) > now
+  )).map((grant) => {
+    try {
+      const currentMtimeMs = fs.statSync(grant.path).mtimeMs;
+      return { ...grant, freshness: currentMtimeMs === grant.observedMtimeMs ? 'current' : 'needs-review', currentMtimeMs };
+    } catch {
+      return { ...grant, freshness: 'stale', currentMtimeMs: null };
     }
   });
+  res.json({ scopes });
+});
+
+app.post('/api/local-selection/scopes/:grantId/revoke', async (req, res) => {
+  const grant = localSelectionGrants.get(req.params.grantId);
+  if (!grant) return res.status(404).json({ error: 'Temporary attachment scope not found.' });
+  try {
+    const revoked = await localSelectionGrants.revoke(grant.id);
+    logAudit('local_context_revoked', { grantId: revoked.id, kind: revoked.kind, sessionId: revoked.sessionId });
+    return res.json({ revoked: true, grantId: revoked.id });
+  } catch (error: unknown) {
+    return res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+// Browse native folder dialog for registering a durable project.
+app.post('/api/workspaces/browse', async (req, res) => {
+  try {
+    const selectedPath = await openNativePathPicker('folder', 'Select a project folder');
+    if (!selectedPath) return res.json({ canceled: true });
+
+    const resolvedPath = await fs.promises.realpath(selectedPath);
+    const pathParts = resolvedPath.split('/').filter(Boolean);
+    const defaultName = pathParts[pathParts.length - 1] || 'New Project';
+    return res.json({ canceled: false, path: resolvedPath, name: defaultName });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    return res.status(500).json({ error: message });
+  }
 });
 
 // Add a new workspace to portal.yaml and register it in the catalog
@@ -560,8 +684,9 @@ app.post('/api/execute/kill', (req, res) => {
 // runs created here are real flowright history, not a throwaway sandbox.
 
 const FLOWRIGHT_REPO = process.env.FLOWRIGHT_REPO_PATH
-  || '/Users/Shared/MYAIAGENTS/active/flowright';
-const FLOWRIGHT_TEMPLATES_DIR = path.join(FLOWRIGHT_REPO, 'templates');
+  ? path.resolve(process.env.FLOWRIGHT_REPO_PATH)
+  : null;
+const FLOWRIGHT_TEMPLATES_DIR = FLOWRIGHT_REPO ? path.join(FLOWRIGHT_REPO, 'templates') : null;
 // Distinct from flowright's own documented default (3001) so this doesn't
 // collide with a copy the operator might already be running standalone.
 const FLOWRIGHT_API_PORT = process.env.FLOWRIGHT_API_PORT || '3101';
@@ -572,10 +697,20 @@ class FlowrightApiBridge {
   public ready = false;
 
   async start(): Promise<void> {
-    this.proc = spawn('npx', ['ts-node', 'apps/api/src/index.ts'], {
+    if (!FLOWRIGHT_REPO) throw new Error('FLOWRIGHT_REPO_PATH is not configured.');
+    const tsNodeBin = path.join(FLOWRIGHT_REPO, 'node_modules', 'ts-node', 'dist', 'bin.js');
+    const apiEntry = path.join(FLOWRIGHT_REPO, 'apps', 'api', 'src', 'index.ts');
+    if (!fs.existsSync(tsNodeBin) || !fs.existsSync(apiEntry)) {
+      throw new Error('Flowright API entry point or local ts-node runtime is missing.');
+    }
+    this.proc = spawn(process.execPath, [tsNodeBin, apiEntry], {
       cwd: FLOWRIGHT_REPO,
       env: {
-        ...process.env,
+        PATH: process.env.PATH,
+        HOME: process.env.HOME,
+        NODE_ENV: process.env.NODE_ENV,
+        DATABASE_URL: process.env.DATABASE_URL,
+        FLOWRIGHT_DB: process.env.FLOWRIGHT_DB,
         PORT: FLOWRIGHT_API_PORT,
         // This is a local, same-machine, single-operator POC — the portal
         // and flowright's API run on the same box as the same person. Real
@@ -585,7 +720,7 @@ class FlowrightApiBridge {
         // request with "Authorization token is required."
         FLOWRIGHT_DEV_AUTH: 'true'
       },
-      shell: true,
+      shell: false,
       stdio: ['ignore', 'pipe', 'pipe']
     });
 
@@ -626,7 +761,7 @@ class FlowrightApiBridge {
 }
 
 const flowrightBridge = new FlowrightApiBridge();
-if (process.env.NODE_ENV !== 'test') {
+if (process.env.NODE_ENV !== 'test' && FLOWRIGHT_REPO && process.env.FLOWRIGHT_AUTOSTART === 'true') {
   flowrightBridge.start().catch((e: Error) =>
     console.warn('[FlowrightBridge] Could not start flowright API:', e.message)
   );
@@ -635,6 +770,9 @@ if (process.env.NODE_ENV !== 'test') {
 // Only allow template paths that actually live inside this flowright repo's
 // own templates directory.
 function resolveSafeTemplatePath(templatePath: string): string {
+  if (!FLOWRIGHT_REPO || !FLOWRIGHT_TEMPLATES_DIR) {
+    throw new Error('Flowright is not configured. Set FLOWRIGHT_REPO_PATH explicitly.');
+  }
   const resolved = path.resolve(FLOWRIGHT_REPO, templatePath);
   if (!resolved.startsWith(FLOWRIGHT_TEMPLATES_DIR + path.sep)) {
     throw new Error('templatePath must resolve inside the flowright templates directory');
@@ -766,15 +904,6 @@ app.get('/api/desktop/apps', (req, res) => {
 // actuation, that is a deliberate new surface with its own threat model,
 // not a stub to grow into.
 
-const PANETERA_ASSISTANT_INSTRUCTION =
-  'You are PaneTera, a local-first human-AI workstation for any kind of builder, researcher, creator, analyst, or operator. ' +
-  'Infer the user’s intended outcome before choosing a tool or asking for context. Do not assume every request concerns code or a workspace. ' +
-  'When one essential detail is missing, ask the smallest useful clarification and give a concrete example. ' +
-  'Distinguish general conversation, project inspection, web surfaces, artifacts, evidence, bounded runs, and governed actions. ' +
-  'Never invent application state, files, evidence, tool results, permissions, or completed execution. ' +
-  'Repository and execution facts must come from tools; mutations require an explicit proposal and user approval. ' +
-  'Answer naturally, directly, and without internal intent codes or emojis.';
-
 // Gemini Q&A execution handler
 async function askGemini(query: string, history: any[] = []): Promise<{ reply: string; uiComponent?: any }> {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -784,8 +913,7 @@ async function askGemini(query: string, history: any[] = []): Promise<{ reply: s
 
   // Key travels in a header, never in the URL — URLs leak into logs,
   // error traces, and proxies.
-  const url =
-    'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+  const url = geminiGenerateContentUrl(process.env.GEMINI_MODEL);
 
   const contentsPayload: any[] = [];
   for (const h of history) {

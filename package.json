@@ -3,13 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "concurrently \"npm run dev:client\" \"npm run dev:server\"",
+    "dev": "concurrently --kill-others-on-fail \"npm run dev:client\" \"npm run dev:server\"",
     "dev:client": "vite",
     "dev:server": "tsx watch server/index.ts",
     "lint": "tsc --noEmit --project tsconfig.json",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "tsx test/validateCommand.test.ts && tsx test/proposalFlow.test.ts && tsx test/repoSetupProposal.test.ts && tsx test/liveAppWorkbench.test.ts && tsx test/workflowIntent.test.ts && tsx test/browserObservation.test.ts && tsx test/missionControlV1.test.ts && tsx test/staticStructureScan.test.ts && tsx test/orchestrator.test.ts && tsx test/workbenchModeToggle.test.ts && tsx test/browserGateway.test.ts && tsx test/evidenceGraphResolver.test.ts && tsx test/researchPersistence.test.ts && tsx test/researchSession.test.ts && tsx test/provenanceValidation.test.ts && tsx test/evidenceCanonicalizer.test.ts && tsx test/researchAnalysisPipeline.test.ts && tsx test/workspaceReader.test.ts && tsx test/liveWorkbenchProbe.test.ts && tsx test/liveWorkbenchRegistry.test.ts && tsx test/liveWorkbenchSurface.test.ts && tsx test/workstationShell.test.tsx && tsx test/composerIntent.test.ts && tsx test/composerContextTray.test.ts && tsx test/composerMachine.test.ts && tsx test/composerSubmission.test.ts && tsx test/composerCapabilities.test.ts && tsx test/theme.test.ts && tsx test/themeCanonical.test.ts && tsx test/composerSurface.test.tsx && tsx test/transcript.test.tsx && tsx test/composerAttachment.test.tsx"
+    "test": "tsx test/runtimeHardening.test.ts && tsx test/validateCommand.test.ts && tsx test/proposalFlow.test.ts && tsx test/repoSetupProposal.test.ts && tsx test/liveAppWorkbench.test.ts && tsx test/workflowIntent.test.ts && tsx test/browserObservation.test.ts && tsx test/missionControlV1.test.ts && tsx test/staticStructureScan.test.ts && tsx test/orchestrator.test.ts && tsx test/workbenchModeToggle.test.ts && tsx test/browserGateway.test.ts && tsx test/evidenceGraphResolver.test.ts && tsx test/researchPersistence.test.ts && tsx test/researchSession.test.ts && tsx test/provenanceValidation.test.ts && tsx test/evidenceCanonicalizer.test.ts && tsx test/researchAnalysisPipeline.test.ts && tsx test/workspaceReader.test.ts && tsx test/liveWorkbenchProbe.test.ts && tsx test/liveWorkbenchRegistry.test.ts && tsx test/liveWorkbenchSurface.test.ts && tsx test/workstationShell.test.tsx && tsx test/composerIntent.test.ts && tsx test/composerContextTray.test.ts && tsx test/composerMachine.test.ts && tsx test/composerSubmission.test.ts && tsx test/composerCapabilities.test.ts && tsx test/theme.test.ts && tsx test/themeCanonical.test.ts && tsx test/composerSurface.test.tsx && tsx test/transcript.test.tsx && tsx test/composerAttachment.test.tsx && tsx test/rigFoundation.test.ts && tsx test/rigIntegration.test.ts && tsx test/headroom.test.ts"
   },
   "dependencies": {
     "@emotion/react": "^11.11.4",

@@ -56,6 +56,8 @@ import type {
 
 export interface ComposerSubmission {
   intent: IntentEnvelope;
+  /** All tray items, including explicit exclusions, for the Headroom audit envelope. */
+  allContext: ContextItem[];
   context: ContextItem[];
   /** Exact transient content for items that carry it, keyed by context id. */
   material: Record<string, string>;
@@ -77,11 +79,14 @@ interface Props {
 }
 
 const DEFAULT_AVAILABILITY: AttachmentAvailability = {
-  hasWorkspacePicker: false,
+  hasProjectPicker: false,
+  hasLocalFilePicker: false,
+  hasLocalFolderPicker: false,
   hasProjects: false,
   // Web links need no host capability: validation is local and the result is a
   // reference, so this is on by default.
   hasWebLinks: true,
+  hasMcpResources: false,
 };
 
 const LIST_ID = 'panetera-slash-menu';
@@ -186,7 +191,7 @@ export const Composer: React.FC<Props> = ({
       return;
     }
 
-    onSubmit({ intent, context: included, material: materialFor(included, material) });
+    onSubmit({ intent, allContext: [...tray], context: included, material: materialFor(included, material) });
     rawDispatch({ type: 'clear-value' });
     rawDispatch({ type: 'notice', message: null });
   };
@@ -195,7 +200,9 @@ export const Composer: React.FC<Props> = ({
     ...DEFAULT_AVAILABILITY,
     ...availability,
     // Derived, not declared: the picker exists only if the host supplied one.
-    hasWorkspacePicker: Boolean(onRequestAttachment) && (availability?.hasWorkspacePicker ?? true),
+    hasProjectPicker: Boolean(onRequestAttachment) && (availability?.hasProjectPicker ?? true),
+    hasLocalFilePicker: Boolean(onRequestAttachment) && (availability?.hasLocalFilePicker ?? true),
+    hasLocalFolderPicker: Boolean(onRequestAttachment) && (availability?.hasLocalFolderPicker ?? true),
   };
 
   const handleAttach = async (kind: ContextKind) => {
@@ -214,7 +221,15 @@ export const Composer: React.FC<Props> = ({
     }
     if (!onRequestAttachment) return;
 
-    const request = await onRequestAttachment(kind);
+    let request: AttachRequest | null;
+    try {
+      request = await onRequestAttachment(kind);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'The selection could not be completed.';
+      rawDispatch({ type: 'notice', message });
+      inputRef.current?.focus();
+      return;
+    }
     // The host resolves only after its picker has finished closing, so this
     // focus cannot be stolen by the dialog's focus-restoration lifecycle.
     inputRef.current?.focus();

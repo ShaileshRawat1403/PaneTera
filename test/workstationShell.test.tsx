@@ -8,6 +8,24 @@ import type { GovernanceSummary } from '../src/components/workstation/Workstatio
 import { extractWebPreviewRequest, isPublicWebPreviewUrl, resolvePublicWebPreviewSandbox, resolveWebPreviewIntent } from '../src/utils/webPreviewIntent';
 import { resolveConversationRoute } from '../src/utils/paneteraIntent';
 import { status as statusTokens } from '../src/theme/tokens';
+import { workstationGuidance } from '../src/components/workstation/guidance';
+
+describe('Workstation guidance uses one relevant line', () => {
+  it('shows attention only when a required capability is unavailable', () => {
+    assert.deepStrictEqual(workstationGuidance({ gatewayConnected: false, loading: false, hasProject: true, objective: 'Ship' }), {
+      kind: 'attention', text: 'PaneTera’s local gateway is unavailable.',
+    });
+  });
+
+  it('reports current work before recommending another action', () => {
+    assert.strictEqual(workstationGuidance({ gatewayConnected: true, loading: true, hasProject: true, objective: 'Ship' }).kind, 'now');
+  });
+
+  it('recommends only the smallest useful next step', () => {
+    assert.strictEqual(workstationGuidance({ gatewayConnected: true, loading: false, hasProject: false, objective: '' }).text, 'Choose a project above or describe a goal.');
+    assert.strictEqual(workstationGuidance({ gatewayConnected: true, loading: false, hasProject: true, objective: '' }).text, 'Set the outcome you want to reach.');
+  });
+});
 
 describe('Website preview intent', () => {
   it('normalizes explicit website requests without requiring a workspace', () => {
@@ -78,6 +96,8 @@ describe('WorkstationShell Structural Markup', () => {
         conversation={<div id="test-conversation-stub">Conversation</div>}
         canvas={canvasContent}
         renderActivity={() => <div id="test-activity-stub">Activity</div>}
+        renderRig={() => <div id="test-rig-stub">Rig</div>}
+        renderHeadroom={() => <div id="test-headroom-stub">Headroom</div>}
         renderWorkspaceSelector={() => <div id="test-workspace-stub">Workspace</div>}
         governanceStatus={dummyGovernance}
         onOpenAudit={() => {}}
@@ -170,6 +190,8 @@ describe('Workstation frame follows the contract palette', () => {
         conversation: React.createElement('div', null, 'conversation'),
         canvas: React.createElement('div', null, 'canvas'),
         renderActivity: () => React.createElement('div', null, 'activity'),
+        renderRig: () => React.createElement('div', null, 'rig'),
+        renderHeadroom: () => React.createElement('div', null, 'headroom'),
         renderWorkspaceSelector: () => React.createElement('div', null, 'workspaces'),
         governanceStatus: status,
         onOpenAudit: () => {},

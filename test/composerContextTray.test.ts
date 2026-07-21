@@ -35,7 +35,11 @@ function attachFolder() {
     kind: 'folder',
     label: 'src',
     locator: `${workspace.path}/src`,
-    workspace,
+    selectionGrant: {
+      id: 'grant-src',
+      kind: 'folder',
+      selectedAt: '2026-07-20T12:00:00.000Z',
+    },
   });
 }
 
@@ -116,14 +120,22 @@ describe('removal is safe', () => {
       kind: 'folder',
       label: 'src',
       locator: `${workspace.path}/src`,
-      workspace,
+      selectionGrant: {
+        id: 'grant-src',
+        kind: 'folder',
+        selectedAt: '2026-07-20T12:00:00.000Z',
+      },
     });
     assert.ok(first.ok);
     const second = attachContextItem(first.tray, {
       kind: 'folder',
       label: 'server',
       locator: `${workspace.path}/server`,
-      workspace,
+      selectionGrant: {
+        id: 'grant-server',
+        kind: 'folder',
+        selectedAt: '2026-07-20T12:01:00.000Z',
+      },
     });
     assert.ok(second.ok);
 
@@ -208,9 +220,9 @@ describe('measurement honesty', () => {
 describe('unsupported kinds are rejected by the core API', () => {
   // Enforced in attachContextItem, not only in the menu. A direct caller must
   // not be able to create an item whose source nothing can read.
-  // `web` moved out of this list when web links became a real kind with a
-  // validated locator. The four remaining have no source or retrieval path.
-  for (const kind of ['image', 'evidence', 'mcp-resource', 'live-app'] as const) {
+  // `web` and `mcp-resource` moved out of this list when their validated
+  // retrieval paths became real. The remaining kinds have no source path.
+  for (const kind of ['image', 'evidence', 'live-app'] as const) {
     it(`rejects ${kind}`, () => {
       const result = attachContextItem(EMPTY_TRAY, {
         kind,
@@ -221,6 +233,13 @@ describe('unsupported kinds are rejected by the core API', () => {
       assert.ok(!result.ok && result.reason === 'unsupported-kind');
     });
   }
+
+  it('rejects an MCP resource that bypasses Rig retrieval', () => {
+    const result = attachContextItem(EMPTY_TRAY, {
+      kind: 'mcp-resource', label: 'Fake resource', locator: 'mcp://fake',
+    });
+    assert.deepStrictEqual(result, { ok: false, reason: 'missing-material' });
+  });
 
   it('does not mislabel an unsupported kind as workspace-sourced', () => {
     const result = attachContextItem(EMPTY_TRAY, {
@@ -310,7 +329,11 @@ describe('duplicates', () => {
       kind: 'folder',
       label: 'src again',
       locator: `${workspace.path}/src`,
-      workspace,
+      selectionGrant: {
+        id: 'grant-src-again',
+        kind: 'folder',
+        selectedAt: '2026-07-20T12:02:00.000Z',
+      },
     });
     assert.strictEqual(second.ok, false);
     assert.ok(!second.ok && second.reason === 'duplicate');

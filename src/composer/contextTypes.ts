@@ -58,6 +58,14 @@ export interface ContextSource {
   capturedAt?: string;
   /** Registered workspace this item belongs to, when it is inside one. */
   workspaceId?: string;
+  /** Opaque server record proving an explicit native file/folder selection. */
+  selectionGrantId?: string;
+  selectedAt?: string;
+  expiresAt?: string;
+  recursive?: boolean;
+  observedMtimeMs?: number;
+  /** Provenance record for material retrieved through Rig. */
+  provenanceRecordId?: string;
 }
 
 export interface ContextItem {
@@ -108,6 +116,7 @@ export const SUPPORTED_CONTEXT_KINDS: readonly ContextKind[] = [
   'project',
   'note',
   'web',
+  'mcp-resource',
 ];
 
 export function isSupportedContextKind(kind: ContextKind): boolean {
@@ -122,12 +131,18 @@ export function isSupportedContextKind(kind: ContextKind): boolean {
  * things that do not work.
  */
 export interface AttachmentAvailability {
-  /** A governed picker for project, file and folder selection is wired. */
-  hasWorkspacePicker: boolean;
+  /** A governed registered-project picker is wired. */
+  hasProjectPicker: boolean;
+  /** Native operating-system file selection is wired. */
+  hasLocalFilePicker: boolean;
+  /** Native operating-system folder selection is wired. */
+  hasLocalFolderPicker: boolean;
   /** At least one project is registered, so there is something to choose. */
   hasProjects: boolean;
   /** Reference validation for public addresses is wired. */
   hasWebLinks: boolean;
+  /** At least one enabled, connected MCP resource is available through Rig. */
+  hasMcpResources: boolean;
 }
 
 // Deliberately no `hasRigSurface`. No Rig surface exists to send anyone to, so
@@ -152,16 +167,21 @@ export function attachmentOptions(availability: AttachmentAvailability): Attachm
     { kind: 'note', label: 'Paste text or note', available: true },
   ];
 
-  if (availability.hasWorkspacePicker && availability.hasProjects) {
-    options.push(
-      { kind: 'project', label: 'Choose project', available: true },
-      { kind: 'file', label: 'Choose file', available: true },
-      { kind: 'folder', label: 'Choose folder', available: true },
-    );
+  if (availability.hasProjectPicker && availability.hasProjects) {
+    options.push({ kind: 'project', label: 'Choose project', available: true });
+  }
+  if (availability.hasLocalFilePicker) {
+    options.push({ kind: 'file', label: 'Choose local file…', available: true });
+  }
+  if (availability.hasLocalFolderPicker) {
+    options.push({ kind: 'folder', label: 'Choose local folder…', available: true });
   }
 
   if (availability.hasWebLinks) {
     options.push({ kind: 'web', label: 'Add web link', available: true });
+  }
+  if (availability.hasMcpResources) {
+    options.push({ kind: 'mcp-resource', label: 'Choose MCP resource…', available: true });
   }
 
   return options;

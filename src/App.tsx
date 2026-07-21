@@ -5,22 +5,25 @@ import TranscriptTurn from './components/transcript/TranscriptTurn';
 import type { TranscriptMessage } from './components/transcript/TranscriptTurn';
 import { Composer } from './components/composer/Composer';
 import { AttachmentPicker } from './components/composer/AttachmentPicker';
-import type { PickerKind } from './components/composer/AttachmentPicker';
+import { McpResourcePicker } from './components/composer/McpResourcePicker';
 import type { AttachRequest } from './composer/contextTray';
 import { PickerCoordinator } from './composer/pickerCoordinator';
 import type { AttachableWorkspace, ContextKind } from './composer/contextTypes';
+import type { RigResourceChoice } from './rig/types';
 import type { ComposerSubmission } from './components/composer/Composer';
 import { resolveIntent } from './composer/intentResolver';
 import { alpha } from '@mui/material/styles';
 import { scrollBehavior } from './theme/motion';
 import { accent, elevation, ink, radius, status, surface } from './theme/tokens';
-import { planSubmission } from './composer/submissionPlan';
+import { materializedContextValue, planSubmission } from './composer/submissionPlan';
 import { capabilitiesFrom, executePlan } from './composer/capabilities';
 import type { PlanExecutors } from './composer/capabilities';
 import { describeResolution, resolveAppName } from './composer/appRegistry';
 import { PreviewPanel, FeedItem } from './components/PreviewPanel';
 import { InteractiveComponent } from './components/InteractiveComponent';
 import { WorkstationShell } from './components/workstation/WorkstationShell';
+import { workstationGuidance } from './components/workstation/guidance';
+import type { HeadroomCapsuleView } from './components/headroom/HeadroomPanel';
 import type { UiComponent } from '../shared/uiComponent';
 import SearchIcon from '@mui/icons-material/Search';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
@@ -46,6 +49,16 @@ import { WebPreviewSurface } from './components/workbench/WebPreviewSurface';
 // Web-preview and workspace-route matching now happen inside the single
 // resolver. App consumes resolved envelopes and does not classify.
 import type { WebPreviewRequest } from './utils/webPreviewIntent';
+
+const RigPanel = React.lazy(async () => {
+  const module = await import('./components/rig/RigPanel');
+  return { default: module.RigPanel };
+});
+
+const HeadroomPanel = React.lazy(async () => {
+  const module = await import('./components/headroom/HeadroomPanel');
+  return { default: module.HeadroomPanel };
+});
 
 
 // Canonical PaneTera workstation theme.
@@ -73,6 +86,17 @@ const App: React.FC = () => {
   const [tokenError, setTokenError] = useState<string>('');
   const [previewFeed, setPreviewFeed] = useState<FeedItem[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
+  const [headroomObjective, setHeadroomObjective] = useState<string>('');
+  const [activeHeadroomCapsule, setActiveHeadroomCapsule] = useState<HeadroomCapsuleView | null>(null);
+  const [rigRequestKey, setRigRequestKey] = useState(0);
+  const [headroomRequestKey, setHeadroomRequestKey] = useState(0);
+  const [headroomSessionId] = useState(() => {
+    const existing = sessionStorage.getItem('panetera-headroom-session');
+    if (existing) return existing;
+    const created = crypto.randomUUID();
+    sessionStorage.setItem('panetera-headroom-session', created);
+    return created;
+  });
 
   // Active workspace state overlays
   const [activeComponent, setActiveComponent] = useState<UiComponent | null>(null);
@@ -676,7 +700,11 @@ const App: React.FC = () => {
   // Every pending promise is settled: on choose, on cancel, when a second
   // request replaces the first, and on unmount. A composer left awaiting
   // forever would silently stop responding to the `+` menu.
-  const [pickerKind, setPickerKind] = useState<PickerKind | null>(null);
+  const [pickerKind, setPickerKind] = useState<'project' | null>(null);
+  const [mcpResourcePickerOpen, setMcpResourcePickerOpen] = useState(false);
+  const [mcpResources, setMcpResources] = useState<RigResourceChoice[]>([]);
+  const [mcpResourcesLoading, setMcpResourcesLoading] = useState(false);
+  const [mcpResourcesError, setMcpResourcesError] = useState<string | null>(null);
   const picker = useRef(new PickerCoordinator<AttachRequest>());
   const pendingPickerResult = useRef<AttachRequest | null | undefined>(undefined);
 
@@ -702,38 +730,134 @@ const App: React.FC = () => {
     [workspacesList],
   );
 
-  /**
-   * List attachable paths inside a project.
-   *
-   * Stable across renders so the picker's effect does not refetch on every
-   * parent update. Authenticated, status-checked, and validated as an array of
-   * strings before it reaches the dialog.
-   */
-  const listProjectPaths = React.useCallback(
-    async (project: AttachableWorkspace): Promise<string[]> => {
-      const response = await fetch(
-        `/api/files?workspace=${encodeURIComponent(project.name)}`,
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
-      if (!response.ok) throw new Error(`Listing failed (${response.status})`);
+  const requestLocalSelection = React.useCallback(
+    async (kind: 'file' | 'folder'): Promise<AttachRequest | null> => {
+      const response = await fetch('/api/local-selection', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ kind, sessionId: headroomSessionId, recursive: false }),
+      });
+      if (!response.ok) throw new Error(`Local selection failed (${response.status})`);
+
       const payload = await response.json();
-      if (!Array.isArray(payload)) return [];
-      return payload.filter((entry): entry is string => typeof entry === 'string');
+      if (payload?.canceled) return null;
+      if (
+        payload?.kind !== kind
+        || typeof payload?.path !== 'string'
+        || typeof payload?.label !== 'string'
+        || typeof payload?.grantId !== 'string'
+        || typeof payload?.selectedAt !== 'string'
+        || typeof payload?.expiresAt !== 'string'
+        || typeof payload?.observedMtimeMs !== 'number'
+      ) {
+        throw new Error('PaneTera received an invalid local selection record.');
+      }
+
+      return {
+        kind,
+        label: payload.label,
+        locator: payload.path,
+        selectionGrant: {
+          id: payload.grantId,
+          kind,
+          selectedAt: payload.selectedAt,
+          expiresAt: payload.expiresAt,
+          recursive: payload.recursive === true,
+          observedMtimeMs: payload.observedMtimeMs,
+        },
+      };
     },
-    [token],
+    [headroomSessionId, token],
   );
+
+  const refreshMcpResources = React.useCallback(async (): Promise<RigResourceChoice[]> => {
+    if (!token) {
+      setMcpResources([]);
+      return [];
+    }
+    const response = await fetch('/api/rig/resources', { headers: { Authorization: `Bearer ${token}` } });
+    if (!response.ok) throw new Error(`Rig resource discovery failed (${response.status})`);
+    const payload = await response.json();
+    const resources = Array.isArray(payload?.resources)
+      ? payload.resources.flatMap((item: any) => {
+          const uri = item?.rawDeclaration?.uri;
+          if (
+            typeof item?.connectionId !== 'string'
+            || typeof item?.connectionName !== 'string'
+            || typeof item?.capabilityId !== 'string'
+            || typeof uri !== 'string'
+          ) return [];
+          return [{
+            connectionId: item.connectionId,
+            connectionName: item.connectionName,
+            capabilityId: item.capabilityId,
+            label: typeof item.label === 'string' ? item.label : uri,
+            uri,
+          } satisfies RigResourceChoice];
+        })
+      : [];
+    setMcpResources(resources);
+    return resources;
+  }, [token]);
+
+  useEffect(() => {
+    refreshMcpResources().catch(() => setMcpResources([]));
+  }, [refreshMcpResources]);
 
   const requestAttachment = React.useCallback(
     (kind: ContextKind): Promise<AttachRequest | null> => {
-      if (kind !== 'project' && kind !== 'file' && kind !== 'folder') {
-        return Promise.resolve(null);
+      if (kind === 'file' || kind === 'folder') return requestLocalSelection(kind);
+      if (kind === 'mcp-resource') {
+        setMcpResourcesLoading(true);
+        setMcpResourcesError(null);
+        refreshMcpResources()
+          .catch((error: Error) => setMcpResourcesError(error.message))
+          .finally(() => setMcpResourcesLoading(false));
+        setMcpResourcePickerOpen(true);
+        return picker.current.request();
       }
-      // The coordinator supersedes any earlier request, settling it as null.
-      setPickerKind(kind);
+      if (kind !== 'project') return Promise.resolve(null);
+
+      // Project selection is durable and comes from PaneTera's registered
+      // project catalog. It intentionally remains separate from the native
+      // one-off file/folder grants above.
+      setPickerKind('project');
       return picker.current.request();
     },
-    [],
+    [refreshMcpResources, requestLocalSelection],
   );
+
+  const chooseMcpResource = React.useCallback(async (resource: RigResourceChoice) => {
+    setMcpResourcesLoading(true);
+    setMcpResourcesError(null);
+    try {
+      const response = await fetch('/api/rig/resources/read', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ connectionId: resource.connectionId, capabilityId: resource.capabilityId }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload?.error || `MCP resource read failed (${response.status})`);
+      if (typeof payload?.provenance?.recordId !== 'string') throw new Error('Rig returned an invalid provenance record.');
+      pendingPickerResult.current = {
+        kind: 'mcp-resource',
+        label: resource.label,
+        locator: resource.uri,
+        connectionId: resource.connectionId,
+        provenanceRecordId: payload.provenance.recordId,
+        capturedAt: payload.provenance.createdAt,
+        retrievedMaterial: JSON.stringify(payload.result),
+      };
+      setMcpResourcePickerOpen(false);
+    } catch (error: unknown) {
+      setMcpResourcesError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setMcpResourcesLoading(false);
+    }
+  }, [token]);
 
   /**
    * Handlers for every plan this app can carry out.
@@ -744,6 +868,8 @@ const App: React.FC = () => {
    * being passed an application name where an application id was required.
    */
   const planExecutors: PlanExecutors = {
+    openRig: () => setRigRequestKey((value) => value + 1),
+    openHeadroom: () => setHeadroomRequestKey((value) => value + 1),
     webOpen: (plan) => {
       setWebPreview({ url: plan.url, name: plan.label });
       setActiveComponent(null);
@@ -831,9 +957,19 @@ const App: React.FC = () => {
       // plan.message carries the attached material and references. Sending
       // `text` here instead would drop everything the user attached, which is
       // what the chips promise to include.
+      const capsuleBlock = activeHeadroomCapsule
+        ? `<headroom-capsule trust="user-authored" authority="none">\n${materializedContextValue(JSON.stringify({
+            objective: activeHeadroomCapsule.objective,
+            decisions: activeHeadroomCapsule.decisions,
+            assumptions: activeHeadroomCapsule.assumptions,
+            unresolvedQuestions: activeHeadroomCapsule.unresolvedQuestions,
+            changedUnderstanding: activeHeadroomCapsule.changedUnderstanding,
+          }))}\n</headroom-capsule>`
+        : null;
+      const effectiveMessage = capsuleBlock ? `${plan.message}\n\n${capsuleBlock}` : plan.message;
       const requestBody = useWorkspaceOrchestrator
         ? {
-            message: plan.message,
+            message: effectiveMessage,
             workspaceId: activeWorkspace ? activeWorkspace.id : null,
             selectedFile,
             persona: activeLens,
@@ -841,7 +977,7 @@ const App: React.FC = () => {
             attachedContext: plan.context,
           }
         : {
-            query: plan.message,
+            query: effectiveMessage,
             history: messages.slice(-12).map(message => ({
               role: message.role === 'assistant' ? 'model' : 'user',
               parts: [{ text: message.content }],
@@ -924,6 +1060,46 @@ const App: React.FC = () => {
 
     addMessage({ role: 'user', content: intent.rawInput });
 
+    // Persist the audited context view before any action leaves the workstation.
+    // If this fails, proceeding would create work with no truthful record of
+    // what PaneTera knew, so the submission stops rather than degrading silently.
+    try {
+      const response = await fetch('/api/headroom/envelopes', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: headroomSessionId,
+          projectId: activeWorkspace?.name ?? activeWorkspace?.id ?? null,
+          projectRoot: activeWorkspace?.path ?? null,
+          objective: headroomObjective.trim() || null,
+          intent,
+          context: submission.allContext,
+          material: submission.material,
+          materialized: Object.fromEntries(
+            Object.entries(submission.material).map(([itemId, value]) => [itemId, materializedContextValue(value)]),
+          ),
+          model: null,
+          // MCP tools remain manually proposed through Rig in this release;
+          // none are silently offered to the conversation model.
+          capabilitiesOffered: [],
+          activeCapsule: activeHeadroomCapsule
+            ? { capsuleId: activeHeadroomCapsule.capsuleId, snapshot: activeHeadroomCapsule }
+            : null,
+        }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || `Headroom persistence failed (${response.status})`);
+      }
+    } catch (error: unknown) {
+      addMessage({
+        role: 'assistant',
+        content: `I did not continue because Headroom could not record this turn: ${error instanceof Error ? error.message : String(error)}`,
+        intent: 'needs_capability',
+      });
+      return;
+    }
+
     // The plan is the execution boundary. App never inspects readiness or
     // family itself, so a non-ready envelope cannot reach a backend by
     // omission here.
@@ -956,6 +1132,7 @@ const App: React.FC = () => {
   const handleSend = (text: string) =>
     handleSubmission({
       intent: resolveIntent(text, { ...composerResolverContext, includedContextCount: 0 }),
+      allContext: [],
       context: [],
       material: {},
     });
@@ -1521,24 +1698,36 @@ const App: React.FC = () => {
       <AttachmentPicker
         kind={pickerKind}
         projects={attachableProjects}
-        listPaths={listProjectPaths}
         onCancel={() => {
           pendingPickerResult.current = null;
           setPickerKind(null);
         }}
-        onChoose={({ kind, project, relativePath }) => {
-          // The picker returns a path relative to the project. App owns the
-          // registered root, so App is where the absolute locator is built and
-          // where attachContextItem's confinement check gets a real path.
-          const locator = relativePath ? `${project.path}/${relativePath}` : project.path;
+        onChoose={({ kind, project }) => {
           pendingPickerResult.current = {
             kind,
-            label: relativePath ? relativePath.split('/').pop() || relativePath : project.name,
-            locator,
+            label: project.name,
+            locator: project.path,
             workspace: project,
           };
           setPickerKind(null);
         }}
+        onExited={() => {
+          const result = pendingPickerResult.current;
+          if (result === undefined) return;
+          pendingPickerResult.current = undefined;
+          settlePicker(result);
+        }}
+      />
+      <McpResourcePicker
+        open={mcpResourcePickerOpen}
+        resources={mcpResources}
+        loading={mcpResourcesLoading}
+        error={mcpResourcesError}
+        onCancel={() => {
+          pendingPickerResult.current = null;
+          setMcpResourcePickerOpen(false);
+        }}
+        onChoose={chooseMcpResource}
         onExited={() => {
           const result = pendingPickerResult.current;
           if (result === undefined) return;
@@ -1555,6 +1744,12 @@ const App: React.FC = () => {
       */}
       <Box sx={{ height: '100vh', width: '100vw' }}>
       {(() => {
+          const guidance = workstationGuidance({
+            gatewayConnected: backendHealth?.status === 'ok',
+            loading,
+            hasProject: Boolean(activeWorkspace),
+            objective: headroomObjective,
+          });
           const conversationNode = (
             <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
               <Box sx={{ flexGrow: 1, overflowY: 'auto' }}>
@@ -1570,6 +1765,20 @@ const App: React.FC = () => {
                   backgroundColor: surface.base,
                 }}
               >
+                <Typography
+                  role={guidance.kind === 'attention' ? 'alert' : 'status'}
+                  variant="caption"
+                  sx={{
+                    display: 'block',
+                    mb: 0.75,
+                    color: guidance.kind === 'attention' ? status.danger : ink.secondary,
+                  }}
+                >
+                  <Box component="span" sx={{ color: ink.primary, fontWeight: 600, textTransform: 'capitalize' }}>
+                    {guidance.kind}
+                  </Box>
+                  {' · '}{guidance.text}
+                </Typography>
                 <Stack direction="row" spacing={1} sx={{ mb: 1, alignItems: 'center' }}>
                   <Button
                     size="small"
@@ -1600,9 +1809,12 @@ const App: React.FC = () => {
                   resolverContext={composerResolverContext}
                   onRequestAttachment={requestAttachment}
                   availability={{
-                    hasWorkspacePicker: true,
+                    hasProjectPicker: true,
+                    hasLocalFilePicker: true,
+                    hasLocalFolderPicker: true,
                     hasProjects: attachableProjects.length > 0,
                     hasWebLinks: true,
+                    hasMcpResources: mcpResources.length > 0,
                   }}
                 />
               </Box>
@@ -1618,7 +1830,8 @@ const App: React.FC = () => {
             workspaceCatalogCount: workspacesList.length,
             localAdapterActive: backendHealth?.status === 'ok',
             liveAppUrlReachable: localAppStatus === 'reachable',
-            liveAppManifestAvailable: !!localAppDef
+            liveAppManifestAvailable: !!localAppDef,
+            currentObjective: headroomObjective.trim() || null,
           };
 
           const emptyCanvasNode = (
@@ -1734,7 +1947,30 @@ const App: React.FC = () => {
                     onAuditLogsClick={() => setIsAuditLogsOpen(true)}
                   />
                 )}
+                renderRig={(closeRig) => (
+                  <React.Suspense fallback={<Box role="status" sx={{ p: 2 }}>Loading Rig…</Box>}>
+                    <RigPanel token={token} onClose={closeRig} onResourcesChanged={() => { void refreshMcpResources(); }} />
+                  </React.Suspense>
+                )}
+                renderHeadroom={(closeHeadroom) => (
+                  <React.Suspense fallback={<Box role="status" sx={{ p: 2 }}>Loading Headroom…</Box>}>
+                    <HeadroomPanel
+                      token={token}
+                      sessionId={headroomSessionId}
+                      projectId={activeWorkspace?.name ?? activeWorkspace?.id ?? null}
+                      objective={headroomObjective}
+                      onObjectiveChange={setHeadroomObjective}
+                      onResume={(capsule) => {
+                        setActiveHeadroomCapsule(capsule);
+                        setHeadroomObjective(capsule?.objective ?? '');
+                      }}
+                      onClose={closeHeadroom}
+                    />
+                  </React.Suspense>
+                )}
                 governanceStatus={governanceSummary}
+                rigRequestKey={rigRequestKey}
+                headroomRequestKey={headroomRequestKey}
                 onOpenAudit={() => setIsAuditLogsOpen(true)}
               />
           );

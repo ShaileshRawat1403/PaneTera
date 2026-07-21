@@ -30,8 +30,22 @@ export interface AttachRequest {
   label: string;
   locator: string;
   workspace?: AttachableWorkspace;
+  /** Server-issued record of an explicit native local-system selection. */
+  selectionGrant?: {
+    id: string;
+    kind: 'file' | 'folder';
+    selectedAt: string;
+    expiresAt?: string;
+    recursive?: boolean;
+    observedMtimeMs?: number;
+  };
   /** Inline text for a note. Never read from disk. */
   noteBody?: string;
+  /** Explicitly retrieved material supplied by Rig, never read by the composer. */
+  retrievedMaterial?: string;
+  connectionId?: string;
+  provenanceRecordId?: string;
+  capturedAt?: string;
 }
 
 /**
@@ -87,7 +101,7 @@ export type AttachRejection =
   | 'missing-material'
   | 'invalid-web-address';
 
-const KINDS_REQUIRING_WORKSPACE: readonly ContextKind[] = ['file', 'folder', 'project'];
+const KINDS_REQUIRING_WORKSPACE: readonly ContextKind[] = ['project'];
 
 /**
  * Kinds that materialise nothing at attach time.
@@ -97,13 +111,22 @@ const KINDS_REQUIRING_WORKSPACE: readonly ContextKind[] = ['file', 'folder', 'pr
  * not exist yet, and inventing a measurement for content we have not read would
  * be exactly the fabricated precision the workstation contract forbids.
  */
-function materializationFor(kind: ContextKind, noteBody?: string): Materialization {
+function materializationFor(kind: ContextKind, noteBody?: string, retrievedMaterial?: string): Materialization {
   if (kind === 'note' && typeof noteBody === 'string') {
     // A note is the one kind whose content the user supplied directly, so its
     // byte length is a measurement rather than an estimate.
     return {
       mode: 'inline',
       measurement: { unit: 'bytes', value: byteLength(noteBody) },
+    };
+  }
+  if (kind === 'mcp-resource' && typeof retrievedMaterial === 'string') {
+    return {
+      mode: 'retrieved',
+      strategy: 'rig-explicit-resource-read',
+      lastRetrieved: new Date().toISOString(),
+      itemsRetrieved: 1,
+      measurement: { unit: 'bytes', value: byteLength(retrievedMaterial) },
     };
   }
   return { mode: 'reference' };
@@ -118,6 +141,8 @@ function originFor(kind: ContextKind): ContextSource['origin'] {
   // A web link came from the person typing it. Calling it a browser observation
   // would claim PaneTera had looked at the page, which it has not.
   if (kind === 'note' || kind === 'web') return 'user-input';
+  if (kind === 'mcp-resource') return 'external-mcp';
+  if (kind === 'file' || kind === 'folder') return 'local-fs';
   return 'workspace-mcp';
 }
 
@@ -125,17 +150,21 @@ function accessFor(kind: ContextKind): AccessLevel {
   // A reference-only item carries a name and no read authority. Files and
   // folders inside a registered workspace carry read-scoped access, which the
   // host policy engine still gates at retrieval time.
-  if (kind === 'note') return 'read-scoped';
+  if (kind === 'note' || kind === 'mcp-resource') return 'read-scoped';
   // A web link is a name only. PaneTera holds no read authority over the page.
   if (kind === 'web') return 'reference-only';
-  return KINDS_REQUIRING_WORKSPACE.includes(kind) ? 'read-scoped' : 'reference-only';
+  if (kind === 'project') return 'read-scoped';
+  // An explicit file/folder selection is initially only a reference. Reading
+  // or recursively enumerating it requires a later governed retrieval action.
+  return 'reference-only';
 }
 
-function freshnessFor(kind: ContextKind): Freshness {
+function freshnessFor(kind: ContextKind, request: AttachRequest): Freshness {
   // Nothing here has been revalidated, and most kinds have no revalidation
   // mechanism in this slice. 'not-measured' is the honest state; 'current'
   // would be a claim we cannot support.
-  if (kind === 'note') return 'current';
+  if (kind === 'note' || kind === 'mcp-resource') return 'current';
+  if (kind === 'file' && typeof request.selectionGrant?.observedMtimeMs === 'number') return 'current';
   return 'not-measured';
 }
 
@@ -164,6 +193,13 @@ export function attachContextItem(tray: ContextTray, request: AttachRequest): At
   if (request.kind === 'note' && typeof request.noteBody !== 'string') {
     return { ok: false, reason: 'missing-material' };
   }
+  if (request.kind === 'mcp-resource' && (
+    typeof request.retrievedMaterial !== 'string'
+    || !request.connectionId
+    || !request.provenanceRecordId
+  )) {
+    return { ok: false, reason: 'missing-material' };
+  }
 
   // Canonical validation, not a scheme check.
   //
@@ -189,6 +225,12 @@ export function attachContextItem(tray: ContextTray, request: AttachRequest): At
     }
   }
 
+  if (request.kind === 'file' || request.kind === 'folder') {
+    if (!request.selectionGrant || request.selectionGrant.kind !== request.kind) {
+      return { ok: false, reason: 'outside-registered-workspace' };
+    }
+  }
+
   // Compared against the normalised form, so `example.com` and
   // `https://example.com/` are recognised as the same address rather than
   // producing two chips for one page.
@@ -206,17 +248,25 @@ export function attachContextItem(tray: ContextTray, request: AttachRequest): At
       origin: originFor(request.kind),
       locator: storedLocator,
       workspaceId: request.workspace?.id,
+      selectionGrantId: request.selectionGrant?.id,
+      selectedAt: request.selectionGrant?.selectedAt,
+      expiresAt: request.selectionGrant?.expiresAt,
+      recursive: request.selectionGrant?.recursive,
+      observedMtimeMs: request.selectionGrant?.observedMtimeMs,
+      connectionId: request.connectionId,
+      provenanceRecordId: request.provenanceRecordId,
+      capturedAt: request.capturedAt,
     },
     access: accessFor(request.kind),
     authority: 'none',
-    materialization: materializationFor(request.kind, request.noteBody),
-    freshness: freshnessFor(request.kind),
+    materialization: materializationFor(request.kind, request.noteBody, request.retrievedMaterial),
+    freshness: freshnessFor(request.kind, request),
     included: true,
   };
 
   // Material travels beside the item, never inside it. The caller stores it and
   // submits it with the item; the tray itself stays free of content.
-  const material = request.kind === 'note' ? request.noteBody : undefined;
+  const material = request.kind === 'note' ? request.noteBody : request.retrievedMaterial;
 
   return { ok: true, tray: [...tray, item], item, material };
 }

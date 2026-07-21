@@ -18,6 +18,8 @@ import { Box, Drawer, Typography, Divider, Tooltip, Popover, Button } from '@mui
 import ViewSidebarIcon from '@mui/icons-material/ViewSidebar';
 import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 import AccountTreeIcon from '@mui/icons-material/AccountTree';
+import HubIcon from '@mui/icons-material/Hub';
+import LayersIcon from '@mui/icons-material/Layers';
 import { accent, elevation, ink, radius, status, surface } from '../../theme/tokens';
 import { transition } from '../../theme/motion';
 
@@ -30,6 +32,7 @@ export interface GovernanceSummary {
   localAdapterActive: boolean;
   liveAppUrlReachable: boolean;
   liveAppManifestAvailable: boolean;
+  currentObjective?: string | null;
 }
 
 export interface WorkstationShellProps {
@@ -37,6 +40,10 @@ export interface WorkstationShellProps {
   canvas: React.ReactNode;
   renderActivity: (closeActivity: () => void) => React.ReactNode;
   renderWorkspaceSelector: (closeWorkspaceSelector: () => void) => React.ReactNode;
+  renderRig: (closeRig: () => void) => React.ReactNode;
+  renderHeadroom: (closeHeadroom: () => void) => React.ReactNode;
+  rigRequestKey?: number;
+  headroomRequestKey?: number;
   governanceStatus: GovernanceSummary;
   onOpenAudit: () => void;
 }
@@ -65,13 +72,47 @@ export function WorkstationShell({
   canvas,
   renderActivity,
   renderWorkspaceSelector,
+  renderRig,
+  renderHeadroom,
+  rigRequestKey = 0,
+  headroomRequestKey = 0,
   governanceStatus,
   onOpenAudit,
 }: WorkstationShellProps) {
   const [activityOpen, setActivityOpen] = useState(false);
+  const [rigOpen, setRigOpen] = useState(false);
+  const [headroomOpen, setHeadroomOpen] = useState(false);
   const [workspaceAnchorEl, setWorkspaceAnchorEl] = useState<null | HTMLElement>(null);
 
-  const toggleActivity = () => setActivityOpen(current => !current);
+  React.useEffect(() => {
+    if (rigRequestKey <= 0) return;
+    setActivityOpen(false);
+    setHeadroomOpen(false);
+    setRigOpen(true);
+  }, [rigRequestKey]);
+
+  React.useEffect(() => {
+    if (headroomRequestKey <= 0) return;
+    setActivityOpen(false);
+    setRigOpen(false);
+    setHeadroomOpen(true);
+  }, [headroomRequestKey]);
+
+  const toggleActivity = () => {
+    setRigOpen(false);
+    setHeadroomOpen(false);
+    setActivityOpen(current => !current);
+  };
+  const toggleRig = () => {
+    setActivityOpen(false);
+    setHeadroomOpen(false);
+    setRigOpen(current => !current);
+  };
+  const toggleHeadroom = () => {
+    setActivityOpen(false);
+    setRigOpen(false);
+    setHeadroomOpen(current => !current);
+  };
   const openWorkspacePopover = (event: React.MouseEvent<HTMLElement>) => {
     setWorkspaceAnchorEl(event.currentTarget);
   };
@@ -173,10 +214,53 @@ export function WorkstationShell({
               </Typography>
             </Button>
           </Tooltip>
+          {governanceStatus.currentObjective && (
+            <Typography variant="caption" noWrap sx={{ color: ink.secondary, maxWidth: { xs: 120, md: 300 } }}>
+              {governanceStatus.currentObjective}
+            </Typography>
+          )}
         </Box>
 
         {/* Right: contextual surfaces */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          <Tooltip title="Headroom context and memory">
+            <Button
+              size="small"
+              startIcon={<LayersIcon sx={{ fontSize: 16 }} />}
+              aria-label="Toggle Headroom drawer"
+              aria-expanded={headroomOpen}
+              aria-controls="headroom-drawer"
+              onClick={toggleHeadroom}
+              sx={{
+                ...topBarButton,
+                color: headroomOpen ? ink.primary : ink.secondary,
+                backgroundColor: headroomOpen ? accent.violetMuted : 'transparent',
+                borderColor: headroomOpen ? accent.violetBorder : 'transparent',
+              }}
+            >
+              <Box component="span" sx={{ display: { xs: 'none', md: 'inline' } }}>Headroom</Box>
+            </Button>
+          </Tooltip>
+
+          <Tooltip title="Rig connections and capabilities">
+            <Button
+              size="small"
+              startIcon={<HubIcon sx={{ fontSize: 16 }} />}
+              aria-label="Toggle Rig drawer"
+              aria-expanded={rigOpen}
+              aria-controls="rig-drawer"
+              onClick={toggleRig}
+              sx={{
+                ...topBarButton,
+                color: rigOpen ? ink.primary : ink.secondary,
+                backgroundColor: rigOpen ? accent.violetMuted : 'transparent',
+                borderColor: rigOpen ? accent.violetBorder : 'transparent',
+              }}
+            >
+              <Box component="span" sx={{ display: { xs: 'none', md: 'inline' } }}>Rig</Box>
+            </Button>
+          </Tooltip>
+
           <Tooltip title="Audit log">
             <Button
               size="small"
@@ -297,7 +381,6 @@ export function WorkstationShell({
         open={activityOpen}
         onClose={toggleActivity}
         variant="temporary"
-        ModalProps={{ keepMounted: true }}
         // Drawer in MUI v5 exposes the paper slot as PaperProps rather than
         // slotProps.paper, unlike Popover above.
         PaperProps={{
@@ -318,6 +401,48 @@ export function WorkstationShell({
             {renderActivity(() => setActivityOpen(false))}
           </Box>
         </Box>
+      </Drawer>
+
+      <Drawer
+        id="rig-drawer"
+        anchor="right"
+        open={rigOpen}
+        onClose={toggleRig}
+        variant="temporary"
+        PaperProps={{
+          role: 'region',
+          'aria-label': 'Rig drawer',
+          sx: {
+            width: 'min(620px, 96vw)',
+            backgroundColor: surface.raised,
+            borderLeft: `1px solid ${surface.border}`,
+            boxShadow: elevation.overlay,
+            color: ink.primary,
+          },
+        }}
+      >
+        {renderRig(() => setRigOpen(false))}
+      </Drawer>
+
+      <Drawer
+        id="headroom-drawer"
+        anchor="right"
+        open={headroomOpen}
+        onClose={toggleHeadroom}
+        variant="temporary"
+        PaperProps={{
+          role: 'region',
+          'aria-label': 'Headroom drawer',
+          sx: {
+            width: 'min(560px, 96vw)',
+            backgroundColor: surface.raised,
+            borderLeft: `1px solid ${surface.border}`,
+            boxShadow: elevation.overlay,
+            color: ink.primary,
+          },
+        }}
+      >
+        {renderHeadroom(() => setHeadroomOpen(false))}
       </Drawer>
     </Box>
   );

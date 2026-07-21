@@ -6,16 +6,17 @@
 or decision-maker
 **Deployment:** Single-user, local-first, desktop-first V1
 
-## Current implementation checkpoint
+## Current development baseline
 
-The `v0.9.0-alpha-workstation` checkpoint implements the workstation shell,
-composer foundation, contextual Activity and Audit surfaces, project selection,
-registered local-application routing, governed proposal presentation, and the
-strict public web-preview path. The legacy three-column shell is no longer an
-alternate product surface.
+Commit `a4a1664` records a tested development baseline for the workstation
+shell, composer foundation, contextual Activity and Audit surfaces, project
+selection, registered local-application routing, governed proposal
+presentation, and strict public web-preview path. It is not a release candidate
+and has no release tag. The legacy three-column shell is no longer an alternate
+product surface.
 
-The following contract capabilities remain deliberate future work and must not
-be inferred from the current interface:
+The following are release blockers and must not be inferred from the current
+interface:
 
 - a general Rig registry or arbitrary external MCP connection;
 - MCP capability discovery, resource attachment, or invocation;
@@ -23,8 +24,19 @@ be inferred from the current interface:
 - the read model for work, now, attention, and next;
 - generic cross-capability proposal and provenance contracts.
 
-See `docs/CURRENT_IMPLEMENTATION_CHECKPOINT.md` for the exact shipped boundary
-and verification record.
+File and folder selection are also incomplete: they currently reuse the
+registered-project chooser. The finished interaction must allow explicit native
+selection from the local system while preserving least authority, provenance,
+and auditability. Choosing a project, choosing a file, and choosing a folder
+are three different grants and must not be cosmetic variants of one flow.
+
+PaneTera must not receive a release tag until the user-visible Rig and Headroom
+capabilities are complete, the native attachment model is accepted, the
+primary journeys are verified in Chrome, and the user explicitly approves the
+release candidate.
+
+See `docs/CURRENT_IMPLEMENTATION_CHECKPOINT.md` for the exact implemented
+boundary, release gates, and verification record.
 
 ## Product promise
 

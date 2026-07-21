@@ -1,6 +1,6 @@
 # Rig MCP Connection Architecture
 
-**Status:** Approved direction. Not implementation-ready.
+**Status:** Accepted for V1 implementation.
 **Revision:** 3
 **Depends on:** `PANETERA_WORKSTATION_CONTRACT.md`, `COMPOSER_CONTEXT_CONTRACT.md`,
 `docs/adr/ADR-001-BROWSER-OPERATOR-MCP-FACADE.md`,
@@ -679,13 +679,13 @@ per ADR-001.
    attachment, refresh explicitly, use subscriptions only where the server
    supports them and PaneTera has validated the mechanism.
 
-## Open questions
+## Implementation decisions
 
-1. Does the workspace adapter's current `npx tsx` spawn become non-compliant at
-   Stage 4, or does `panetera-managed` carry a narrower environment rule? A
-   version-pinned local resolution seems right but changes the dev setup.
-2. Where does capability classification live: `myai-policy.json`, the connection
-   record, or a separate classification store? Policy is the consistent home but
-   couples classification to host policy reloads.
-3. Is `local-development` HTTP exemption a per-connection flag or a global mode?
-   Per-connection is safer and more tedious.
+1. The workspace adapter migrates to a resolved, version-pinned local entry
+   point and a PaneTera-authored environment allowlist. `panetera-managed` is a
+   source class, not a permanent transport-security exemption.
+2. Capability classification lives in a separate classification store under
+   PaneTera application data. It is correlated with, but not embedded in,
+   connection inventory or the host policy file.
+3. The `local-development` HTTP exemption is per connection, explicitly
+   approved, visible in Rig, and never a global mode.

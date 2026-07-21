@@ -42,6 +42,8 @@ export interface PlanExecutors {
   selectProject?: (plan: PlanOf<'select-project'>) => void | Promise<void>;
   openLiveApp?: (plan: PlanOf<'open-live-app'>) => void | Promise<void>;
   clearContext?: (plan: PlanOf<'clear-context'>) => void | Promise<void>;
+  openHeadroom?: (plan: PlanOf<'open-headroom'>) => void | Promise<void>;
+  openRig?: (plan: PlanOf<'open-rig'>) => void | Promise<void>;
   chat?: (plan: PlanOf<'chat'>) => void | Promise<void>;
 }
 
@@ -61,6 +63,8 @@ export function capabilitiesFrom(executors: PlanExecutors): CapabilityKey[] {
   if (executors.selectProject) claimed.push('project');
   if (executors.openLiveApp) claimed.push('live-app');
   if (executors.clearContext) claimed.push('headroom:clear');
+  if (executors.openHeadroom) claimed.push('headroom');
+  if (executors.openRig) claimed.push('rig');
   if (executors.chat) {
     // One handler serves both, since the plan carries the endpoint.
     claimed.push('converse', 'artifact');
@@ -104,6 +108,10 @@ export async function executePlan(
       return run(executors.openLiveApp);
     case 'clear-context':
       return run(executors.clearContext);
+    case 'open-headroom':
+      return run(executors.openHeadroom);
+    case 'open-rig':
+      return run(executors.openRig);
     case 'chat':
       return run(executors.chat);
   }

@@ -494,12 +494,11 @@ A composer implementation is acceptable when:
 4. **Content hashes.** Both. `sourceDigest` over original bytes and
    `materializedDigest` over exactly what the model received.
 
-## Open questions
+## Implementation decisions
 
-1. Does a temporary attachment scope survive a session, or expire with it?
-   Session-scoped is safer and will annoy anyone re-attaching the same external
-   folder repeatedly.
-2. When a folder is attached as `reference` and later retrieved, does the
-   retrieval selection itself need provenance beyond the materialized record?
-   Arguably yes, because "which files did it choose and why" is a different
-   question from "what did it read."
+1. A temporary attachment scope expires with the session. Pinning a Headroom
+   capsule retains redacted context metadata, not standing filesystem access;
+   an external local path must be selected again in a later session.
+2. Folder retrieval selection receives its own provenance record in addition
+   to materialized content records, so PaneTera can answer both which files it
+   chose and what bytes it actually read.

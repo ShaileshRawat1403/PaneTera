@@ -41,6 +41,8 @@ export type SubmissionPlan =
   | { kind: 'select-project'; target: string }
   | { kind: 'open-live-app'; target: string }
   | { kind: 'clear-context' }
+  | { kind: 'open-headroom' }
+  | { kind: 'open-rig' }
   | {
       kind: 'chat';
       endpoint: 'orchestrator' | 'general';
@@ -95,7 +97,7 @@ export function buildMaterialBlock(
     const body = material[item.id];
     if (typeof body !== 'string' || !body) continue;
     blocks.push(
-      `<attached-context trust="untrusted" authority="none" kind="${escapeAttr(item.kind)}" label="${escapeAttr(item.label)}">\n${escapeBody(body)}\n</attached-context>`,
+      `<attached-context trust="untrusted" authority="none" kind="${escapeAttr(item.kind)}" label="${escapeAttr(item.label)}">\n${materializedContextValue(body)}\n</attached-context>`,
     );
   }
   if (blocks.length === 0) return null;
@@ -108,7 +110,7 @@ export function buildMaterialBlock(
  * This prevents a structural break. It does not prevent the content from being
  * read as instruction, which no amount of escaping can.
  */
-function escapeBody(value: string): string {
+export function materializedContextValue(value: string): string {
   // Quotes are escaped as well as angle brackets. Escaping `<` alone already
   // prevents a forged tag from parsing, but leaves readable text like
   // trust="trusted" sitting in the body, which is needless noise inside a block
@@ -124,7 +126,7 @@ export function buildReferenceBlock(items: readonly ContextItem[]): string | nul
   const references = items.filter((item) => item.materialization.mode === 'reference');
   if (references.length === 0) return null;
   const lines = references.map(
-    (item) => `- ${escapeBody(item.kind)}: ${escapeBody(item.source.locator)}`,
+    (item) => `- ${materializedContextValue(item.kind)}: ${materializedContextValue(item.source.locator)}`,
   );
   return `<attached-references trust="untrusted" note="named only, contents not included">\n${lines.join('\n')}\n</attached-references>`;
 }
@@ -179,11 +181,7 @@ export function planSubmission(input: SubmissionInput): SubmissionPlan {
 
     case 'headroom': {
       if (action === 'clear') return { kind: 'clear-context' };
-      return {
-        kind: 'blocked',
-        readiness: intent.readiness,
-        reason: 'The Headroom surface is not built yet.',
-      };
+      return { kind: 'open-headroom' };
     }
 
     case 'artifact':
@@ -210,6 +208,7 @@ export function planSubmission(input: SubmissionInput): SubmissionPlan {
     case 'run':
     case 'proposal':
     case 'rig':
+      return { kind: 'open-rig' };
     case 'evidence':
       return {
         kind: 'blocked',
