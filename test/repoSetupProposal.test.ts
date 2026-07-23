@@ -1,5 +1,6 @@
 import assert from 'assert';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import {
   parseRepoSetupIntent,
   resolveRepoSetupTarget,
@@ -8,13 +9,19 @@ import {
 
 console.log('Running repo setup proposal tests...');
 
-const WORKSPACE_ROOT = '/Users/Shailesh/MYAIAGENTS';
+// Derive the fixture from this checked-out repository rather than one
+// developer's home directory. The resolver still receives an explicit root,
+// so the test exercises the same authority boundary on macOS, Linux, CI, and
+// an alternate workspace checkout.
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const WORKSPACE_ROOT = path.dirname(REPO_ROOT);
+const REPO_NAME = path.basename(REPO_ROOT);
 
 // 1. Intent Parser Tests
 const validQueries = [
   'add myai-portal',
   'add my myai-portal repo',
-  'connect /Users/Shailesh/MYAIAGENTS/PaneTera',
+  `connect ${REPO_ROOT}`,
   'track the websiteops repo',
   'make flowright available',
   'use myai-portal repo',
@@ -42,18 +49,18 @@ for (const q of invalidQueries) {
 }
 
 async function runAsyncTests() {
-  // 2. Target Resolver Tests - Inside Root and Exists (PaneTera itself)
-  const proposal1 = await resolveRepoSetupTarget('PaneTera', WORKSPACE_ROOT);
-  assert.strictEqual(proposal1.workspaceName, 'PaneTera');
-  assert.strictEqual(proposal1.exists, true, 'PaneTera should exist');
-  assert.strictEqual(proposal1.insideWorkspaceRoot, true, 'PaneTera should be inside root');
-  assert.strictEqual(proposal1.allowed, true, 'PaneTera should be allowed');
-  assert.strictEqual(proposal1.gitDetected, true, 'PaneTera should have git detected');
+  // 2. Target Resolver Tests - Inside Root and Exists (this repository)
+  const proposal1 = await resolveRepoSetupTarget(REPO_NAME, WORKSPACE_ROOT);
+  assert.strictEqual(proposal1.workspaceName, REPO_NAME);
+  assert.strictEqual(proposal1.exists, true, 'the checked-out repository should exist');
+  assert.strictEqual(proposal1.insideWorkspaceRoot, true, 'the repository should be inside its parent root');
+  assert.strictEqual(proposal1.allowed, true, 'the repository should be allowed');
+  assert.strictEqual(proposal1.gitDetected, true, 'the repository should have git detected');
   assert.ok(
     proposal1.packageManager === 'npm' || proposal1.packageManager === 'pnpm',
-    'PaneTera should be npm or pnpm project',
+    'the repository should be an npm or pnpm project',
   );
-  assert.ok(proposal1.scripts && proposal1.scripts.includes('build'), 'PaneTera should have build script');
+  assert.ok(proposal1.scripts && proposal1.scripts.includes('build'), 'the repository should have a build script');
 
   // 3. Target Resolver Tests - Inside Root but Missing
   const proposal2 = await resolveRepoSetupTarget('missing-folder-xyz', WORKSPACE_ROOT);
@@ -71,15 +78,15 @@ async function runAsyncTests() {
   );
 
   // 5. Target Resolver Tests - Absolute path outside root
-  const proposal4 = await resolveRepoSetupTarget('/Users/Shailesh/MYAIAGENTS-evil/foo', WORKSPACE_ROOT);
+  const proposal4 = await resolveRepoSetupTarget(path.join(`${WORKSPACE_ROOT}-evil`, 'foo'), WORKSPACE_ROOT);
   assert.strictEqual(proposal4.insideWorkspaceRoot, false);
   assert.strictEqual(proposal4.allowed, false);
 
   // 6. buildRepoSetupProposal integration
-  const integration = await buildRepoSetupProposal('connect PaneTera', WORKSPACE_ROOT);
+  const integration = await buildRepoSetupProposal(`connect ${REPO_NAME}`, WORKSPACE_ROOT);
   assert.ok(integration !== null);
   assert.strictEqual(integration.allowed, true);
-  assert.strictEqual(integration.workspaceName, 'PaneTera');
+  assert.strictEqual(integration.workspaceName, REPO_NAME);
 
   console.log('✓ All repo setup proposal tests passed!');
 }
