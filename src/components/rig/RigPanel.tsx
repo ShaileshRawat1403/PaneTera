@@ -23,7 +23,7 @@ import { accent, ink, radius, status, surface, typography } from '../../theme/to
 import type { RigCapability, RigConnection, RigPermission } from '../../rig/types';
 import { StructuredResult } from './StructuredResult';
 import { BrowserOperatorConnection } from './BrowserOperatorConnection';
-import { loadRigConnections, loadRigProvenance, resolveRigConnectionsView } from './rigLoadingModel';
+import { loadRigConnections, loadRigProvenance, resolveRigConnectionsView, resolveRigInteractionMode } from './rigLoadingModel';
 import {
   resolveConnectionCard,
   actionLabel,
@@ -169,6 +169,20 @@ function RigPanelSession({ token, onClose, onResourcesChanged }: Props): React.R
   // does not prove current availability.
   const connectionsAuthoritative = connectionsView.status === 'ready' || connectionsView.status === 'empty';
   const showConnectionList = connectionsView.status === 'ready' || connectionsView.status === 'stale';
+
+  // One interaction mode, derived from the loading model. Cached cards stay
+  // readable and inspectable, but consequential, state-dependent actions are only
+  // safe when the shown state is current and no refresh is racing them.
+  const interactionMode = resolveRigInteractionMode(connectionsView, connectionsLoading);
+  const canMutate = interactionMode === 'live';
+  const mutationPausedReason = interactionMode === 'refreshing'
+    ? 'Refreshing connections. Actions are paused until the current state loads.'
+    : interactionMode === 'stale'
+      ? 'Showing cached connections. Refresh to load the current state before acting.'
+      : null;
+  // A shared id so every paused control names, to assistive technology, why it is
+  // disabled — the explanation is text, never colour alone.
+  const pausedDescribedBy = canMutate ? undefined : 'rig-actions-paused';
 
   const enabledResources = useMemo(
     () => connections.flatMap((connection) => connection.capabilities.resources.filter((item) => item.enabled)),
@@ -511,6 +525,17 @@ function RigPanelSession({ token, onClose, onResourcesChanged }: Props): React.R
         <Typography variant="body2" sx={{ color: ink.secondary }}>No MCP servers connected yet.</Typography>
       )}
 
+      {showConnectionList && !canMutate && mutationPausedReason && (
+        <Typography
+          id="rig-actions-paused"
+          role="status"
+          variant="caption"
+          sx={{ display: 'block', color: status.brass, mb: 1 }}
+        >
+          {mutationPausedReason}
+        </Typography>
+      )}
+
       {showConnectionList && (
       <Stack spacing={1.25}>
         {connections.map((connection) => {
@@ -573,7 +598,8 @@ function RigPanelSession({ token, onClose, onResourcesChanged }: Props): React.R
                         size="small"
                         variant="outlined"
                         onClick={() => reviewConnection(connection.connectionId)}
-                        disabled={Boolean(busy)}
+                        disabled={Boolean(busy) || !canMutate}
+                        aria-describedby={pausedDescribedBy}
                         sx={{
                           color: ink.primary,
                           borderColor: accent.violetBorder,
@@ -584,10 +610,10 @@ function RigPanelSession({ token, onClose, onResourcesChanged }: Props): React.R
                       </Button>
                     )}
                     {showRefresh && (
-                      <Button size="small" onClick={() => act(connection.connectionId, 'refresh')} disabled={Boolean(busy)}>Refresh</Button>
+                      <Button size="small" onClick={() => act(connection.connectionId, 'refresh')} disabled={Boolean(busy) || !canMutate} aria-describedby={pausedDescribedBy}>Refresh</Button>
                     )}
                     {showStop && (
-                      <Button size="small" onClick={() => act(connection.connectionId, 'stop')} disabled={Boolean(busy)}>Stop</Button>
+                      <Button size="small" onClick={() => act(connection.connectionId, 'stop')} disabled={Boolean(busy) || !canMutate} aria-describedby={pausedDescribedBy}>Stop</Button>
                     )}
                     <Button size="small" aria-expanded={isExpanded} onClick={() => setExpanded(isExpanded ? null : connection.connectionId)}>
                       {isExpanded
@@ -601,7 +627,8 @@ function RigPanelSession({ token, onClose, onResourcesChanged }: Props): React.R
                     <Button
                       size="small"
                       onClick={() => setRemoveConnectionId(connection.connectionId)}
-                      disabled={Boolean(busy)}
+                      disabled={Boolean(busy) || !canMutate}
+                      aria-describedby={pausedDescribedBy}
                       sx={{ color: ink.muted, '&:hover': { color: status.danger, backgroundColor: surface.sunken } }}
                     >
                       Remove
@@ -628,15 +655,18 @@ function RigPanelSession({ token, onClose, onResourcesChanged }: Props): React.R
                           <Checkbox
                             size="small"
                             aria-label={`Enable ${capability.capabilityId}`}
+                            aria-describedby={pausedDescribedBy}
                             checked={capability.enabled}
+                            disabled={Boolean(busy) || !canMutate}
                             onChange={(event) => setPolicy(connection.connectionId, capability, event.target.checked, 'proposable')}
                           />
                           <Select
                             size="small"
                             value={capability.permission}
-                            disabled={!capability.enabled || connection.sourceClass !== 'panetera-managed'}
+                            disabled={!capability.enabled || connection.sourceClass !== 'panetera-managed' || Boolean(busy) || !canMutate}
                             onChange={(event) => setPolicy(connection.connectionId, capability, true, event.target.value as RigPermission)}
                             aria-label={`Permission for ${capability.capabilityId}`}
+                            aria-describedby={pausedDescribedBy}
                           >
                             <MenuItem value="denied">Denied</MenuItem>
                             <MenuItem value="proposable">Approval each time</MenuItem>
@@ -659,12 +689,12 @@ function RigPanelSession({ token, onClose, onResourcesChanged }: Props): React.R
                             <Alert
                               severity="warning"
                               sx={{ mt: 1 }}
-                              action={<Button onClick={() => approveAndRun(connection.connectionId, capability)}>Approve and run</Button>}
+                              action={<Button onClick={() => approveAndRun(connection.connectionId, capability)} disabled={Boolean(busy) || !canMutate} aria-describedby={pausedDescribedBy}>Approve and run</Button>}
                             >
                               Review the exact connection, capability, and arguments before running once.
                             </Alert>
                           ) : (
-                            <Button size="small" sx={{ mt: 0.75 }} onClick={() => propose(connection.connectionId, capability)}>
+                            <Button size="small" sx={{ mt: 0.75 }} onClick={() => propose(connection.connectionId, capability)} disabled={Boolean(busy) || !canMutate} aria-describedby={pausedDescribedBy}>
                               Review invocation
                             </Button>
                           )}
@@ -682,7 +712,7 @@ function RigPanelSession({ token, onClose, onResourcesChanged }: Props): React.R
                             value={toolArguments[capability.capabilityId] ?? '{}'}
                             onChange={(event) => setToolArguments((current) => ({ ...current, [capability.capabilityId]: event.target.value }))}
                           />
-                          <Button size="small" sx={{ mt: 0.75 }} onClick={() => loadPrompt(connection.connectionId, capability)} disabled={Boolean(busy)}>
+                          <Button size="small" sx={{ mt: 0.75 }} onClick={() => loadPrompt(connection.connectionId, capability)} disabled={Boolean(busy) || !canMutate} aria-describedby={pausedDescribedBy}>
                             Load prompt
                           </Button>
                           {capability.capabilityId in results && <StructuredResult value={results[capability.capabilityId]} label="Untrusted MCP prompt" />}
@@ -758,11 +788,17 @@ function RigPanelSession({ token, onClose, onResourcesChanged }: Props): React.R
           <Alert severity="warning" sx={{ mb: 1.5 }}>
             Connecting can start a local process or contact a remote service. Approve only this exact specification.
           </Alert>
+          {/* The explanation lives inside the modal, because MUI hides the
+              background from assistive technology while a dialog is open, so an
+              aria-describedby pointing at the page behind it would be unreadable. */}
+          {!canMutate && mutationPausedReason && (
+            <Alert severity="info" role="status" sx={{ mb: 1.5 }}>{mutationPausedReason}</Alert>
+          )}
           {review && <StructuredResult value={review.value} label="Connection specification and security checks" />}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setReview(null)}>Cancel</Button>
-          <Button variant="contained" onClick={connectReviewed} disabled={Boolean(busy)}>Approve connection</Button>
+          <Button variant="contained" onClick={connectReviewed} disabled={Boolean(busy) || !canMutate}>Approve connection</Button>
         </DialogActions>
       </Dialog>
 
@@ -776,10 +812,13 @@ function RigPanelSession({ token, onClose, onResourcesChanged }: Props): React.R
           <Typography variant="body2" sx={{ color: ink.secondary }}>
             PaneTera will stop the connection, forget its capability inventory, and remove its local record. The MCP server and its own data are not deleted.
           </Typography>
+          {!canMutate && mutationPausedReason && (
+            <Alert severity="info" role="status" sx={{ mt: 1.5 }}>{mutationPausedReason}</Alert>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setRemoveConnectionId(null)}>Cancel</Button>
-          <Button color="error" variant="contained" onClick={removeConnection} disabled={Boolean(busy)}>Remove connection</Button>
+          <Button color="error" variant="contained" onClick={removeConnection} disabled={Boolean(busy) || !canMutate}>Remove connection</Button>
         </DialogActions>
       </Dialog>
     </Box>

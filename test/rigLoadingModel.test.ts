@@ -16,6 +16,7 @@ import {
   isRigConnection,
   isRigCapability,
   resolveRigConnectionsView,
+  resolveRigInteractionMode,
   type RigFetch,
 } from '../src/components/rig/rigLoadingModel';
 import type { RigCapability, RigConnection } from '../src/rig/types';
@@ -286,5 +287,29 @@ describe('resolveRigConnectionsView distinguishes every load state', () => {
     const view = resolveRigConnectionsView({ loaded: true, connections: [], error: 'refresh failed' });
     assert.strictEqual(view.status, 'stale');
     assert.notStrictEqual(view.status, 'empty');
+  });
+});
+
+describe('resolveRigInteractionMode derives one mode from the loading model', () => {
+  const ready = { status: 'ready' as const, connections: [] };
+  const stale = { status: 'stale' as const, reason: 'x', connections: [] };
+
+  it('is live when the shown state is current and idle', () => {
+    assert.strictEqual(resolveRigInteractionMode(ready, false), 'live');
+  });
+
+  it('is refreshing when a load is in flight while cards are shown', () => {
+    assert.strictEqual(resolveRigInteractionMode(ready, true), 'refreshing');
+    assert.strictEqual(resolveRigInteractionMode(stale, true), 'refreshing');
+  });
+
+  it('is stale when a refresh failed and cards are cached', () => {
+    assert.strictEqual(resolveRigInteractionMode(stale, false), 'stale');
+  });
+
+  it('defaults to live for card-less views, which render nothing to act on', () => {
+    assert.strictEqual(resolveRigInteractionMode({ status: 'loading' }, true), 'live');
+    assert.strictEqual(resolveRigInteractionMode({ status: 'error', reason: 'x' }, false), 'live');
+    assert.strictEqual(resolveRigInteractionMode({ status: 'empty' }, false), 'live');
   });
 });

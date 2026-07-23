@@ -251,3 +251,28 @@ export function resolveRigConnectionsView(state: RigConnectionsState): RigConnec
   if (state.connections.length === 0) return { status: 'empty' };
   return { status: 'ready', connections: state.connections };
 }
+
+/**
+ * The one interaction mode for the cards, derived from the loading model rather
+ * than from any error text.
+ *
+ *   - live: the shown cards reflect the current, successfully loaded state, and
+ *     no refresh is in flight. Consequential, state-dependent actions are safe.
+ *   - refreshing: a same-token load is in flight while cached cards are shown.
+ *     Cards stay readable, but a state-dependent mutation must not race the
+ *     refresh, so consequential actions pause until it settles.
+ *   - stale: a refresh failed and the cards are cached. They reflect a state that
+ *     may no longer hold, so consequential actions are withheld until the state
+ *     is refreshed; inspection of the cached details remains available.
+ *
+ * A view with no cards (loading with no cache, hard error, empty) has nothing to
+ * act on, so it reports `live` by default and simply renders no cards.
+ */
+export type RigInteractionMode = 'live' | 'refreshing' | 'stale';
+
+export function resolveRigInteractionMode(view: RigConnectionsView, loading: boolean): RigInteractionMode {
+  const hasCards = view.status === 'ready' || view.status === 'stale';
+  if (loading && hasCards) return 'refreshing';
+  if (view.status === 'stale') return 'stale';
+  return 'live';
+}
