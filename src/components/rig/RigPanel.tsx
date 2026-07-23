@@ -61,6 +61,17 @@ async function rigRequest<T>(token: string, url: string, init?: RequestInit): Pr
   return payload as T;
 }
 
+/**
+ * The capability kinds, in fixed display order, with their section heading and
+ * the singular noun used in each capability's identity line. Grouping the flat
+ * inventory by kind gives the expanded card a scannable structure.
+ */
+const CAPABILITY_GROUPS = [
+  { kind: 'tool', field: 'tools', heading: 'Tools', noun: 'Tool' },
+  { kind: 'resource', field: 'resources', heading: 'Resources', noun: 'Resource' },
+  { kind: 'prompt', field: 'prompts', heading: 'Prompts', noun: 'Prompt' },
+] as const;
+
 /** Map a semantic card tone to a theme colour. Colour is a reinforcement of the
  *  status words and attention icon, never the only signal. */
 function cardToneColor(tone: 'neutral' | 'muted' | 'attention' | 'danger'): string {
@@ -570,7 +581,9 @@ function RigPanelSession({ token, onClose, onResourcesChanged }: Props): React.R
               <Box sx={{ p: 1.5 }}>
                 <Stack direction="row" justifyContent="space-between" alignItems="flex-start" gap={1}>
                   <Box sx={{ minWidth: 0 }}>
-                    <Typography variant="subtitle2">{connection.displayName}</Typography>
+                    {/* The connection name is the semantic parent of its capability
+                        group headings (h4). It keeps its subtitle2 visual size. */}
+                    <Typography component="h3" variant="subtitle2" sx={{ m: 0 }}>{connection.displayName}</Typography>
                     <Stack direction="row" alignItems="center" gap={0.5} flexWrap="wrap" sx={{ mt: 0.25 }}>
                       {card.needsAttention && (
                         <WarningAmberIcon aria-hidden sx={{ fontSize: 14, color: toneColor }} />
@@ -638,88 +651,132 @@ function RigPanelSession({ token, onClose, onResourcesChanged }: Props): React.R
               </Box>
               <Collapse in={isExpanded}>
                 <Divider />
-                <Stack spacing={1} sx={{ p: 1.5, backgroundColor: surface.sunken }}>
+                <Stack spacing={1.5} sx={{ p: 1.5, backgroundColor: surface.sunken }}>
                   {connection.transport.kind === 'stdio' && connection.transport.isolationMode === 'none' && (
                     <Alert severity="warning">Memory, CPU, file-descriptor, and filesystem isolation are not enforced for this connection.</Alert>
                   )}
-                  {connection.capabilities.truncated && <Alert severity="warning">The capability inventory was truncated.</Alert>}
+                  {connection.capabilities.truncated && <Alert severity="warning">The capability inventory was truncated. One or more groups may be incomplete; counts show items returned.</Alert>}
                   {capabilities.length === 0 && <Typography variant="caption" sx={{ color: ink.secondary }}>No capabilities discovered.</Typography>}
-                  {capabilities.map((capability) => (
-                    <Box key={capability.capabilityId} sx={{ p: 1.25, border: `1px solid ${surface.border}`, borderRadius: `${radius.sm}px`, backgroundColor: surface.raised }}>
-                      <Stack direction="row" alignItems="center" justifyContent="space-between" gap={1}>
-                        <Box sx={{ minWidth: 0 }}>
-                          <Typography variant="body2" sx={{ fontFamily: typography.mono }}>{capability.capabilityId}</Typography>
-                          <Typography variant="caption" sx={{ color: ink.secondary }}>{capability.description.text}</Typography>
-                        </Box>
-                        <Stack direction="row" alignItems="center" gap={0.5}>
-                          <Checkbox
-                            size="small"
-                            aria-label={`Enable ${capability.capabilityId}`}
-                            aria-describedby={pausedDescribedBy}
-                            checked={capability.enabled}
-                            disabled={Boolean(busy) || !canMutate}
-                            onChange={(event) => setPolicy(connection.connectionId, capability, event.target.checked, 'proposable')}
-                          />
-                          <Select
-                            size="small"
-                            value={capability.permission}
-                            disabled={!capability.enabled || connection.sourceClass !== 'panetera-managed' || Boolean(busy) || !canMutate}
-                            onChange={(event) => setPolicy(connection.connectionId, capability, true, event.target.value as RigPermission)}
-                            aria-label={`Permission for ${capability.capabilityId}`}
-                            aria-describedby={pausedDescribedBy}
-                          >
-                            <MenuItem value="denied">Denied</MenuItem>
-                            <MenuItem value="proposable">Approval each time</MenuItem>
-                            {connection.sourceClass === 'panetera-managed' && <MenuItem value="auto-invocable">Automatic</MenuItem>}
-                          </Select>
+
+                  {CAPABILITY_GROUPS.map((group) => {
+                    const items = connection.capabilities[group.field];
+                    if (items.length === 0) return null;
+                    // A truncated inventory can hide members of any group, so the
+                    // count is qualified as "shown" and never implies completeness.
+                    const countLabel = connection.capabilities.truncated ? `${items.length} shown` : `${items.length}`;
+                    const headingId = `rig-cap-group-${connection.connectionId}-${group.field}`;
+                    return (
+                      <Box key={group.field} component="section" aria-labelledby={headingId}>
+                        <Typography
+                          id={headingId}
+                          component="h4"
+                          variant="overline"
+                          sx={{ display: 'block', color: ink.muted, fontWeight: 700, letterSpacing: '0.06em', mb: 0.5 }}
+                        >
+                          {group.heading} · {countLabel}
+                        </Typography>
+                        <Stack spacing={1}>
+                          {items.map((capability) => (
+                            <Box key={capability.capabilityId} sx={{ p: 1.25, border: `1px solid ${surface.border}`, borderRadius: `${radius.sm}px`, backgroundColor: surface.raised }}>
+                              {/* Identity leads; the governance controls sit to the
+                                  right and wrap beneath the identity on narrow widths. */}
+                              <Stack direction="row" alignItems="flex-start" justifyContent="space-between" gap={1} flexWrap="wrap">
+                                <Box sx={{ minWidth: 0, flex: '1 1 220px' }}>
+                                  <Typography variant="body2" sx={{ color: ink.primary, fontWeight: 600 }}>
+                                    {capability.label || capability.name}
+                                  </Typography>
+                                  <Typography variant="caption" sx={{ color: ink.muted, display: 'block' }}>
+                                    {/* The noun comes from the capability's own kind, not its enclosing
+                                        group, so array placement can never relabel it. */}
+                                    {capability.kind === 'tool' ? 'Tool' : capability.kind === 'resource' ? 'Resource' : 'Prompt'}
+                                    {' · '}{capability.enabled ? 'Enabled' : 'Disabled'}
+                                  </Typography>
+                                  <Typography
+                                    variant="caption"
+                                    title={capability.capabilityId}
+                                    sx={{ color: ink.secondary, fontFamily: typography.mono, display: 'block', overflowWrap: 'anywhere' }}
+                                  >
+                                    {capability.capabilityId}
+                                  </Typography>
+                                  <Typography variant="caption" sx={{ color: ink.secondary, display: 'block', mt: 0.25 }}>
+                                    {capability.description.text}
+                                  </Typography>
+                                </Box>
+                                <Stack direction="row" alignItems="center" gap={0.5} sx={{ flexShrink: 0 }}>
+                                  <Checkbox
+                                    size="small"
+                                    aria-label={`Enable ${capability.capabilityId}`}
+                                    aria-describedby={pausedDescribedBy}
+                                    checked={capability.enabled}
+                                    disabled={Boolean(busy) || !canMutate}
+                                    onChange={(event) => setPolicy(connection.connectionId, capability, event.target.checked, 'proposable')}
+                                  />
+                                  <Select
+                                    size="small"
+                                    value={capability.permission}
+                                    disabled={!capability.enabled || connection.sourceClass !== 'panetera-managed' || Boolean(busy) || !canMutate}
+                                    onChange={(event) => setPolicy(connection.connectionId, capability, true, event.target.value as RigPermission)}
+                                    aria-label={`Permission for ${capability.capabilityId}`}
+                                    aria-describedby={pausedDescribedBy}
+                                  >
+                                    <MenuItem value="denied">Denied</MenuItem>
+                                    <MenuItem value="proposable">Approval each time</MenuItem>
+                                    {connection.sourceClass === 'panetera-managed' && <MenuItem value="auto-invocable">Automatic</MenuItem>}
+                                  </Select>
+                                </Stack>
+                              </Stack>
+
+                              {capability.kind === 'tool' && capability.enabled && capability.permission === 'proposable' && (
+                                <Box sx={{ mt: 1, pt: 1, borderTop: `1px solid ${surface.border}` }}>
+                                  <TextField
+                                    fullWidth
+                                    size="small"
+                                    multiline
+                                    minRows={2}
+                                    label="Arguments (JSON)"
+                                    value={toolArguments[capability.capabilityId] ?? '{}'}
+                                    onChange={(event) => setToolArguments((current) => ({ ...current, [capability.capabilityId]: event.target.value }))}
+                                  />
+                                  {proposals[capability.capabilityId] ? (
+                                    <Alert
+                                      severity="warning"
+                                      sx={{ mt: 1 }}
+                                      action={<Button onClick={() => approveAndRun(connection.connectionId, capability)} disabled={Boolean(busy) || !canMutate} aria-describedby={pausedDescribedBy}>Approve and run</Button>}
+                                    >
+                                      Review the exact connection, capability, and arguments before running once.
+                                    </Alert>
+                                  ) : (
+                                    <Button size="small" sx={{ mt: 0.75 }} onClick={() => propose(connection.connectionId, capability)} disabled={Boolean(busy) || !canMutate} aria-describedby={pausedDescribedBy}>
+                                      Review invocation
+                                    </Button>
+                                  )}
+                                  {capability.capabilityId in results && (
+                                    <StructuredResult value={results[capability.capabilityId]} />
+                                  )}
+                                </Box>
+                              )}
+
+                              {capability.kind === 'prompt' && capability.enabled && capability.permission !== 'denied' && (
+                                <Box sx={{ mt: 1, pt: 1, borderTop: `1px solid ${surface.border}` }}>
+                                  <TextField
+                                    fullWidth
+                                    size="small"
+                                    label="Prompt arguments (JSON string map)"
+                                    value={toolArguments[capability.capabilityId] ?? '{}'}
+                                    onChange={(event) => setToolArguments((current) => ({ ...current, [capability.capabilityId]: event.target.value }))}
+                                  />
+                                  <Button size="small" sx={{ mt: 0.75 }} onClick={() => loadPrompt(connection.connectionId, capability)} disabled={Boolean(busy) || !canMutate} aria-describedby={pausedDescribedBy}>
+                                    Load prompt
+                                  </Button>
+                                  {capability.capabilityId in results && <StructuredResult value={results[capability.capabilityId]} label="Untrusted MCP prompt" />}
+                                </Box>
+                              )}
+                            </Box>
+                          ))}
                         </Stack>
-                      </Stack>
-                      {capability.kind === 'tool' && capability.enabled && capability.permission === 'proposable' && (
-                        <Box sx={{ mt: 1 }}>
-                          <TextField
-                            fullWidth
-                            size="small"
-                            multiline
-                            minRows={2}
-                            label="Arguments (JSON)"
-                            value={toolArguments[capability.capabilityId] ?? '{}'}
-                            onChange={(event) => setToolArguments((current) => ({ ...current, [capability.capabilityId]: event.target.value }))}
-                          />
-                          {proposals[capability.capabilityId] ? (
-                            <Alert
-                              severity="warning"
-                              sx={{ mt: 1 }}
-                              action={<Button onClick={() => approveAndRun(connection.connectionId, capability)} disabled={Boolean(busy) || !canMutate} aria-describedby={pausedDescribedBy}>Approve and run</Button>}
-                            >
-                              Review the exact connection, capability, and arguments before running once.
-                            </Alert>
-                          ) : (
-                            <Button size="small" sx={{ mt: 0.75 }} onClick={() => propose(connection.connectionId, capability)} disabled={Boolean(busy) || !canMutate} aria-describedby={pausedDescribedBy}>
-                              Review invocation
-                            </Button>
-                          )}
-                          {capability.capabilityId in results && (
-                            <StructuredResult value={results[capability.capabilityId]} />
-                          )}
-                        </Box>
-                      )}
-                      {capability.kind === 'prompt' && capability.enabled && capability.permission !== 'denied' && (
-                        <Box sx={{ mt: 1 }}>
-                          <TextField
-                            fullWidth
-                            size="small"
-                            label="Prompt arguments (JSON string map)"
-                            value={toolArguments[capability.capabilityId] ?? '{}'}
-                            onChange={(event) => setToolArguments((current) => ({ ...current, [capability.capabilityId]: event.target.value }))}
-                          />
-                          <Button size="small" sx={{ mt: 0.75 }} onClick={() => loadPrompt(connection.connectionId, capability)} disabled={Boolean(busy) || !canMutate} aria-describedby={pausedDescribedBy}>
-                            Load prompt
-                          </Button>
-                          {capability.capabilityId in results && <StructuredResult value={results[capability.capabilityId]} label="Untrusted MCP prompt" />}
-                        </Box>
-                      )}
-                    </Box>
-                  ))}
+                      </Box>
+                    );
+                  })}
                 </Stack>
               </Collapse>
             </Box>

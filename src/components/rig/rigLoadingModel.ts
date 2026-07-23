@@ -124,11 +124,16 @@ export function isRigConnection(value: unknown): value is RigConnection {
   if (typeof caps.truncated !== 'boolean') return false;
   if (caps.discoveredAt !== null && !isCanonicalTimestamp(caps.discoveredAt)) return false;
   // Each capability array must exist and every element must be a valid capability,
-  // so a `resources: [null]` cannot reach the renderer.
+  // so a `resources: [null]` cannot reach the renderer. Each element's kind must
+  // also match the array it sits in: a `prompt` inside `tools` is a malformed
+  // payload, and accepting it would let array placement reclassify a capability
+  // and invent an unsupported action (e.g. tool invocation on a prompt).
+  const ARRAY_KIND = { tools: 'tool', resources: 'resource', prompts: 'prompt' } as const;
   const ids: string[] = [];
   for (const key of ['tools', 'resources', 'prompts'] as const) {
     const list = caps[key];
     if (!Array.isArray(list) || !list.every(isRigCapability)) return false;
+    if (!list.every((item) => (item as RigCapability).kind === ARRAY_KIND[key])) return false;
     for (const item of list) ids.push((item as RigCapability).capabilityId);
   }
   // Capability ids must be unique across the three arrays, both because the card

@@ -167,6 +167,21 @@ describe('loadRigConnections turns every failure into an explicit reason', () =>
     assert.ok((await loadRigConnections(okFetch([{ ...conn('x'), transport: { ...conn('x').transport, isolationMode: 'container' } }]), 't')).ok);
   });
 
+  it('rejects a capability whose kind does not match its array', async () => {
+    const withCaps = (caps: unknown) => ({ ...conn('x'), capabilities: { ...conn('x').capabilities, ...(caps as object) } });
+    for (const bad of [
+      [withCaps({ tools: [cap('prompt', 'p-in-tools')] })],   // a prompt sitting in tools
+      [withCaps({ resources: [cap('tool', 't-in-res')] })],   // a tool sitting in resources
+      [withCaps({ prompts: [cap('resource', 'r-in-prompts')] })],
+    ]) {
+      const result = await loadRigConnections(okFetch(bad), 't');
+      assert.strictEqual(result.ok, false, `${JSON.stringify(bad)} must fail`);
+    }
+    // Correctly-placed kinds pass.
+    const good = withCaps({ tools: [cap('tool', 't')], resources: [cap('resource', 'r')], prompts: [cap('prompt', 'p')] });
+    assert.ok((await loadRigConnections(okFetch([good]), 't')).ok, 'matching kinds pass');
+  });
+
   it('rejects duplicate capabilityId values across tools, resources, and prompts', async () => {
     const dup = { ...conn('x'), capabilities: {
       tools: [cap('tool', 'shared-id')], resources: [cap('resource', 'shared-id')], prompts: [],
