@@ -4,6 +4,7 @@ import {
   Box,
   Button,
   Checkbox,
+  Chip,
   Collapse,
   Dialog,
   DialogActions,
@@ -20,7 +21,8 @@ import {
   Typography,
 } from '@mui/material';
 import { accent, ink, radius, status, surface, typography } from '../../theme/tokens';
-import type { RigCapability, RigConnection, RigPermission } from '../../rig/types';
+import type { RigCapability, RigConnection, RigPermission, ProvenanceRecord } from '../../rig/types';
+import { resolveProvenanceView } from './provenanceModel';
 import { StructuredResult } from './StructuredResult';
 import { BrowserOperatorConnection } from './BrowserOperatorConnection';
 import { loadRigConnections, loadRigProvenance, resolveRigConnectionsView, resolveRigInteractionMode } from './rigLoadingModel';
@@ -117,7 +119,8 @@ function RigPanelSession({ token, onClose, onResourcesChanged }: Props): React.R
   const [results, setResults] = useState<Record<string, unknown>>({});
   const [review, setReview] = useState<{ connectionId: string; value: Record<string, unknown> } | null>(null);
   const [removeConnectionId, setRemoveConnectionId] = useState<string | null>(null);
-  const [provenanceRecords, setProvenanceRecords] = useState<Array<Record<string, unknown>>>([]);
+  const [provenanceRecords, setProvenanceRecords] = useState<ProvenanceRecord[]>([]);
+  const [provenanceRawOpen, setProvenanceRawOpen] = useState<Record<string, boolean>>({});
   const [showAddServer, setShowAddServer] = useState(false);
   const [showProvenance, setShowProvenance] = useState(false);
 
@@ -830,7 +833,64 @@ function RigPanelSession({ token, onClose, onResourcesChanged }: Props): React.R
           </Alert>
         )}
         {provenanceRecords.length > 0 && (
-          <StructuredResult value={provenanceRecords} label="Rig provenance records" />
+          <Stack component="ul" aria-label="Rig provenance records" spacing={1} sx={{ listStyle: 'none', m: 0, mt: 1, p: 0 }}>
+            {provenanceRecords.map((record) => {
+              const view = resolveProvenanceView(record);
+              const rawOpen = Boolean(provenanceRawOpen[view.recordId]);
+              const integrityColor = cardToneColor(view.integrity.tone);
+              return (
+                <Box component="li" key={view.recordId} sx={{ p: 1.25, border: `1px solid ${surface.border}`, borderRadius: `${radius.sm}px`, backgroundColor: surface.raised }}>
+                  {/* Lead: record type and timestamp. */}
+                  <Stack direction="row" justifyContent="space-between" alignItems="baseline" gap={1} flexWrap="wrap">
+                    <Typography variant="body2" sx={{ color: ink.primary, fontWeight: 600 }}>
+                      {view.typeLabel}
+                      {!view.isKnownType && (
+                        <Box component="span" sx={{ color: ink.muted, fontWeight: 400 }}> · unknown record type</Box>
+                      )}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: ink.muted, fontFamily: typography.mono }}>
+                      {new Date(view.timestamp).toLocaleString()}
+                    </Typography>
+                  </Stack>
+                  {/* Source identity. */}
+                  <Typography variant="caption" sx={{ color: ink.secondary, display: 'block', mt: 0.25 }}>
+                    Source: {view.sourceKind}{' · '}
+                    <Box component="span" sx={{ fontFamily: typography.mono, overflowWrap: 'anywhere' }}>{view.sourceId}</Box>
+                  </Typography>
+                  {/* Integrity and trust are independent fields, shown independently. */}
+                  <Stack direction="row" gap={1} alignItems="baseline" flexWrap="wrap" sx={{ mt: 0.5 }}>
+                    <Typography variant="caption" sx={{ color: integrityColor, fontWeight: 600 }}>{view.integrity.label}</Typography>
+                    <Typography variant="caption" sx={{ color: ink.secondary }}>Trust: {view.trust.label}</Typography>
+                  </Stack>
+                  {/* Correlations, accurately labelled and secondary. */}
+                  {view.correlations.length > 0 && (
+                    <Stack direction="row" gap={0.5} flexWrap="wrap" sx={{ mt: 0.5 }}>
+                      {view.correlations.map((c) => (
+                        <Chip
+                          key={`${c.type}:${c.value}`}
+                          label={`${c.label}: ${c.value}`}
+                          size="small"
+                          sx={{ height: 16, fontSize: '0.55rem', background: surface.overlay, color: ink.secondary, fontFamily: typography.mono, maxWidth: '100%' }}
+                        />
+                      ))}
+                    </Stack>
+                  )}
+                  {/* Raw record stays behind explicit disclosure. */}
+                  <Button
+                    size="small"
+                    sx={{ mt: 0.5, color: ink.secondary }}
+                    aria-expanded={rawOpen}
+                    onClick={() => setProvenanceRawOpen((current) => ({ ...current, [view.recordId]: !rawOpen }))}
+                  >
+                    {rawOpen ? 'Hide raw record' : 'Show raw record'}
+                  </Button>
+                  <Collapse in={rawOpen} unmountOnExit>
+                    <StructuredResult value={view.raw} label="Raw provenance record" />
+                  </Collapse>
+                </Box>
+              );
+            })}
+          </Stack>
         )}
         {provenanceRecords.length === 0 && !provenanceError && (
           (provenanceLoading || !provenanceLoaded)

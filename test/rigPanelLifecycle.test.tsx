@@ -66,6 +66,16 @@ const connection = (id: string) => ({
   connectionApprovalId: null,
 });
 
+// A valid provenance record whose source id carries the seed, so a test can find
+// it in the rendered summary (the source identity is shown; the record id is not).
+const provRecord = (seed: string) => ({
+  recordId: seed, recordType: 'mcp-invocation', ownerId: 'local-operator',
+  sourceIdentity: { kind: 'mcp-connection', id: seed }, parentRecordIds: [],
+  inputDigest: null, outputDigest: null, createdAt: '2026-01-01T00:00:00.000Z',
+  sourceClass: 'local-user-installed', trustLevel: 'untrusted', correlation: {},
+  integrity: 'verified', retentionClass: 'session',
+});
+
 async function harness() {
   const win = installDom();
   const { fetchImpl, conn, prov } = router();
@@ -200,9 +210,9 @@ describe('the Rig drawer load lifecycle is honest, isolated, and ordered', () =>
     const h = await harness();
     await h.render('tokenA');
     await h.settle(h.conn[0], resp({ connections: [connection('A-server')] }));
-    await h.settle(h.prov[0], resp({ records: [{ recordId: 'A-provenance' }] }));
+    await h.settle(h.prov[0], resp({ records: [provRecord('A-provenance')] }));
     await h.clickText('provenance'); // expand under token A
-    await h.settle(h.prov[1], resp({ records: [{ recordId: 'A-provenance' }] }));
+    await h.settle(h.prov[1], resp({ records: [provRecord('A-provenance')] }));
     assert.ok(h.body().includes('A-provenance'), 'token A provenance is expanded and shown');
 
     await h.render('tokenB'); // remount discards the whole session
@@ -216,10 +226,10 @@ describe('the Rig drawer load lifecycle is honest, isolated, and ordered', () =>
     const h = await harness();
     await h.render('t1');
     await h.settle(h.conn[0], resp({ connections: [connection('gamma-server')] }));
-    await h.settle(h.prov[0], resp({ records: [{ recordId: 'prov-keep' }] }));
+    await h.settle(h.prov[0], resp({ records: [provRecord('prov-keep')] }));
 
     await h.clickText('provenance'); // expand; triggers prov[1]
-    await h.settle(h.prov[1], resp({ records: [{ recordId: 'prov-keep' }] }));
+    await h.settle(h.prov[1], resp({ records: [provRecord('prov-keep')] }));
     assert.ok(h.body().includes('prov-keep'), 'provenance records are shown when expanded');
 
     await h.clickRefresh(); // conn[1], prov[2]
@@ -239,7 +249,7 @@ describe('the Rig drawer load lifecycle is honest, isolated, and ordered', () =>
     await h.settle(h.conn[0], resp({ connections: [connection('server-1')] }));
 
     // 1-2. Provenance loads successfully; the collapsed control shows the count.
-    await h.settle(h.prov[0], resp({ records: [{ recordId: 'p1' }, { recordId: 'p2' }, { recordId: 'p3' }] }));
+    await h.settle(h.prov[0], resp({ records: [provRecord('p1'), provRecord('p2'), provRecord('p3')] }));
     assert.ok(h.body().includes('Show provenance (3)'), 'a successful load shows the current count');
     assert.ok(!h.body().includes('cached'), 'nothing is stale yet');
 
@@ -255,7 +265,7 @@ describe('the Rig drawer load lifecycle is honest, isolated, and ordered', () =>
     // 8-9. A successful recovery removes the stale wording.
     await h.clickRefresh(); // conn[2], prov[2]
     await h.settle(h.conn[2], resp({ connections: [connection('server-1')] }));
-    await h.settle(h.prov[2], resp({ records: [{ recordId: 'p1' }, { recordId: 'p2' }] }));
+    await h.settle(h.prov[2], resp({ records: [provRecord('p1'), provRecord('p2')] }));
     assert.ok(h.body().includes('Show provenance (2)'), 'recovery shows the fresh count');
     assert.ok(!h.body().includes('cached'), 'the cached wording disappears on recovery');
     await h.act(async () => { h.root.unmount(); });

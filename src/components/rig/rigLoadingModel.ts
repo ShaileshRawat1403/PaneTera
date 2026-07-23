@@ -20,7 +20,9 @@ import {
   STDIO_ISOLATION_MODES,
   type RigCapability,
   type RigConnection,
+  type ProvenanceRecord,
 } from '../../rig/types';
+import { isProvenanceRecord, projectProvenanceRecord } from './provenanceModel';
 
 const STATE_SET: ReadonlySet<string> = new Set(CONNECTION_STATES);
 const HEALTH_SET: ReadonlySet<string> = new Set(CONNECTION_HEALTHS);
@@ -180,7 +182,7 @@ export async function loadRigConnections(fetchImpl: RigFetch, token: string): Pr
 }
 
 export type RigProvenanceResult =
-  | { ok: true; records: Array<Record<string, unknown>> }
+  | { ok: true; records: ProvenanceRecord[] }
   | { ok: false; reason: string };
 
 /**
@@ -204,10 +206,20 @@ export async function loadRigProvenance(fetchImpl: RigFetch, token: string): Pro
   try {
     const data = await response.json();
     const records = (data as { records?: unknown } | null)?.records;
-    if (!Array.isArray(records) || records.some((item) => !item || typeof item !== 'object' || Array.isArray(item))) {
+    // Every element must be a valid provenance record. One malformed element
+    // makes the whole load unreadable rather than reaching the renderer.
+    if (!Array.isArray(records) || !records.every(isProvenanceRecord)) {
       return { ok: false, reason: 'The provenance response was not in the expected format.' };
     }
-    return { ok: true, records: records as Array<Record<string, unknown>> };
+    // Project each record onto its canonical fields, so arbitrary input keys
+    // (including secret-bearing ones) never reach state, the view, or the raw
+    // disclosure. Reject duplicate record ids within one response.
+    const projected = records.map(projectProvenanceRecord);
+    const ids = projected.map((r) => r.recordId);
+    if (new Set(ids).size !== ids.length) {
+      return { ok: false, reason: 'The provenance response contained duplicate record ids.' };
+    }
+    return { ok: true, records: projected };
   } catch {
     return { ok: false, reason: 'The provenance response could not be read.' };
   }

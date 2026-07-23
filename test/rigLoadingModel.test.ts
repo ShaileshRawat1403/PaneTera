@@ -243,9 +243,17 @@ describe('isRigConnection enforces the shape the renderer dereferences', () => {
   });
 });
 
+const provRec = (over: Record<string, unknown> = {}) => ({
+  recordId: 'r1', recordType: 'mcp-invocation', ownerId: 'local-operator',
+  sourceIdentity: { kind: 'mcp-connection', id: 'c1' }, parentRecordIds: [],
+  inputDigest: null, outputDigest: null, createdAt: '2026-01-01T00:00:00.000Z',
+  sourceClass: 'local-user-installed', trustLevel: 'untrusted', correlation: {},
+  integrity: 'verified', retentionClass: 'session', ...over,
+});
+
 describe('loadRigProvenance is honest, never failing open to empty', () => {
   it('returns records on a well-formed success', async () => {
-    const result = await loadRigProvenance(okProvFetch([{ recordId: 'r1' }]), 't');
+    const result = await loadRigProvenance(okProvFetch([provRec()]), 't');
     assert.ok(result.ok && result.records.length === 1);
   });
 
@@ -259,6 +267,63 @@ describe('loadRigProvenance is honest, never failing open to empty', () => {
       const result = await loadRigProvenance(okProvFetch(bad), 't');
       assert.strictEqual(result.ok, false, `${JSON.stringify(bad)} must fail`);
     }
+  });
+
+  it('fails the whole load when a single element is an invalid provenance record', async () => {
+    for (const bad of [
+      [provRec(), { recordId: 'x' }],                       // one incomplete element
+      [provRec({ trustLevel: 'super' })],                  // out-of-enum trust
+      [provRec({ integrity: 'ok' })],                      // out-of-enum integrity
+      [provRec({ sourceClass: 'nope' })],                  // out-of-enum source class
+      [provRec({ createdAt: '' })],                        // empty timestamp
+    ]) {
+      const result = await loadRigProvenance(okProvFetch(bad), 't');
+      assert.strictEqual(result.ok, false, `${JSON.stringify(bad)} must fail`);
+      assert.ok(!('records' in result), 'no partial records leak on failure');
+    }
+    // A future/unknown record type is still a valid record and loads.
+    assert.ok((await loadRigProvenance(okProvFetch([provRec({ recordType: 'mcp-future' })]), 't')).ok, 'unknown type is valid');
+  });
+
+  it('rejects duplicate record ids within one response', async () => {
+    const dup = [provRec({ recordId: 'same' }), provRec({ recordId: 'same' })];
+    const result = await loadRigProvenance(okProvFetch(dup), 't');
+    assert.strictEqual(result.ok, false, 'a duplicate record id fails the load');
+    assert.ok(!result.ok && /duplicate/i.test(result.reason));
+    // Distinct ids load.
+    assert.ok((await loadRigProvenance(okProvFetch([provRec({ recordId: 'a' }), provRec({ recordId: 'b' })]), 't')).ok);
+  });
+
+  it('rejects a non-canonical or normalized-impossible timestamp element', async () => {
+    for (const bad of ['not-a-date', '2026', 'Invalid Date', '2026-01-01T00:00:00Z', '2026-02-30T00:00:00.000Z', '2026-01-01T00:00:00.000+00:00']) {
+      const result = await loadRigProvenance(okProvFetch([provRec({ createdAt: bad })]), 't');
+      assert.strictEqual(result.ok, false, `createdAt=${bad} must fail`);
+    }
+    assert.ok((await loadRigProvenance(okProvFetch([provRec({ createdAt: '2026-07-21T08:18:32.000Z' })]), 't')).ok, 'the exact server format loads');
+  });
+
+  it('rejects blank or unbounded identity, type, parent, and correlation fields', async () => {
+    const long = 'x'.repeat(257);
+    for (const bad of [
+      [provRec({ recordType: '   ' })],
+      [provRec({ recordType: ' mcp-invocation' })],
+      [provRec({ recordType: long })],
+      [provRec({ ownerId: '' })],
+      [provRec({ sourceIdentity: { kind: 'mcp-connection', id: '  ' } })],
+      [provRec({ retentionClass: '' })],
+      [provRec({ parentRecordIds: ['  '] })],
+      [provRec({ correlation: { proposalId: '  ' } })],
+    ]) {
+      const result = await loadRigProvenance(okProvFetch(bad), 't');
+      assert.strictEqual(result.ok, false, `${JSON.stringify(bad)} must fail`);
+    }
+  });
+
+  it('projects loaded records onto canonical fields, dropping arbitrary keys', async () => {
+    const dirty = { ...provRec(), extensionToken: 'https://example.test/?token=SECRETVALUE' };
+    const result = await loadRigProvenance(okProvFetch([dirty]), 't');
+    assert.ok(result.ok, 'a record with extra keys still loads');
+    assert.ok(result.ok && !('extensionToken' in result.records[0]), 'the arbitrary key is dropped at the boundary');
   });
 
   it('reports a 500 and a network failure', async () => {

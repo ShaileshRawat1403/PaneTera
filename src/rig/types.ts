@@ -57,6 +57,36 @@ export interface RigConnection {
   connectionApprovalId: string | null;
 }
 
+// Provenance, mirrored from the server record. `recordType` and `retentionClass`
+// are open strings on purpose (new kinds can appear); trust and integrity are
+// closed enums the UI must never widen or infer.
+export type ProvenanceTrustLevel = 'untrusted' | 'derived' | 'authoritative';
+export type ProvenanceIntegrity = 'verified' | 'unverified' | 'broken';
+
+export const PROVENANCE_TRUST_LEVELS: readonly ProvenanceTrustLevel[] = ['untrusted', 'derived', 'authoritative'];
+export const PROVENANCE_INTEGRITIES: readonly ProvenanceIntegrity[] = ['verified', 'unverified', 'broken'];
+
+export interface ProvenanceRecord {
+  recordId: string;
+  recordType: string;
+  ownerId: string;
+  sourceIdentity: { kind: string; id: string };
+  parentRecordIds: string[];
+  inputDigest: string | null;
+  outputDigest: string | null;
+  createdAt: string;
+  sourceClass: RigSourceClass;
+  trustLevel: ProvenanceTrustLevel;
+  correlation: {
+    envelopeId?: string;
+    proposalId?: string;
+    approvalId?: string;
+    connectionId?: string;
+  };
+  integrity: ProvenanceIntegrity;
+  retentionClass: string;
+}
+
 export interface RigResourceChoice {
   connectionId: string;
   capabilityId: string;
