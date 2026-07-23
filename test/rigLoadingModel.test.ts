@@ -20,9 +20,9 @@ import {
 } from '../src/components/rig/rigLoadingModel';
 import type { RigCapability, RigConnection } from '../src/rig/types';
 
-function cap(kind: RigCapability['kind'] = 'tool'): RigCapability {
+function cap(kind: RigCapability['kind'] = 'tool', id = `cap-${kind}`): RigCapability {
   return {
-    capabilityId: 'cap-1', kind, name: 'n', label: 'n',
+    capabilityId: id, kind, name: 'n', label: 'n',
     description: { source: 'schema-derived', text: 'does a thing' },
     inputSchema: null, rawDeclaration: {}, permission: 'proposable', enabled: false,
     structuralDigest: 'd', presentationDigest: 'd',
@@ -108,6 +108,75 @@ describe('loadRigConnections turns every failure into an explicit reason', () =>
   it('accepts an array of fully-formed connections', async () => {
     const result = await loadRigConnections(okFetch([conn('a'), conn('b')]), 't');
     assert.ok(result.ok && result.connections.length === 2);
+  });
+
+  it('rejects unknown connection-state and health enum values as unreadable', async () => {
+    const cases: unknown[] = [
+      [{ ...conn('x'), state: 'future-state' }],
+      [{ ...conn('x'), state: '' }],
+      [{ ...conn('x'), health: { state: 'future-health', lastSuccessfulContact: null } }],
+      [{ ...conn('x'), transport: { ...conn('x').transport, kind: 'grpc' } }],
+    ];
+    for (const bad of cases) {
+      const result = await loadRigConnections(okFetch(bad), 't');
+      assert.strictEqual(result.ok, false, `${JSON.stringify(bad)} must fail`);
+      assert.ok(!result.ok && /format/i.test(result.reason), 'reported as unreadable, not accepted');
+      assert.ok(!('connections' in result), 'no unknown-state connection leaks through');
+    }
+  });
+
+  it('rejects malformed inventory freshness/completeness fields', async () => {
+    const withCaps = (caps: unknown) => ({ ...conn('x'), capabilities: { ...conn('x').capabilities, ...(caps as object) } });
+    for (const bad of [
+      [withCaps({ truncated: 'no' })],
+      [withCaps({ truncated: undefined })],
+      [withCaps({ discoveredAt: 123 })],
+      [withCaps({ discoveredAt: {} })],
+    ]) {
+      const result = await loadRigConnections(okFetch(bad), 't');
+      assert.strictEqual(result.ok, false, `${JSON.stringify(bad)} must fail`);
+    }
+  });
+
+  it('rejects a non-canonical discovery timestamp', async () => {
+    const withCaps = (caps: unknown) => ({ ...conn('x'), capabilities: { ...conn('x').capabilities, ...(caps as object) } });
+    for (const bad of ['not-a-date', '2026', '2026-01-01', 'yesterday', '2026-13-40T99:99:99Z']) {
+      const result = await loadRigConnections(okFetch([withCaps({ discoveredAt: bad })]), 't');
+      assert.strictEqual(result.ok, false, `discoveredAt=${bad} must fail`);
+    }
+    // A real ISO timestamp and an explicit null both pass.
+    assert.ok((await loadRigConnections(okFetch([withCaps({ discoveredAt: '2026-01-01T00:00:00.000Z' })]), 't')).ok);
+    assert.ok((await loadRigConnections(okFetch([withCaps({ discoveredAt: null })]), 't')).ok);
+  });
+
+  it('rejects an invalid sourceClass and an invalid stdio isolation mode', async () => {
+    for (const bad of [
+      [{ ...conn('x'), sourceClass: 'invented' }],
+      [{ ...conn('x'), transport: { ...conn('x').transport, isolationMode: 'invented' } }],
+      [{ ...conn('x'), transport: { ...conn('x').transport, isolationMode: undefined } }],
+    ]) {
+      const result = await loadRigConnections(okFetch(bad), 't');
+      assert.strictEqual(result.ok, false, `${JSON.stringify(bad)} must fail`);
+    }
+    // The exact reproduction from review: invented isolation + bad timestamp.
+    const withCaps = { ...conn('x').capabilities, discoveredAt: 'not-a-date' };
+    const reproduction = [{ ...conn('x'), transport: { ...conn('x').transport, isolationMode: 'invented' }, capabilities: withCaps }];
+    assert.strictEqual((await loadRigConnections(okFetch(reproduction), 't')).ok, false, 'the reproduced case is rejected');
+    // `container` is a valid isolation mode and passes.
+    assert.ok((await loadRigConnections(okFetch([{ ...conn('x'), transport: { ...conn('x').transport, isolationMode: 'container' } }]), 't')).ok);
+  });
+
+  it('rejects duplicate capabilityId values across tools, resources, and prompts', async () => {
+    const dup = { ...conn('x'), capabilities: {
+      tools: [cap('tool', 'shared-id')], resources: [cap('resource', 'shared-id')], prompts: [],
+      truncated: false, discoveredAt: null,
+    } };
+    assert.strictEqual((await loadRigConnections(okFetch([dup]), 't')).ok, false, 'a duplicate id is a malformed snapshot');
+    const unique = { ...conn('x'), capabilities: {
+      tools: [cap('tool', 'a')], resources: [cap('resource', 'b')], prompts: [cap('prompt', 'c')],
+      truncated: false, discoveredAt: null,
+    } };
+    assert.ok((await loadRigConnections(okFetch([unique]), 't')).ok, 'distinct ids pass');
   });
 
   it('rejects a connection whose capability arrays contain a malformed element', async () => {

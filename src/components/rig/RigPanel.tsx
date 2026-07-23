@@ -24,6 +24,12 @@ import type { RigCapability, RigConnection, RigPermission } from '../../rig/type
 import { StructuredResult } from './StructuredResult';
 import { BrowserOperatorConnection } from './BrowserOperatorConnection';
 import { loadRigConnections, loadRigProvenance, resolveRigConnectionsView } from './rigLoadingModel';
+import {
+  resolveConnectionCard,
+  actionLabel,
+  inventoryLabel,
+} from './connectionCardModel';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 
 interface Props {
   token: string;
@@ -55,10 +61,16 @@ async function rigRequest<T>(token: string, url: string, init?: RequestInit): Pr
   return payload as T;
 }
 
-function stateTone(state: string): string {
-  if (state === 'unreachable') return status.danger;
-  if (state === 'approval-required' || state === 'auth-required') return status.brass;
-  return status.neutral;
+/** Map a semantic card tone to a theme colour. Colour is a reinforcement of the
+ *  status words and attention icon, never the only signal. */
+function cardToneColor(tone: 'neutral' | 'muted' | 'attention' | 'danger'): string {
+  switch (tone) {
+    case 'attention': return status.brass;
+    case 'danger': return status.danger;
+    case 'muted': return ink.muted;
+    case 'neutral':
+    default: return status.neutral;
+  }
 }
 
 export function RigPanel(props: Props): React.ReactElement {
@@ -508,32 +520,90 @@ function RigPanelSession({ token, onClose, onResourcesChanged }: Props): React.R
             ...connection.capabilities.prompts,
           ];
           const isExpanded = expanded === connection.connectionId;
+          const card = resolveConnectionCard({
+            state: connection.state,
+            health: connection.health.state,
+            capabilityCount: capabilities.length,
+            discoveredAt: connection.capabilities.discoveredAt,
+            truncated: connection.capabilities.truncated,
+          });
+          const toneColor = cardToneColor(card.tone);
+          const showRefresh = card.secondaryActions.includes('refresh');
+          const showStop = card.secondaryActions.includes('stop');
           return (
-            <Box key={connection.connectionId} sx={{ border: `1px solid ${surface.border}`, borderRadius: `${radius.md}px`, overflow: 'hidden' }}>
+            <Box
+              key={connection.connectionId}
+              // A card that needs attention gets a stronger left keyline in its
+              // tone, so attention is carried by structure, not colour alone.
+              sx={{
+                border: `1px solid ${card.needsAttention ? toneColor : surface.border}`,
+                borderLeft: card.needsAttention ? `3px solid ${toneColor}` : `1px solid ${surface.border}`,
+                borderRadius: `${radius.md}px`,
+                overflow: 'hidden',
+              }}
+            >
               <Box sx={{ p: 1.5 }}>
                 <Stack direction="row" justifyContent="space-between" alignItems="flex-start" gap={1}>
                   <Box sx={{ minWidth: 0 }}>
                     <Typography variant="subtitle2">{connection.displayName}</Typography>
-                    <Typography variant="caption" sx={{ color: stateTone(connection.state), fontFamily: typography.mono }}>
-                      {connection.state.replaceAll('-', ' ')} · {connection.transport.kind} · health {connection.health.state.replaceAll('-', ' ')}
+                    <Stack direction="row" alignItems="center" gap={0.5} flexWrap="wrap" sx={{ mt: 0.25 }}>
+                      {card.needsAttention && (
+                        <WarningAmberIcon aria-hidden sx={{ fontSize: 14, color: toneColor }} />
+                      )}
+                      <Typography variant="caption" sx={{ color: toneColor, fontWeight: 600 }}>
+                        {card.statusText}
+                      </Typography>
+                      {card.healthText && (
+                        <Typography variant="caption" sx={{ color: toneColor }}>
+                          · {card.healthText}
+                        </Typography>
+                      )}
+                      <Typography variant="caption" sx={{ color: ink.muted, fontFamily: typography.mono }}>
+                        · {connection.transport.kind}
+                      </Typography>
+                    </Stack>
+                    <Typography variant="caption" sx={{ color: ink.muted, display: 'block', mt: 0.25 }}>
+                      {inventoryLabel(capabilities.length, card.inventoryFreshness, card.inventoryTruncated)}
                     </Typography>
                   </Box>
-                  <Stack direction="row" gap={0.5} flexWrap="wrap" justifyContent="flex-end">
-                    {['approval-required', 'stopped', 'unreachable'].includes(connection.state) && (
-                      <Button size="small" onClick={() => reviewConnection(connection.connectionId)} disabled={Boolean(busy)}>
-                        Review and connect
+                  <Stack direction="row" gap={0.5} flexWrap="wrap" justifyContent="flex-end" alignItems="center">
+                    {card.primaryAction === 'review-connect' && (
+                      // The recovery path, given the clearest affordance.
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => reviewConnection(connection.connectionId)}
+                        disabled={Boolean(busy)}
+                        sx={{
+                          color: ink.primary,
+                          borderColor: accent.violetBorder,
+                          '&:hover': { backgroundColor: accent.violetMuted, borderColor: accent.violetBorder },
+                        }}
+                      >
+                        {actionLabel('review-connect', connection.state)}
                       </Button>
                     )}
-                    {connection.state === 'connected' && (
-                      <>
-                        <Button size="small" onClick={() => act(connection.connectionId, 'refresh')} disabled={Boolean(busy)}>Refresh</Button>
-                        <Button size="small" onClick={() => act(connection.connectionId, 'stop')} disabled={Boolean(busy)}>Stop</Button>
-                      </>
+                    {showRefresh && (
+                      <Button size="small" onClick={() => act(connection.connectionId, 'refresh')} disabled={Boolean(busy)}>Refresh</Button>
+                    )}
+                    {showStop && (
+                      <Button size="small" onClick={() => act(connection.connectionId, 'stop')} disabled={Boolean(busy)}>Stop</Button>
                     )}
                     <Button size="small" aria-expanded={isExpanded} onClick={() => setExpanded(isExpanded ? null : connection.connectionId)}>
-                      {isExpanded ? 'Hide' : `Inspect (${capabilities.length})`}
+                      {isExpanded
+                        ? 'Hide'
+                        : `Inspect (${capabilities.length}${card.inventoryTruncated ? ' shown' : ''})`}
                     </Button>
-                    <Button size="small" color="error" onClick={() => setRemoveConnectionId(connection.connectionId)} disabled={Boolean(busy)}>
+                    {/* Removal is destructive, so it sits last and quiet, set off
+                        by a hairline, revealing its danger only on hover. The
+                        confirmation dialog remains the real guard. */}
+                    <Box aria-hidden sx={{ width: '1px', alignSelf: 'stretch', backgroundColor: surface.border, mx: 0.25 }} />
+                    <Button
+                      size="small"
+                      onClick={() => setRemoveConnectionId(connection.connectionId)}
+                      disabled={Boolean(busy)}
+                      sx={{ color: ink.muted, '&:hover': { color: status.danger, backgroundColor: surface.sunken } }}
+                    >
                       Remove
                     </Button>
                   </Stack>

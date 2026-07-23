@@ -12,7 +12,52 @@
 // failure that the panel must show as such, and an empty array is the single
 // authoritative empty state.
 
-import type { RigCapability, RigConnection } from '../../rig/types';
+import {
+  CONNECTION_STATES,
+  CONNECTION_HEALTHS,
+  RIG_TRANSPORT_KINDS,
+  RIG_SOURCE_CLASSES,
+  STDIO_ISOLATION_MODES,
+  type RigCapability,
+  type RigConnection,
+} from '../../rig/types';
+
+const STATE_SET: ReadonlySet<string> = new Set(CONNECTION_STATES);
+const HEALTH_SET: ReadonlySet<string> = new Set(CONNECTION_HEALTHS);
+const TRANSPORT_SET: ReadonlySet<string> = new Set(RIG_TRANSPORT_KINDS);
+const SOURCE_CLASS_SET: ReadonlySet<string> = new Set(RIG_SOURCE_CLASSES);
+const ISOLATION_SET: ReadonlySet<string> = new Set(STDIO_ISOLATION_MODES);
+
+/**
+ * Whether a value is a canonical ISO-8601 timestamp.
+ *
+ * `discoveredAt` is written by the server as `new Date().toISOString()`. A lenient
+ * `Date.parse` accepts junk like a bare year, so the shape is checked against the
+ * canonical form and then confirmed parseable, so `"not-a-date"` is rejected.
+ */
+function isCanonicalTimestamp(value: unknown): boolean {
+  if (typeof value !== 'string') return false;
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/.test(value)) return false;
+  return !Number.isNaN(Date.parse(value));
+}
+
+/** Validate the transport discriminator and its kind-specific fields. */
+function isValidTransport(transport: Record<string, unknown>): boolean {
+  if (typeof transport.kind !== 'string' || !TRANSPORT_SET.has(transport.kind)) return false;
+  if (transport.kind === 'stdio') {
+    if (typeof transport.executablePath !== 'string') return false;
+    if (!Array.isArray(transport.argv) || !transport.argv.every((a) => typeof a === 'string')) return false;
+    if (typeof transport.cwd !== 'string') return false;
+    // Isolation is a security-relevant claim; only the known modes are accepted.
+    if (typeof transport.isolationMode !== 'string' || !ISOLATION_SET.has(transport.isolationMode)) return false;
+    return true;
+  }
+  // http
+  if (typeof transport.url !== 'string') return false;
+  if (typeof transport.localDevelopment !== 'boolean') return false;
+  if (transport.authRef !== null && typeof transport.authRef !== 'string') return false;
+  return true;
+}
 
 /**
  * A structural guard for a single capability.
@@ -61,19 +106,35 @@ export type RigConnectionsResult =
 export function isRigConnection(value: unknown): value is RigConnection {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const c = value as Record<string, unknown>;
-  if (typeof c.connectionId !== 'string' || typeof c.displayName !== 'string' || typeof c.state !== 'string') return false;
+  if (typeof c.connectionId !== 'string' || typeof c.displayName !== 'string') return false;
+  if (typeof c.sourceClass !== 'string' || !SOURCE_CLASS_SET.has(c.sourceClass)) return false;
+  // The state and health must be exact known enum values. An unrecognised string
+  // is a version mismatch or a malformed response and must make the load
+  // unreadable, never be quietly accepted and rendered as a known state.
+  if (typeof c.state !== 'string' || !STATE_SET.has(c.state)) return false;
   const health = c.health as Record<string, unknown> | undefined;
-  if (!health || typeof health !== 'object' || typeof health.state !== 'string') return false;
+  if (!health || typeof health !== 'object' || typeof health.state !== 'string' || !HEALTH_SET.has(health.state as string)) return false;
   const transport = c.transport as Record<string, unknown> | undefined;
-  if (!transport || typeof transport !== 'object' || typeof transport.kind !== 'string') return false;
+  if (!transport || typeof transport !== 'object' || !isValidTransport(transport)) return false;
   const caps = c.capabilities as Record<string, unknown> | undefined;
   if (!caps || typeof caps !== 'object') return false;
+  // The inventory freshness/completeness fields the card reads must be present
+  // and well-typed, so the card never infers freshness from a missing field. A
+  // discovery timestamp must be null or a real canonical timestamp.
+  if (typeof caps.truncated !== 'boolean') return false;
+  if (caps.discoveredAt !== null && !isCanonicalTimestamp(caps.discoveredAt)) return false;
   // Each capability array must exist and every element must be a valid capability,
   // so a `resources: [null]` cannot reach the renderer.
+  const ids: string[] = [];
   for (const key of ['tools', 'resources', 'prompts'] as const) {
     const list = caps[key];
     if (!Array.isArray(list) || !list.every(isRigCapability)) return false;
+    for (const item of list) ids.push((item as RigCapability).capabilityId);
   }
+  // Capability ids must be unique across the three arrays, both because the card
+  // keys on them (a duplicate is a React key collision) and because two
+  // capabilities claiming one id is a malformed snapshot.
+  if (new Set(ids).size !== ids.length) return false;
   return true;
 }
 
