@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Box,
@@ -22,6 +22,8 @@ import {
 import { accent, ink, radius, status, surface, typography } from '../../theme/tokens';
 import type { RigCapability, RigConnection, RigPermission } from '../../rig/types';
 import { StructuredResult } from './StructuredResult';
+import { BrowserOperatorConnection } from './BrowserOperatorConnection';
+import { loadRigConnections, loadRigProvenance, resolveRigConnectionsView } from './rigLoadingModel';
 
 interface Props {
   token: string;
@@ -59,8 +61,24 @@ function stateTone(state: string): string {
   return status.neutral;
 }
 
-export function RigPanel({ token, onClose, onResourcesChanged }: Props): React.ReactElement {
+export function RigPanel(props: Props): React.ReactElement {
+  // A token change is a new principal. Remounting the whole session by token
+  // discards every piece of prior-principal state at once — connections,
+  // provenance, open review and remove dialogs, proposals, results, and the
+  // paired-device pairing state held in the child — so none of it can render or
+  // persist under the new token. Keying is applied at render, so the previous
+  // principal's data cannot paint even briefly under the new one.
+  return <RigPanelSession key={props.token} {...props} />;
+}
+
+function RigPanelSession({ token, onClose, onResourcesChanged }: Props): React.ReactElement {
   const [connections, setConnections] = useState<RigConnection[]>([]);
+  const [connectionsLoaded, setConnectionsLoaded] = useState(false);
+  const [connectionsLoading, setConnectionsLoading] = useState(false);
+  const [connectionsError, setConnectionsError] = useState<string | null>(null);
+  const [provenanceError, setProvenanceError] = useState<string | null>(null);
+  const [provenanceLoaded, setProvenanceLoaded] = useState(false);
+  const [provenanceLoading, setProvenanceLoading] = useState(false);
   const [transport, setTransport] = useState<'stdio' | 'http'>('stdio');
   const [name, setName] = useState('');
   const [endpoint, setEndpoint] = useState('');
@@ -77,21 +95,68 @@ export function RigPanel({ token, onClose, onResourcesChanged }: Props): React.R
   const [review, setReview] = useState<{ connectionId: string; value: Record<string, unknown> } | null>(null);
   const [removeConnectionId, setRemoveConnectionId] = useState<string | null>(null);
   const [provenanceRecords, setProvenanceRecords] = useState<Array<Record<string, unknown>>>([]);
+  const [showAddServer, setShowAddServer] = useState(false);
+  const [showProvenance, setShowProvenance] = useState(false);
+
+  // Monotonic ids for connection and provenance loads. Refreshes and post-action
+  // reloads can overlap; only the newest of each may publish, so an older
+  // response can never overwrite newer data or drop a stale banner over it.
+  const connectionsGen = useRef(0);
+  const provenanceGen = useRef(0);
 
   const load = useCallback(async () => {
-    const payload = await rigRequest<{ connections: RigConnection[] }>(token, '/api/rig/connections');
-    setConnections(payload.connections);
+    const gen = ++connectionsGen.current;
+    setConnectionsLoading(true);
+    const result = await loadRigConnections(fetch as never, token);
+    if (gen !== connectionsGen.current) return; // A newer load superseded this one; ignore it.
+    if (result.ok) {
+      setConnections(result.connections);
+      setConnectionsLoaded(true);
+      setConnectionsError(null);
+    } else {
+      // Preserve the last successful inventory so a failed refresh degrades to a
+      // stale banner instead of silently blanking or reading as an empty Rig.
+      setConnectionsError(result.reason);
+    }
+    setConnectionsLoading(false);
   }, [token]);
 
+  // Provenance loads on its own error channel and its own generation guard. A
+  // provenance failure never touches connection state, a malformed response is
+  // an explicit failure rather than a silent empty set, and the last valid
+  // records are preserved and disclosed as stale rather than cleared.
   const loadProvenance = useCallback(async () => {
-    const payload = await rigRequest<{ records: Array<Record<string, unknown>> }>(token, '/api/rig/provenance');
-    setProvenanceRecords(payload.records);
+    const gen = ++provenanceGen.current;
+    setProvenanceLoading(true);
+    const result = await loadRigProvenance(fetch as never, token);
+    if (gen !== provenanceGen.current) return;
+    if (result.ok) {
+      setProvenanceRecords(result.records);
+      setProvenanceError(null);
+      setProvenanceLoaded(true);
+    } else {
+      setProvenanceError(result.reason);
+    }
+    setProvenanceLoading(false);
   }, [token]);
 
+  // Token isolation is handled by remounting the session (see RigPanel), so this
+  // instance always belongs to a single token and simply loads on mount.
   useEffect(() => {
-    load().catch((error: Error) => setNotice({ severity: 'error', text: error.message }));
-    loadProvenance().catch((error: Error) => setNotice({ severity: 'error', text: error.message }));
+    void load();
+    void loadProvenance();
   }, [load, loadProvenance]);
+
+  const connectionsView = useMemo(
+    () => resolveRigConnectionsView({ loaded: connectionsLoaded, connections, error: connectionsError }),
+    [connectionsLoaded, connections, connectionsError],
+  );
+  const connectionsKnown = connectionsView.status === 'ready' || connectionsView.status === 'empty' || connectionsView.status === 'stale';
+  // Only a current successful load proves what is available. A stale (cached)
+  // inventory must not claim resources "are available", because a cached list
+  // does not prove current availability.
+  const connectionsAuthoritative = connectionsView.status === 'ready' || connectionsView.status === 'empty';
+  const showConnectionList = connectionsView.status === 'ready' || connectionsView.status === 'stale';
 
   const enabledResources = useMemo(
     () => connections.flatMap((connection) => connection.capabilities.resources.filter((item) => item.enabled)),
@@ -299,14 +364,19 @@ export function RigPanel({ token, onClose, onResourcesChanged }: Props): React.R
 
   return (
     <Box component="section" aria-labelledby="rig-title" sx={{ height: '100%', overflowY: 'auto', p: 2 }}>
-      <Stack direction="row" alignItems="center" justifyContent="space-between">
+      <Stack direction="row" alignItems="center" justifyContent="space-between" gap={2}>
         <Box>
           <Typography id="rig-title" variant="h6">Rig</Typography>
           <Typography variant="caption" sx={{ color: ink.secondary }}>
             MCP connections, capabilities, permissions, and evidence.
           </Typography>
         </Box>
-        <Button onClick={onClose} aria-label="Close Rig">Close</Button>
+        <Stack direction="row" gap={0.5}>
+          <Button aria-label="Refresh Rig connections" disabled={connectionsLoading} onClick={() => { void load(); void loadProvenance(); }}>
+            {connectionsLoading ? 'Refreshing…' : 'Refresh'}
+          </Button>
+          <Button onClick={onClose} aria-label="Close Rig">Close</Button>
+        </Stack>
       </Stack>
 
       {notice && (
@@ -330,8 +400,24 @@ export function RigPanel({ token, onClose, onResourcesChanged }: Props): React.R
         </Alert>
       )}
 
-      <Box sx={{ mt: 2, p: 1.5, border: `1px solid ${surface.border}`, borderRadius: `${radius.md}px` }}>
-        <Typography variant="subtitle2">Add MCP server</Typography>
+      <Box sx={{ mt: 2 }}>
+        <Typography variant="overline" sx={{ color: ink.secondary }}>This device</Typography>
+        <BrowserOperatorConnection token={token} />
+      </Box>
+
+      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mt: 2.5, mb: 1 }}>
+        <Box>
+          <Typography variant="subtitle2">MCP servers</Typography>
+          <Typography variant="caption" sx={{ color: ink.secondary }}>Local tools and remote services you explicitly govern.</Typography>
+        </Box>
+        <Button size="small" variant="outlined" aria-expanded={showAddServer} onClick={() => setShowAddServer((value) => !value)}>
+          {showAddServer ? 'Cancel' : 'Add server'}
+        </Button>
+      </Stack>
+
+      <Collapse in={showAddServer} unmountOnExit>
+      <Box sx={{ p: 1.5, mb: 1.5, border: `1px solid ${surface.border}`, borderRadius: `${radius.md}px`, backgroundColor: surface.sunken }}>
+        <Typography variant="subtitle2">New MCP server</Typography>
         <Tabs value={transport} onChange={(_, value) => setTransport(value)} sx={{ minHeight: 36 }}>
           <Tab value="stdio" label="Local stdio" />
           <Tab value="http" label="Remote HTTP" />
@@ -372,11 +458,48 @@ export function RigPanel({ token, onClose, onResourcesChanged }: Props): React.R
           </Button>
         </Stack>
       </Box>
+      </Collapse>
 
-      <Typography variant="subtitle2" sx={{ mt: 2.5, mb: 1 }}>Connections ({connections.length})</Typography>
-      {connections.length === 0 && (
+      <Typography variant="subtitle2" sx={{ mt: 1.5, mb: 1 }}>
+        Connections{connectionsKnown ? ` (${connections.length})` : ''}
+      </Typography>
+
+      {connectionsView.status === 'loading' && (
+        <Typography variant="body2" sx={{ color: ink.secondary }}>Loading Rig connections…</Typography>
+      )}
+
+      {connectionsView.status === 'error' && (
+        <Alert
+          severity="error"
+          action={(
+            <Button color="inherit" size="small" disabled={connectionsLoading} onClick={() => void load()}>
+              {connectionsLoading ? 'Retrying…' : 'Retry'}
+            </Button>
+          )}
+        >
+          {connectionsView.reason}
+        </Alert>
+      )}
+
+      {connectionsView.status === 'stale' && (
+        <Alert
+          severity="warning"
+          sx={{ mb: 1 }}
+          action={(
+            <Button color="inherit" size="small" disabled={connectionsLoading} onClick={() => void load()}>
+              {connectionsLoading ? 'Retrying…' : 'Retry'}
+            </Button>
+          )}
+        >
+          Showing cached connections. {connectionsView.reason}
+        </Alert>
+      )}
+
+      {connectionsView.status === 'empty' && (
         <Typography variant="body2" sx={{ color: ink.secondary }}>No MCP servers connected yet.</Typography>
       )}
+
+      {showConnectionList && (
       <Stack spacing={1.25}>
         {connections.map((connection) => {
           const capabilities = [
@@ -503,14 +626,61 @@ export function RigPanel({ token, onClose, onResourcesChanged }: Props): React.R
           );
         })}
       </Stack>
+      )}
 
-      <Typography variant="caption" sx={{ color: ink.secondary, display: 'block', mt: 2 }}>
-        {enabledResources.length} MCP resources are available to the context picker.
-      </Typography>
-      <Button size="small" sx={{ mt: 1 }} onClick={() => void loadProvenance().catch((error: Error) => setNotice({ severity: 'error', text: error.message }))}>
-        Show provenance ({provenanceRecords.length})
+      {connectionsAuthoritative && (
+        <Typography variant="caption" sx={{ color: ink.secondary, display: 'block', mt: 2 }}>
+          {enabledResources.length} MCP resources are available to the context picker.
+        </Typography>
+      )}
+      {connectionsView.status === 'stale' && (
+        <Typography variant="caption" sx={{ color: ink.muted, display: 'block', mt: 2 }}>
+          Resource availability is unknown until the connection list refreshes.
+        </Typography>
+      )}
+      <Button
+        size="small"
+        sx={{ mt: 1 }}
+        aria-expanded={showProvenance}
+        onClick={() => {
+          setShowProvenance((value) => !value);
+          if (!showProvenance) void loadProvenance();
+        }}
+      >
+        {showProvenance ? 'Hide' : 'Show'} provenance ({
+          provenanceError && provenanceRecords.length === 0
+            ? 'unavailable'
+            : provenanceError && provenanceRecords.length > 0
+              // Cached records after a failed refresh. The collapsed control must
+              // disclose the same staleness the expanded alert does, so the count
+              // is never read as current availability.
+              ? `${provenanceRecords.length} cached`
+              : (!provenanceLoaded && provenanceRecords.length === 0)
+                ? '…'
+                : provenanceRecords.length
+        })
       </Button>
-      {provenanceRecords.length > 0 && <StructuredResult value={provenanceRecords} label="Rig provenance records" />}
+      <Collapse in={showProvenance} unmountOnExit>
+        {provenanceError && (
+          <Alert
+            severity={provenanceRecords.length > 0 ? 'warning' : 'error'}
+            sx={{ mt: 1 }}
+            action={(
+              <Button color="inherit" size="small" onClick={() => void loadProvenance()}>Retry</Button>
+            )}
+          >
+            {provenanceRecords.length > 0 ? `Showing cached provenance. ${provenanceError}` : provenanceError}
+          </Alert>
+        )}
+        {provenanceRecords.length > 0 && (
+          <StructuredResult value={provenanceRecords} label="Rig provenance records" />
+        )}
+        {provenanceRecords.length === 0 && !provenanceError && (
+          (provenanceLoading || !provenanceLoaded)
+            ? <Typography variant="caption" sx={{ color: ink.secondary, display: 'block', mt: 1 }}>Loading provenance…</Typography>
+            : <Typography variant="caption" sx={{ color: ink.secondary, display: 'block', mt: 1 }}>No provenance records yet.</Typography>
+        )}
+      </Collapse>
 
       <Dialog open={Boolean(review)} onClose={() => setReview(null)} fullWidth maxWidth="md" aria-labelledby="rig-review-title">
         <DialogTitle id="rig-review-title">Review exact connection</DialogTitle>

@@ -2,6 +2,7 @@
 import { getAccessToken, setAccessToken, getRefreshToken, setRefreshToken, getInstallationId } from './storage.js';
 
 const GATEWAY_BASE_URL = 'http://127.0.0.1:4000';
+let refreshInFlight = null;
 
 export async function request(path, options = {}) {
   const url = `${GATEWAY_BASE_URL}${path}`;
@@ -39,6 +40,16 @@ export async function request(path, options = {}) {
 }
 
 async function attemptTokenRefresh() {
+  if (refreshInFlight) return refreshInFlight;
+  refreshInFlight = refreshAccessToken();
+  try {
+    return await refreshInFlight;
+  } finally {
+    refreshInFlight = null;
+  }
+}
+
+async function refreshAccessToken() {
   const refreshToken = await getRefreshToken();
   const installationId = await getInstallationId();
   if (!refreshToken) return false;

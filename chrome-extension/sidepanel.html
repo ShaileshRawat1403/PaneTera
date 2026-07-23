@@ -112,17 +112,33 @@
       margin-top: 8px;
       display: none;
     }
+    .approval-panel {
+      background: rgba(184, 138, 68, 0.08);
+      border: 1px solid rgba(184, 138, 68, 0.35);
+      border-radius: 8px;
+      padding: 14px;
+      margin-bottom: 16px;
+    }
+    .approval-panel strong { display: block; font-size: 13px; margin-bottom: 7px; }
+    .approval-panel p { color: #b9b1a6; font-size: 11px; line-height: 1.5; margin: 0 0 12px; }
   </style>
 </head>
 <body>
-  <h3>Tessera Browser Operator</h3>
+  <h3>PaneTera Browser Operator</h3>
   
   <div id="statusBadge" class="status-badge status-disconnected">Checking Gateway...</div>
+
+  <div id="pendingPanel" class="approval-panel" style="display: none;">
+    <strong>PaneTera wants to connect</strong>
+    <p>Allow read-only page observation and structured extraction on this device. Actions remain governed in PaneTera.</p>
+    <button id="btnApprovePairing">Allow connection</button>
+    <button id="btnDismissPairing" class="btn-secondary">Not now</button>
+  </div>
 
   <!-- Disconnected State Panel -->
   <div id="setupPanel" style="display: none;">
     <div class="info-box">
-      Enter the 8-character pairing code generated in the Tessera Workbench dashboard to authorize this extension connection.
+      If automatic connection is unavailable, enter the temporary code shown in Rig.
     </div>
     <div class="input-group">
       <label>Pairing Code</label>
@@ -135,8 +151,8 @@
   <!-- Connected State Panel -->
   <div id="actionPanel" style="display: none;">
     <div class="info-box">
-      <strong>Active Mode:</strong> Governed Read-Only<br/>
-      Observations will be routed to the Workbench Intelligence Feed.
+      <strong>Access:</strong> Safe inspection<br/>
+      Observations and evidence are routed to PaneTera Activity.
     </div>
     <div class="input-group" style="margin-bottom: 12px;">
       <label>Action</label>

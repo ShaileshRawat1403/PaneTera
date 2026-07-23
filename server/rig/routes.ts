@@ -1,6 +1,8 @@
 import express from 'express';
 import { randomUUID } from 'crypto';
-import { logAudit } from '../audit';
+import { logTypedAudit } from '../auditRecord';
+import { operatorPrincipalForRequest, type OperatorPrincipal } from '../operatorPrincipal';
+import { rigAuditFields, rigInvocationFailureFields, type InvocationPhase } from './auditClassification';
 import { digest } from './canonical';
 import { CapabilityApprovalStore } from './approval';
 import { ProvenanceStore } from './provenance';
@@ -13,14 +15,7 @@ import type { CapabilityCard, McpConnection, Permission, ProvenanceRecord } from
 export const rigRouter = express.Router();
 const registry = new RigRegistry();
 const runtime = new RigRuntime(async (connectionId, error) => {
-  const connection = registry.get(connectionId);
-  if (!connection) return;
-  await registry.update(connectionId, (value) => ({
-    ...value,
-    state: 'unreachable',
-    health: { ...value.health, state: 'degraded' },
-  }));
-  logAudit('rig.connection.transport-failed', { connectionId, error: error.message });
+  await handleTransportFailure(rigLifecycleDeps(), connectionId, error);
 });
 const approvals = new CapabilityApprovalStore();
 const provenance = new ProvenanceStore();
@@ -41,6 +36,84 @@ function publicConnection(record: McpConnection): McpConnection {
 function findCapability(record: McpConnection, capabilityId: string): CapabilityCard | null {
   return [...record.capabilities.tools, ...record.capabilities.resources, ...record.capabilities.prompts]
     .find((card) => card.capabilityId === capabilityId) ?? null;
+}
+
+/** Dependencies for the connection lifecycle failure paths, injectable for tests. */
+export interface RigLifecycleDeps {
+  registry: Pick<RigRegistry, 'get' | 'update'>;
+  runtime: Pick<RigRuntime, 'disconnect'>;
+}
+
+function rigLifecycleDeps(): RigLifecycleDeps {
+  return { registry, runtime };
+}
+
+/**
+ * A transport failure observed by PaneTera's runtime. The terminal record is
+ * emitted first and unconditionally, so a failing or unreadable registry during
+ * the follow-up state update cannot erase the audit. The state degradation is
+ * best effort and secondary to the record.
+ */
+export async function handleTransportFailure(deps: RigLifecycleDeps, connectionId: string, error: Error): Promise<void> {
+  logTypedAudit({
+    event: 'rig.connection.transport-failed',
+    ...rigAuditFields('rig.connection.transport-failed'),
+    correlation: { connectionId },
+    details: { error: error.message },
+  });
+  try {
+    if (deps.registry.get(connectionId)) {
+      await deps.registry.update(connectionId, (value) => ({
+        ...value,
+        state: 'unreachable',
+        health: { ...value.health, state: 'degraded' },
+      }));
+    }
+  } catch {
+    // Best effort. The connection may already be gone or the registry unreadable;
+    // the audit record is the guarantee, not the state update.
+  }
+}
+
+/**
+ * A failed connect attempt. The terminal record is emitted first, then the
+ * disconnect and state degradation are attempted best effort, so a failure to
+ * disconnect or to write the degraded state cannot lose the audit or mask the
+ * original connect error. Returns the connection for the response, or null if it
+ * could not be read.
+ */
+export async function emitConnectFailure(
+  deps: RigLifecycleDeps,
+  connectionId: string,
+  approvalId: string,
+  message: string,
+): Promise<McpConnection | null> {
+  // PaneTera's connect attempt failed. This is a system-observed failure, not
+  // the connector reporting on itself.
+  logTypedAudit({
+    event: 'rig.connection.failed',
+    ...rigAuditFields('rig.connection.failed'),
+    correlation: { connectionId, approvalId },
+    details: { error: message },
+  });
+  try {
+    await deps.runtime.disconnect(connectionId);
+  } catch {
+    // Best effort; the audit is already recorded.
+  }
+  try {
+    return await deps.registry.update(connectionId, (value) => ({
+      ...value,
+      state: 'unreachable',
+      health: { ...value.health, state: 'degraded' },
+    }));
+  } catch {
+    try {
+      return deps.registry.get(connectionId) ?? null;
+    } catch {
+      return null;
+    }
+  }
 }
 
 interface ConnectionReview extends Record<string, unknown> {
@@ -130,7 +203,14 @@ rigRouter.post('/connections', async (req, res) => {
         throw error;
       }
     }
-    logAudit('rig.connection.proposed', { connectionId: record.connectionId, transport: transport.kind });
+    // The operator proposed a connection through the UI. The connector has not
+    // acted; a connectionId here does not make it the actor.
+    logTypedAudit({
+      event: 'rig.connection.proposed',
+      ...rigAuditFields('rig.connection.proposed', undefined, operatorPrincipalForRequest(req)),
+      correlation: { connectionId: record.connectionId },
+      details: { transport: transport.kind },
+    });
     return res.status(201).json({ connection: publicConnection(record) });
   } catch (error: unknown) {
     return res.status(400).json({ error: error instanceof Error ? error.message : String(error) });
@@ -173,12 +253,11 @@ rigRouter.post('/connections/:connectionId/approve', async (req, res) => {
         connectionApprovalId: approvalId,
         state: 'starting',
       }));
-      logAudit('rig.connection.approved', {
-        connectionId,
-        approvalId,
-        transport: 'stdio',
-        launchSpecDigest: verified.launchSpecDigest,
-        executablePath: verified.executablePath,
+      logTypedAudit({
+        event: 'rig.connection.approved',
+        ...rigAuditFields('rig.connection.approved', undefined, operatorPrincipalForRequest(req)),
+        correlation: { connectionId, approvalId },
+        details: { transport: 'stdio', launchSpecDigest: verified.launchSpecDigest, executablePath: verified.executablePath },
       });
     } else {
       const verified = await verifyHttpSpec(current.transport);
@@ -189,12 +268,11 @@ rigRouter.post('/connections/:connectionId/approve', async (req, res) => {
         connectionApprovalId: approvalId,
         state: 'starting',
       }));
-      logAudit('rig.connection.approved', {
-        connectionId,
-        approvalId,
-        transport: 'http',
-        origin: verified.url.origin,
-        localDevelopment: current.transport.localDevelopment,
+      logTypedAudit({
+        event: 'rig.connection.approved',
+        ...rigAuditFields('rig.connection.approved', undefined, operatorPrincipalForRequest(req)),
+        correlation: { connectionId, approvalId },
+        details: { transport: 'http', origin: verified.url.origin, localDevelopment: current.transport.localDevelopment },
       });
     }
 
@@ -217,28 +295,27 @@ rigRouter.post('/connections/:connectionId/approve', async (req, res) => {
       health: { state: 'current', lastSuccessfulContact: new Date().toISOString() },
       capabilities: connected.snapshot,
     }));
-    logAudit('rig.connection.connected', {
-      connectionId,
-      approvalId,
-      structuralChanged,
-      presentationChanged,
-      capabilityCounts: {
-        tools: record.capabilities.tools.length,
-        resources: record.capabilities.resources.length,
-        prompts: record.capabilities.prompts.length,
+    // PaneTera's runtime established the session. The connector is the endpoint,
+    // not the actor that connected to it.
+    logTypedAudit({
+      event: 'rig.connection.connected',
+      ...rigAuditFields('rig.connection.connected'),
+      correlation: { connectionId, approvalId },
+      details: {
+        structuralChanged,
+        presentationChanged,
+        capabilityCounts: {
+          tools: record.capabilities.tools.length,
+          resources: record.capabilities.resources.length,
+          prompts: record.capabilities.prompts.length,
+        },
       },
     });
     return res.json({ connection: publicConnection(record), attention: { structuralChanged, presentationChanged } });
   } catch (error: unknown) {
-    await runtime.disconnect(connectionId);
-    const record = await registry.update(connectionId, (value) => ({
-      ...value,
-      state: 'unreachable',
-      health: { ...value.health, state: 'degraded' },
-    }));
     const message = error instanceof Error ? error.message : String(error);
-    logAudit('rig.connection.failed', { connectionId, approvalId, error: message });
-    return res.status(502).json({ error: message, connection: publicConnection(record) });
+    const record = await emitConnectFailure(rigLifecycleDeps(), connectionId, approvalId, message);
+    return res.status(502).json({ error: message, connection: record ? publicConnection(record) : undefined });
   }
 });
 
@@ -248,7 +325,12 @@ rigRouter.post('/connections/:connectionId/stop', async (req, res) => {
     if (!registry.get(connectionId)) return res.status(404).json({ error: 'Rig connection not found.' });
     await runtime.disconnect(connectionId);
     const record = await registry.update(connectionId, (value) => ({ ...value, state: 'stopped' }));
-    logAudit('rig.connection.stopped', { connectionId });
+    logTypedAudit({
+      event: 'rig.connection.stopped',
+      ...rigAuditFields('rig.connection.stopped', undefined, operatorPrincipalForRequest(req)),
+      correlation: { connectionId },
+      details: {},
+    });
     return res.json({ connection: publicConnection(record) });
   } catch (error: unknown) {
     return res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
@@ -265,13 +347,17 @@ rigRouter.delete('/connections/:connectionId', async (req, res) => {
       await deleteBearerCredential(current.transport.authRef);
     }
     const removed = await registry.remove(connectionId);
-    logAudit('rig.connection.removed', {
-      connectionId,
-      transport: removed.transport.kind,
-      capabilityCounts: {
-        tools: removed.capabilities.tools.length,
-        resources: removed.capabilities.resources.length,
-        prompts: removed.capabilities.prompts.length,
+    logTypedAudit({
+      event: 'rig.connection.removed',
+      ...rigAuditFields('rig.connection.removed', undefined, operatorPrincipalForRequest(req)),
+      correlation: { connectionId },
+      details: {
+        transport: removed.transport.kind,
+        capabilityCounts: {
+          tools: removed.capabilities.tools.length,
+          resources: removed.capabilities.resources.length,
+          prompts: removed.capabilities.prompts.length,
+        },
       },
     });
     return res.json({ removed: true });
@@ -295,7 +381,14 @@ rigRouter.post('/connections/:connectionId/refresh', async (req, res) => {
       health: { state: 'current', lastSuccessfulContact: new Date().toISOString() },
     }));
     if (structuralChanged || presentationChanged) {
-      logAudit('rig.capabilities.changed', { connectionId: record.connectionId, structuralChanged, presentationChanged });
+      // PaneTera initiated discovery, compared snapshots, and recorded the
+      // observation. The connector is the evidence source, not the actor.
+      logTypedAudit({
+        event: 'rig.capabilities.changed',
+        ...rigAuditFields('rig.capabilities.changed'),
+        correlation: { connectionId: record.connectionId },
+        details: { structuralChanged, presentationChanged },
+      });
     }
     return res.json({ connection: publicConnection(updated), attention: { structuralChanged, presentationChanged } });
   } catch (error: unknown) {
@@ -331,7 +424,12 @@ rigRouter.put('/connections/:connectionId/capabilities/:capabilityId', async (re
         prompts: updateCards(record.capabilities.prompts),
       },
     }));
-    logAudit('rig.capability.policy', { connectionId, capabilityId, enabled, permission: enabled ? requested : 'denied' });
+    logTypedAudit({
+      event: 'rig.capability.policy',
+      ...rigAuditFields('rig.capability.policy', undefined, operatorPrincipalForRequest(req)),
+      correlation: { connectionId },
+      details: { capabilityId, enabled, permission: enabled ? requested : 'denied' },
+    });
     return res.json({ connection: publicConnection(updated) });
   } catch (error: unknown) {
     return res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
@@ -355,43 +453,150 @@ rigRouter.post('/proposals', (req, res) => {
     arguments: args && typeof args === 'object' && !Array.isArray(args) ? args : {},
     displayArguments: args ?? {},
   });
-  logAudit('rig.invocation.proposed', { connectionId, capabilityId, proposalId: proposal.proposalId, argumentsDigest: proposal.argumentsDigest });
+  logTypedAudit({
+    event: 'rig.invocation.proposed',
+    ...rigAuditFields('rig.invocation.proposed', undefined, operatorPrincipalForRequest(req)),
+    correlation: { connectionId, proposalId: proposal.proposalId },
+    details: { capabilityId, argumentsDigest: proposal.argumentsDigest },
+  });
   return res.status(201).json({ proposal });
 });
 
 rigRouter.post('/proposals/:proposalId/approve', (req, res) => {
   try {
     const approval = approvals.approve(req.params.proposalId);
-    logAudit('rig.invocation.approved', { connectionId: approval.connectionId, capabilityId: approval.capabilityId, proposalId: approval.proposalId, approvalId: approval.approvalId });
+    logTypedAudit({
+      event: 'rig.invocation.approved',
+      ...rigAuditFields('rig.invocation.approved', undefined, operatorPrincipalForRequest(req)),
+      correlation: { connectionId: approval.connectionId, proposalId: approval.proposalId, approvalId: approval.approvalId },
+      details: { capabilityId: approval.capabilityId },
+    });
     return res.json({ approval });
   } catch (error: unknown) {
     return res.status(409).json({ error: error instanceof Error ? error.message : String(error) });
   }
 });
 
-rigRouter.post('/invocations', async (req, res) => {
-  const { approvalId, arguments: args } = req.body ?? {};
-  const connectionId = String(req.body?.connectionId ?? '');
+export interface RigDataDeps {
+  registry: Pick<RigRegistry, 'get' | 'update'>;
+  runtime: Pick<RigRuntime, 'callTool' | 'readResource' | 'getPrompt'>;
+  approvals: Pick<CapabilityApprovalStore, 'claim' | 'consume'>;
+  provenance: Pick<ProvenanceStore, 'append'>;
+}
+
+/**
+ * Degrade a connection's health after a failure, without ever suppressing the
+ * audit or masking the primary error. The audit is emitted before this runs, so
+ * a registry failure here cannot erase the terminal record.
+ */
+async function degradeHealthBestEffort(deps: RigDataDeps, connectionId: string): Promise<void> {
   try {
-    const capabilityId = String(req.body?.capabilityId ?? '');
-    const connection = registry.get(connectionId);
-    const capability = connection ? findCapability(connection, capabilityId) : null;
-    if (!connection || connection.state !== 'connected' || !capability || capability.kind !== 'tool' || !capability.enabled) {
-      return res.status(409).json({ error: 'Enabled connected tool not found.' });
+    if (deps.registry.get(connectionId)) {
+      await deps.registry.update(connectionId, (value) => ({ ...value, health: { ...value.health, state: 'degraded' } }));
     }
-    const argumentsValue = args && typeof args === 'object' && !Array.isArray(args) ? args : {};
-    const { approval, claimId } = approvals.claim(String(approvalId), {
+  } catch {
+    // Best effort. Health degradation is secondary to the audit record.
+  }
+}
+
+/** A pre-serialized HTTP response, so the payload is built inside the audited boundary. */
+export interface HandlerResult {
+  status: number;
+  payload: string;
+}
+
+/** Serialize a small, trusted response object. Used only for denial and error bodies. */
+function jbody(status: number, obj: unknown): HandlerResult {
+  return { status, payload: JSON.stringify(obj) };
+}
+
+/**
+ * Look up the governed connection and capability. A read of PaneTera's own
+ * connection state can fail (corrupt or unreadable registry), so the lookup is
+ * fallible and the caller must audit that failure rather than let it escape.
+ */
+function lookupCapability(
+  deps: RigDataDeps,
+  connectionId: string,
+  capabilityId: string,
+): { connection: McpConnection | null; capability: CapabilityCard | null } {
+  const connection = deps.registry.get(connectionId);
+  const capability = connection ? findCapability(connection, capabilityId) : null;
+  return { connection, capability };
+}
+
+/**
+ * Invoke a governed tool. Exactly one terminal record is emitted on every
+ * attempted action, including a failed registry lookup, and the record is always
+ * written before any best-effort health update. The failure phase is tracked
+ * explicitly so a consumption failure after a successful call reads as
+ * finalization, not as the call. The success payload is serialized inside the
+ * audited boundary, so a response that cannot be built is recorded as a
+ * finalization error rather than a false success.
+ */
+export async function handleInvocation(
+  deps: RigDataDeps,
+  input: { connectionId?: unknown; capabilityId?: unknown; approvalId?: unknown; arguments?: unknown },
+  principal?: OperatorPrincipal,
+): Promise<HandlerResult> {
+  const connectionId = String(input.connectionId ?? '');
+  const capabilityId = String(input.capabilityId ?? '');
+
+  let connection: McpConnection | null;
+  let capability: CapabilityCard | null;
+  try {
+    ({ connection, capability } = lookupCapability(deps, connectionId, capabilityId));
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    logTypedAudit({
+      event: 'rig.invocation.failed',
+      ...rigInvocationFailureFields('registry-lookup', principal),
+      correlation: { connectionId },
+      details: { phase: 'registry-lookup', error: message },
+    });
+    return jbody(500, { error: 'Unable to read connection state.' });
+  }
+
+  if (!connection || connection.state !== 'connected' || !capability || capability.kind !== 'tool' || !capability.enabled) {
+    logTypedAudit({
+      event: 'rig.invocation.failed',
+      ...rigInvocationFailureFields('target-invalid', principal),
+      correlation: { connectionId },
+      details: { phase: 'target-invalid', reason: 'enabled connected tool not found' },
+    });
+    return jbody(409, { error: 'Enabled connected tool not found.' });
+  }
+
+  const argumentsValue = input.arguments && typeof input.arguments === 'object' && !Array.isArray(input.arguments)
+    ? (input.arguments as Record<string, unknown>)
+    : {};
+  let phase: InvocationPhase = 'approval-claim';
+  let approval: { proposalId: string; approvalId: string } | undefined;
+  try {
+    const claim = deps.approvals.claim(String(input.approvalId ?? ''), {
       connectionId,
       capabilityId,
       capabilityDigest: capability.structuralDigest,
       arguments: argumentsValue,
     });
+    approval = claim.approval;
+    const claimId = claim.claimId;
+
+    phase = 'connector-call';
     let output: unknown;
     try {
-      output = await runtime.callTool(connectionId, capability.name, argumentsValue);
-    } finally {
-      approvals.consume(approval.approvalId, claimId);
+      output = await deps.runtime.callTool(connectionId, capability.name, argumentsValue);
+    } catch (callError) {
+      // Release the claim, but never let a consumption error mask the call error.
+      try { deps.approvals.consume(claim.approval.approvalId, claimId); } catch { /* best effort */ }
+      throw callError;
     }
+
+    // The call succeeded; everything after this is local finalization, so a
+    // consumption, provenance, or serialization failure is attributed to
+    // finalization.
+    phase = 'local-finalization';
+    deps.approvals.consume(claim.approval.approvalId, claimId);
     const record: ProvenanceRecord = {
       recordId: randomUUID(),
       recordType: 'mcp-invocation',
@@ -407,42 +612,96 @@ rigRouter.post('/invocations', async (req, res) => {
       integrity: 'verified',
       retentionClass: 'session',
     };
-    provenance.append(record);
-    await registry.update(connectionId, (value) => ({
+    // Build the response before persisting provenance or recording success. If
+    // the untrusted connector output cannot be serialized, this throws without
+    // leaving a verified provenance record for a response the client never got.
+    const payload = JSON.stringify({ result: output, provenance: record });
+    deps.provenance.append(record);
+    await deps.registry.update(connectionId, (value) => ({
       ...value,
       health: { state: 'current', lastSuccessfulContact: new Date().toISOString() },
     }));
-    logAudit('rig.invocation.completed', { connectionId, capabilityId, approvalId, provenanceRecordId: record.recordId, outputDigest: record.outputDigest });
-    return res.json({ result: output, provenance: record });
+    logTypedAudit({
+      event: 'rig.invocation.completed',
+      ...rigAuditFields('rig.invocation.completed', connection),
+      correlation: { connectionId, proposalId: approval.proposalId, approvalId: approval.approvalId, parentRecordId: record.recordId },
+      details: { capabilityId, provenanceRecordId: record.recordId, outputDigest: record.outputDigest },
+    });
+    return { status: 200, payload };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
-    if (registry.get(connectionId)) {
-      await registry.update(connectionId, (value) => ({ ...value, health: { ...value.health, state: 'degraded' } }));
+    // Guaranteed terminal record, before any best-effort health update.
+    if (phase === 'approval-claim') {
+      // The rejected approvalId is unverified, so it is not recorded as
+      // authoritative correlation.
+      logTypedAudit({
+        event: 'rig.invocation.failed',
+        ...rigInvocationFailureFields('approval-claim', principal),
+        correlation: { connectionId },
+        details: { phase, error: message },
+      });
+    } else {
+      logTypedAudit({
+        event: 'rig.invocation.failed',
+        ...rigInvocationFailureFields(phase, principal),
+        correlation: { connectionId, proposalId: approval?.proposalId, approvalId: approval?.approvalId },
+        details: { phase, error: message },
+      });
     }
-    logAudit('rig.invocation.failed', { connectionId, approvalId, error: message });
-    return res.status(409).json({ error: message });
+    await degradeHealthBestEffort(deps, connectionId);
+    return jbody(409, { error: message });
   }
-});
+}
 
-rigRouter.get('/resources', (_req, res) => {
-  const resources = registry.list().flatMap((connection) => connection.capabilities.resources
-    .filter((resource) => connection.state === 'connected' && resource.enabled)
-    .map((resource) => ({ ...resource, connectionId: connection.connectionId, connectionName: connection.displayName })));
-  res.json({ resources });
-});
+/** Read a governed resource. One terminal record per attempted action, audit before health. */
+export async function handleResourceRead(
+  deps: RigDataDeps,
+  input: { connectionId?: unknown; capabilityId?: unknown },
+  principal?: OperatorPrincipal,
+): Promise<HandlerResult> {
+  const connectionId = String(input.connectionId ?? '');
+  const capabilityId = String(input.capabilityId ?? '');
 
-rigRouter.post('/resources/read', async (req, res) => {
-  const connectionId = String(req.body?.connectionId ?? '');
-  const capabilityId = String(req.body?.capabilityId ?? '');
-  const connection = registry.get(connectionId);
-  const capability = connection ? findCapability(connection, capabilityId) : null;
+  let connection: McpConnection | null;
+  let capability: CapabilityCard | null;
+  try {
+    ({ connection, capability } = lookupCapability(deps, connectionId, capabilityId));
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    // A read of PaneTera's own state failed. System-observed, not the connector.
+    logTypedAudit({
+      event: 'rig.resource.failed',
+      ...rigAuditFields('rig.resource.failed'),
+      correlation: { connectionId },
+      details: { capabilityId, phase: 'registry-lookup', error: message },
+    });
+    return jbody(500, { error: 'Unable to read connection state.' });
+  }
+
   if (!connection || connection.state !== 'connected' || !capability || capability.kind !== 'resource' || !capability.enabled || capability.permission === 'denied') {
-    return res.status(403).json({ error: 'Enabled connected resource not found.' });
+    // A policy denial: the resource is absent, disabled, or explicitly denied.
+    logTypedAudit({
+      event: 'rig.resource.denied',
+      ...rigAuditFields('rig.resource.denied', undefined, principal),
+      correlation: { connectionId },
+      details: { capabilityId, reason: 'enabled connected resource not found' },
+    });
+    return jbody(403, { error: 'Enabled connected resource not found.' });
   }
   const declaration = capability.rawDeclaration as Record<string, unknown>;
-  if (typeof declaration.uri !== 'string') return res.status(400).json({ error: 'Resource has no fixed URI.' });
+  if (typeof declaration.uri !== 'string') {
+    // Not a policy denial: the connector's own declaration lacks a fixed URI, so
+    // there is nothing to read. A local declaration failure, system-observed.
+    logTypedAudit({
+      event: 'rig.resource.failed',
+      ...rigAuditFields('rig.resource.failed'),
+      correlation: { connectionId },
+      details: { capabilityId, reason: 'resource has no fixed uri' },
+    });
+    return jbody(422, { error: 'Resource has no fixed URI.' });
+  }
   try {
-    const result = await runtime.readResource(connectionId, declaration.uri);
+    const result = await deps.runtime.readResource(connectionId, declaration.uri);
     const record: ProvenanceRecord = {
       recordId: randomUUID(),
       recordType: 'mcp-resource-read',
@@ -458,35 +717,79 @@ rigRouter.post('/resources/read', async (req, res) => {
       integrity: 'verified',
       retentionClass: 'session',
     };
-    provenance.append(record);
-    await registry.update(connectionId, (value) => ({
+    const payload = JSON.stringify({ result, provenance: record });
+    deps.provenance.append(record);
+    await deps.registry.update(connectionId, (value) => ({
       ...value,
       health: { state: 'current', lastSuccessfulContact: new Date().toISOString() },
     }));
-    logAudit('rig.resource.read', { connectionId, capabilityId, provenanceRecordId: record.recordId });
-    return res.json({ result, provenance: record });
+    logTypedAudit({
+      event: 'rig.resource.read',
+      ...rigAuditFields('rig.resource.read', connection),
+      correlation: { connectionId, parentRecordId: record.recordId },
+      details: { capabilityId, provenanceRecordId: record.recordId },
+    });
+    return { status: 200, payload };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
-    await registry.update(connectionId, (value) => ({ ...value, health: { ...value.health, state: 'degraded' } }));
-    logAudit('rig.resource.failed', { connectionId, capabilityId, error: message });
-    return res.status(502).json({ error: message });
+    logTypedAudit({
+      event: 'rig.resource.failed',
+      ...rigAuditFields('rig.resource.failed'),
+      correlation: { connectionId },
+      details: { capabilityId, error: message },
+    });
+    await degradeHealthBestEffort(deps, connectionId);
+    return jbody(502, { error: message });
   }
-});
+}
 
-rigRouter.post('/prompts/get', async (req, res) => {
-  const connectionId = String(req.body?.connectionId ?? '');
-  const capabilityId = String(req.body?.capabilityId ?? '');
-  const connection = registry.get(connectionId);
-  const capability = connection ? findCapability(connection, capabilityId) : null;
-  if (!connection || connection.state !== 'connected' || !capability || capability.kind !== 'prompt' || !capability.enabled || capability.permission === 'denied') {
-    return res.status(403).json({ error: 'Enabled connected prompt not found.' });
+/** Read a governed prompt. One terminal record per attempted action, audit before health. */
+export async function handlePromptGet(
+  deps: RigDataDeps,
+  input: { connectionId?: unknown; capabilityId?: unknown; arguments?: unknown },
+  principal?: OperatorPrincipal,
+): Promise<HandlerResult> {
+  const connectionId = String(input.connectionId ?? '');
+  const capabilityId = String(input.capabilityId ?? '');
+
+  let connection: McpConnection | null;
+  let capability: CapabilityCard | null;
+  try {
+    ({ connection, capability } = lookupCapability(deps, connectionId, capabilityId));
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    logTypedAudit({
+      event: 'rig.prompt.failed',
+      ...rigAuditFields('rig.prompt.failed'),
+      correlation: { connectionId },
+      details: { capabilityId, phase: 'registry-lookup', error: message },
+    });
+    return jbody(500, { error: 'Unable to read connection state.' });
   }
-  const args = req.body?.arguments;
+
+  if (!connection || connection.state !== 'connected' || !capability || capability.kind !== 'prompt' || !capability.enabled || capability.permission === 'denied') {
+    logTypedAudit({
+      event: 'rig.prompt.denied',
+      ...rigAuditFields('rig.prompt.denied', undefined, principal),
+      correlation: { connectionId },
+      details: { capabilityId, reason: 'enabled connected prompt not found' },
+    });
+    return jbody(403, { error: 'Enabled connected prompt not found.' });
+  }
+  const args = input.arguments;
   if (!args || typeof args !== 'object' || Array.isArray(args) || Object.values(args).some((value) => typeof value !== 'string')) {
-    return res.status(400).json({ error: 'Prompt arguments must be a string map.' });
+    // Not a policy denial: the operator supplied malformed arguments, so the
+    // request failed input validation before policy was consulted.
+    logTypedAudit({
+      event: 'rig.prompt.invalid',
+      ...rigAuditFields('rig.prompt.invalid', undefined, principal),
+      correlation: { connectionId },
+      details: { capabilityId, reason: 'prompt arguments must be a string map' },
+    });
+    return jbody(422, { error: 'Prompt arguments must be a string map.' });
   }
   try {
-    const result = await runtime.getPrompt(connectionId, capability.name, args as Record<string, string>);
+    const result = await deps.runtime.getPrompt(connectionId, capability.name, args as Record<string, string>);
     const record: ProvenanceRecord = {
       recordId: randomUUID(),
       recordType: 'mcp-prompt-read',
@@ -502,19 +805,58 @@ rigRouter.post('/prompts/get', async (req, res) => {
       integrity: 'verified',
       retentionClass: 'session',
     };
-    provenance.append(record);
-    await registry.update(connectionId, (value) => ({
+    const payload = JSON.stringify({ result, provenance: record });
+    deps.provenance.append(record);
+    await deps.registry.update(connectionId, (value) => ({
       ...value,
       health: { state: 'current', lastSuccessfulContact: new Date().toISOString() },
     }));
-    logAudit('rig.prompt.read', { connectionId, capabilityId, provenanceRecordId: record.recordId });
-    return res.json({ result, provenance: record });
+    logTypedAudit({
+      event: 'rig.prompt.read',
+      ...rigAuditFields('rig.prompt.read', connection),
+      correlation: { connectionId, parentRecordId: record.recordId },
+      details: { capabilityId, provenanceRecordId: record.recordId },
+    });
+    return { status: 200, payload };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
-    await registry.update(connectionId, (value) => ({ ...value, health: { ...value.health, state: 'degraded' } }));
-    logAudit('rig.prompt.failed', { connectionId, capabilityId, error: message });
-    return res.status(502).json({ error: message });
+    logTypedAudit({
+      event: 'rig.prompt.failed',
+      ...rigAuditFields('rig.prompt.failed'),
+      correlation: { connectionId },
+      details: { capabilityId, error: message },
+    });
+    await degradeHealthBestEffort(deps, connectionId);
+    return jbody(502, { error: message });
   }
+}
+
+const rigDataDeps = (): RigDataDeps => ({ registry, runtime, approvals, provenance });
+
+function sendHandlerResult(res: express.Response, result: HandlerResult): express.Response {
+  return res.status(result.status).type('application/json').send(result.payload);
+}
+
+rigRouter.post('/invocations', async (req, res) => {
+  const result = await handleInvocation(rigDataDeps(), req.body ?? {}, operatorPrincipalForRequest(req));
+  return sendHandlerResult(res, result);
+});
+
+rigRouter.get('/resources', (_req, res) => {
+  const resources = registry.list().flatMap((connection) => connection.capabilities.resources
+    .filter((resource) => connection.state === 'connected' && resource.enabled)
+    .map((resource) => ({ ...resource, connectionId: connection.connectionId, connectionName: connection.displayName })));
+  res.json({ resources });
+});
+
+rigRouter.post('/resources/read', async (req, res) => {
+  const result = await handleResourceRead(rigDataDeps(), req.body ?? {}, operatorPrincipalForRequest(req));
+  return sendHandlerResult(res, result);
+});
+
+rigRouter.post('/prompts/get', async (req, res) => {
+  const result = await handlePromptGet(rigDataDeps(), req.body ?? {}, operatorPrincipalForRequest(req));
+  return sendHandlerResult(res, result);
 });
 
 rigRouter.get('/provenance', (_req, res) => {

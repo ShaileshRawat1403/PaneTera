@@ -29,6 +29,16 @@ describe('Rig routes are protected by the master token boundary', () => {
   });
 });
 
+describe('Browser Operator pairing delivery', () => {
+  it('opens at most one approval page for one pairing code', () => {
+    const source = fs.readFileSync(path.resolve('src/components/rig/BrowserOperatorConnection.tsx'), 'utf8');
+    const guard = source.indexOf('if (offeredPairingCodeRef.current === code) return;');
+    const mark = source.indexOf('offeredPairingCodeRef.current = code;', guard);
+    const post = source.indexOf("type: 'PAIRING_OFFER'", mark);
+    assert.ok(guard >= 0 && mark > guard && post > mark, 'pairing delivery must be marked before posting the offer');
+  });
+});
+
 describe('governed stdio transport', () => {
   it('requires stable absolute interpreter entry points', async () => {
     const executable = process.execPath;

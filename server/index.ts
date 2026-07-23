@@ -12,12 +12,15 @@ import { buildRepoSetupProposal } from './repoSetup';
 import { parseLiveAppIntent, buildLiveAppWorkbench } from './liveApp';
 import { parseWorkflowIntent } from './workflowIntents';
 import { getWorkspaceAdapter, stopWorkspaceAdapter, stopAllWorkspaceAdapters } from './mcpAdapter';
-import { logAudit } from './audit';
+import { fingerprint, normalizeAuditRecord } from './auditRecord';
+import { auditOperatorAction } from './operatorAudit';
+import { authenticatePortalRequest, operatorPrincipalForRequest } from './operatorPrincipal';
 import * as fs from 'fs';
 import { FEATURES } from './features';
 import { handleOrchestratorQuery } from './orchestrator';
 import { browserRouter } from './browserGateway';
 import { mcpRouter } from './mcp/browserMcpRoute';
+import { probeWebPreview } from './workbench/webPreviewProbe';
 import { workbenchRouter } from './workbench/workbenchRoutes';
 import { rigRouter } from './rig/routes';
 import { headroomRouter } from './headroom/routes';
@@ -63,8 +66,7 @@ app.use('/mcp/browser', mcpRouter);
 app.use('/api/workbench', workbenchRouter);
 // Token authentication middleware (supports Authorization header and query parameter token for EventSource)
 app.use((req: Request, res: Response, next: NextFunction) => {
-  const authHeader = req.headers.authorization?.split(' ')[1] || (req.query.token as string);
-  if (!authHeader || authHeader !== TOKEN) {
+  if (!authenticatePortalRequest(req, TOKEN, { allowQueryToken: req.path === '/api/events' })) {
     return res.status(401).json({ error: 'Invalid or missing token' });
   }
   next();
@@ -391,15 +393,19 @@ app.post('/api/local-selection', async (req, res) => {
       observedMtimeMs: info.mtimeMs,
     };
     await localSelectionGrants.add(grant);
-    logAudit('local_context_selected', {
-      grantId: grant.id,
+    auditOperatorAction({
+      event: 'local_context_selected',
+      principal: operatorPrincipalForRequest(req),
+      correlation: { grantId: grant.id },
+      details: {
       kind: grant.kind,
-      path: grant.path,
+      scopeFingerprint: fingerprint(grant.path),
       selectedAt: grant.selectedAt,
       expiresAt: grant.expiresAt,
       recursive: grant.recursive,
       observedMtimeMs: grant.observedMtimeMs,
       authority: 'reference-only',
+      },
     });
 
     return res.json({
@@ -437,7 +443,12 @@ app.post('/api/local-selection/scopes/:grantId/revoke', async (req, res) => {
   if (!grant) return res.status(404).json({ error: 'Temporary attachment scope not found.' });
   try {
     const revoked = await localSelectionGrants.revoke(grant.id);
-    logAudit('local_context_revoked', { grantId: revoked.id, kind: revoked.kind, sessionId: revoked.sessionId });
+    auditOperatorAction({
+      event: 'local_context_revoked',
+      principal: operatorPrincipalForRequest(req),
+      correlation: { grantId: revoked.id },
+      details: { kind: revoked.kind, sessionId: revoked.sessionId },
+    });
     return res.json({ revoked: true, grantId: revoked.id });
   } catch (error: unknown) {
     return res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
@@ -493,7 +504,11 @@ app.post('/api/workspaces/add', async (req, res) => {
         status: 'online'
       });
       fs.writeFileSync(catalogPath, JSON.stringify(catalog, null, 2), 'utf8');
-      logAudit('workspace enabled', { workspaceId: name, details: 'Manually added via folder picker' });
+      auditOperatorAction({
+        event: 'workspace.enabled',
+        principal: operatorPrincipalForRequest(req),
+        details: { workspaceId: name, source: 'native-folder-picker' },
+      });
     }
 
     res.json({ success: true, message: `Workspace ${name} added successfully.` });
@@ -1848,6 +1863,39 @@ function isSuspicious(val: any): boolean {
   return false;
 }
 
+/**
+ * Ask whether a public address will allow being framed, before rendering it.
+ *
+ * Exists because a cross-origin frame that refuses to load is silent from the
+ * browser's side: the embedding page cannot read the response, so the canvas
+ * renders blank with no way to explain itself. The server can read the headers.
+ *
+ * The address is validated inside `probeWebPreview` through the same validator
+ * the composer uses, on the initial request and on every redirect hop.
+ */
+app.post('/api/web-preview/probe', async (req, res) => {
+  const url = req.body?.url;
+  if (typeof url !== 'string' || !url.trim()) {
+    return res.status(400).json({ error: 'A url string is required' });
+  }
+
+  try {
+    const outcome = await probeWebPreview(url);
+    return res.json({ outcome });
+  } catch (error) {
+    // A probe failure must not stop the person seeing something useful, but it
+    // must not vanish either. Discarding the exception here meant an
+    // unanticipated failure reached the canvas as a bare "did not respond",
+    // indistinguishable from a site that was genuinely down and with nothing
+    // recorded anywhere to tell them apart.
+    const reason = error instanceof Error ? error.message : String(error);
+    console.error(`[web-preview-probe] threw while probing ${url}: ${reason}`);
+    return res.json({
+      outcome: { kind: 'unreachable', detail: 'the check could not be completed' },
+    });
+  }
+});
+
 app.post('/api/browser-observation', (req, res) => {
   if (!FEATURES.browserObservation) {
     return res.status(403).json({ error: "Access denied: browser observation is disabled in PaneTera." });
@@ -1982,7 +2030,11 @@ app.post('/api/myai-workspaces/register', (req: Request, res: Response) => {
     catalog.workspaces.push(newWs);
     fs.writeFileSync(catalogPath, JSON.stringify(catalog, null, 2), 'utf8');
 
-    logAudit('workspace enabled', { workspaceId: id, details: 'Manually registered workspace' });
+    auditOperatorAction({
+      event: 'workspace.registered',
+      principal: operatorPrincipalForRequest(req),
+      details: { workspaceId: id, enabled: false, source: 'manual-registration' },
+    });
     res.json({ success: true, workspace: newWs });
   } catch (err: any) {
     res.status(500).json({ error: 'Failed to register workspace: ' + err.message });
@@ -2010,10 +2062,10 @@ app.post('/api/myai-workspaces/toggle', (req: Request, res: Response) => {
     fs.writeFileSync(catalogPath, JSON.stringify(catalog, null, 2), 'utf8');
 
     if (enabled) {
-      logAudit('workspace enabled', { workspaceId: id });
+      auditOperatorAction({ event: 'workspace.enabled', principal: operatorPrincipalForRequest(req), details: { workspaceId: id } });
     } else {
       stopWorkspaceAdapter(id);
-      logAudit('workspace disabled', { workspaceId: id });
+      auditOperatorAction({ event: 'workspace.disabled', principal: operatorPrincipalForRequest(req), details: { workspaceId: id } });
     }
 
     res.json({ success: true, workspace: ws });
@@ -2077,7 +2129,7 @@ app.post('/api/myai-workspaces/query', async (req: Request, res: Response) => {
 
   try {
     const adapter = await getWorkspaceAdapter(workspaceId);
-    const result = await adapter.call(toolName, toolArgs || {});
+    const result = await adapter.call(toolName, toolArgs || {}, operatorPrincipalForRequest(req));
     res.json(result);
   } catch (err: any) {
     res.status(403).json({ error: err.message || 'Tool execution failed' });
@@ -2102,8 +2154,13 @@ app.get('/api/myai-workspaces/audit', (req: Request, res: Response) => {
         return { raw: line };
       }
     });
-    // Return latest 50 logs (reversed)
-    res.json({ logs: lines.slice(-50).reverse() });
+    // Shape every line through the authoritative typed model before returning it,
+    // so the client reads one consistent typed record and never re-derives actor
+    // attribution from raw fields. Legacy lines come back as unknown/unattributed.
+    // This is read-shaping only; it does not change what is recorded or how any
+    // actor is classified at write time.
+    const logs = lines.slice(-50).reverse().map((line) => normalizeAuditRecord(line));
+    res.json({ logs });
   } catch (err: any) {
     res.status(500).json({ error: 'Failed to read audit logs: ' + err.message });
   }

@@ -51,7 +51,7 @@ export async function getInstallationId() {
       if (res.installationId) {
         resolve(res.installationId);
       } else {
-        const newId = 'inst-' + Math.random().toString(36).substring(2) + '-' + Date.now();
+        const newId = 'inst-' + crypto.randomUUID();
         chrome.storage.local.set({ installationId: newId }, () => {
           resolve(newId);
         });
@@ -67,5 +67,36 @@ export async function clearTokens() {
         resolve();
       });
     });
+  });
+}
+
+export async function getPendingPairing() {
+  return new Promise((resolve) => {
+    chrome.storage.session.get(['pendingPairing'], (res) => {
+      const pending = res.pendingPairing;
+      if (!pending || typeof pending.code !== 'string' || typeof pending.requestedAt !== 'number') {
+        resolve(null);
+        return;
+      }
+      // A pairing offer is deliberately short-lived. Never leave an old
+      // approval waiting in the extension after the server-side code expires.
+      if (Date.now() - pending.requestedAt > 2 * 60 * 1000) {
+        chrome.storage.session.remove(['pendingPairing'], () => resolve(null));
+        return;
+      }
+      resolve(pending);
+    });
+  });
+}
+
+export async function setPendingPairing(pending) {
+  return new Promise((resolve) => {
+    chrome.storage.session.set({ pendingPairing: pending }, resolve);
+  });
+}
+
+export async function clearPendingPairing() {
+  return new Promise((resolve) => {
+    chrome.storage.session.remove(['pendingPairing'], resolve);
   });
 }

@@ -251,6 +251,13 @@ function looksLikeUrlAttempt(value: string): boolean {
   return false;
 }
 
+function matchLiveApplicationPhrase(input: string): { target?: string } | null {
+  const match = input.trim().match(/^(?:open|show|start|launch)\s+(?:the\s+)?(?:live\s+)?(?:app|application|preview)(?:\s+(?:for|of))?(?:\s+(.+))?$/i);
+  if (!match) return null;
+  const target = match[1]?.trim();
+  return target ? { target } : {};
+}
+
 /** Front door 1: an explicit slash action. The user asserts the family. */
 function selectFromSlash(input: string): FamilySelection | null {
   const parsed = parseSlashInput(input);
@@ -314,6 +321,14 @@ function selectFromNaturalLanguage(input: string, context: ResolverContext): Fam
   const projectMatch = matchProjectPhrase(input);
   if (projectMatch) {
     return { family: 'project', args: { target: projectMatch.target } };
+  }
+
+  // A request to start a named live preview is presentation intent, not a
+  // command execution proposal. Resolve it before the broader "start/run"
+  // matcher so the canvas opens instead of showing an approval card.
+  const liveApplication = matchLiveApplicationPhrase(input);
+  if (liveApplication) {
+    return { family: 'live-app', args: liveApplication.target ? { target: liveApplication.target } : {} };
   }
 
   const runMatch = matchRunPhrase(input);

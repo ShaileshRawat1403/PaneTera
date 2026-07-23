@@ -1,23 +1,37 @@
 // src/components/workbench/AuditLogsView.tsx
-import React, { useState, useEffect } from 'react';
-import { Box, Dialog, DialogTitle, DialogContent, DialogActions, Typography, List, ListItem, Button, Chip, Stack, CircularProgress, Accordion, AccordionSummary, AccordionDetails } from '@mui/material';
+//
+// The Audit panel, rebuilt on the typed audit model. It renders one row per
+// record and answers, at a glance: who acted, what happened, whether policy
+// allowed or denied it, whether it succeeded, and which proposal, approval,
+// connection, grant, run, or provenance record it belongs to.
+//
+// All classification is the model's. This file only maps a scrubbed view to
+// chips and text. It never inspects an event name, an owner string, or a legacy
+// field to decide attribution, and it never reconstructs a redacted value: the
+// detail object it shows was already scrubbed on the server.
+
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import {
+  Box, Dialog, DialogTitle, DialogContent, DialogActions, Typography, List, ListItem,
+  Button, Chip, Stack, CircularProgress, Accordion, AccordionSummary, AccordionDetails,
+  Select, MenuItem, FormControl,
+} from '@mui/material';
 import { accent, ink, status, surface, typography } from '../../theme/tokens';
 import SecurityIcon from '@mui/icons-material/Security';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-
-interface AuditRecord {
-  timestamp: string;
-  event: string;
-  details: {
-    workspaceId?: string;
-    path?: string;
-    tool?: string;
-    args?: any;
-    error?: string;
-    reason?: string;
-  };
-}
+import {
+  toAuditRecordView,
+  filterAuditRecordViews,
+  loadAuditRecords,
+  AUDIT_ACTOR_KIND_OPTIONS,
+  AUDIT_OUTCOME_OPTIONS,
+  AUDIT_POLICY_OPTIONS,
+  type AuditRecordView,
+  type AuditTone,
+  type AuditFilter,
+  type RawAuditRecord,
+} from './auditRecordViewModel';
 
 interface AuditLogsProps {
   token: string;
@@ -25,49 +39,212 @@ interface AuditLogsProps {
   onClose: () => void;
 }
 
+/** Map a model tone to concrete chip colours, keeping colour decisions in one place. */
+export function toneStyle(tone: AuditTone): { bg: string; text: string; border: string } {
+  switch (tone) {
+    case 'success':
+      return { bg: status.successMuted, text: status.success, border: status.success };
+    case 'danger':
+      return { bg: status.dangerMuted, text: status.danger, border: status.danger };
+    case 'attention':
+      return { bg: status.brassMuted, text: status.brass, border: status.brass };
+    case 'accent':
+      return { bg: accent.violetMuted, text: accent.violet, border: accent.violetBorder };
+    case 'muted':
+      return { bg: 'transparent', text: ink.muted, border: surface.border };
+    case 'neutral':
+    default:
+      return { bg: 'transparent', text: ink.secondary, border: surface.border };
+  }
+}
+
+function ToneChip({ label, tone, bold = false }: { label: string; tone: AuditTone; bold?: boolean }) {
+  const c = toneStyle(tone);
+  return (
+    <Chip
+      label={label}
+      size="small"
+      sx={{
+        height: 18,
+        fontSize: '0.58rem',
+        fontWeight: bold ? 800 : 600,
+        backgroundColor: c.bg,
+        color: c.text,
+        border: `1px solid ${c.border}`,
+      }}
+    />
+  );
+}
+
+/**
+ * One audit row. Exported and self-contained so it renders from a view object
+ * alone, which is what the render tests exercise. The default row is compact:
+ * actor, event, outcome, policy, and correlation chips on a single line, with the
+ * scrubbed detail behind progressive disclosure.
+ */
+export function AuditRecordRow({ view }: { view: AuditRecordView }) {
+  const time = view.timestamp ? new Date(view.timestamp).toLocaleTimeString() : '—';
+  const hasDetails = Object.keys(view.details).length > 0;
+
+  return (
+    <Accordion
+      disableGutters
+      sx={{
+        background: surface.sunken,
+        border: `1px solid ${surface.border}`,
+        borderRadius: '6px !important',
+        color: ink.secondary,
+        '&:before': { display: 'none' },
+      }}
+    >
+      <AccordionSummary
+        expandIcon={<ExpandMoreIcon sx={{ fontSize: 16, color: ink.secondary }} />}
+        sx={{ minHeight: 40, py: 0, px: 1.5, '& .MuiAccordionSummary-content': { margin: '8px 0 !important' } }}
+      >
+        <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap" sx={{ width: '100%' }}>
+          <ToneChip label={view.actor.kindLabel} tone={view.actor.tone} bold />
+          {view.actor.identity && (
+            <Typography
+              variant="caption"
+              sx={{ color: view.actor.authoritative ? ink.secondary : ink.muted, fontFamily: typography.mono, fontSize: '0.6rem' }}
+            >
+              {view.actor.identity}
+            </Typography>
+          )}
+          <Typography variant="body2" sx={{ color: ink.primary, fontFamily: typography.mono, fontSize: '0.7rem', fontWeight: 600 }}>
+            {view.event}
+          </Typography>
+          {view.project && (
+            <Chip
+              label={`Project: ${view.project}`}
+              size="small"
+              sx={{ height: 16, fontSize: '0.55rem', background: surface.overlay, color: ink.secondary, fontFamily: typography.mono }}
+            />
+          )}
+          <Box sx={{ flexGrow: 1 }} />
+          <ToneChip label={`Outcome: ${view.outcome.label}`} tone={view.outcome.tone} />
+          <ToneChip label={`Policy: ${view.policy.label}`} tone={view.policy.tone} />
+          <Typography variant="caption" sx={{ color: ink.muted, fontFamily: typography.mono, fontSize: '0.58rem' }}>
+            {time}
+          </Typography>
+        </Stack>
+      </AccordionSummary>
+      <AccordionDetails sx={{ p: 1.5, background: surface.sunken, borderTop: `1px solid ${surface.border}` }}>
+        {view.correlations.length > 0 && (
+          <Box sx={{ mb: hasDetails ? 1.5 : 0 }}>
+            <Typography variant="caption" sx={{ color: ink.muted, display: 'block', mb: 0.5 }}>
+              Correlations
+            </Typography>
+            <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap">
+              {view.correlations.map((c) => (
+                <Chip
+                  key={`${c.type}:${c.value}`}
+                  label={`${c.label}: ${c.value}`}
+                  size="small"
+                  sx={{
+                    height: 16, fontSize: '0.55rem', background: surface.overlay,
+                    color: ink.secondary, fontFamily: typography.mono,
+                  }}
+                />
+              ))}
+            </Stack>
+          </Box>
+        )}
+        {view.isLegacy && (
+          <Typography variant="caption" sx={{ color: ink.muted, display: 'block', mb: hasDetails ? 1 : 0, fontStyle: 'italic' }}>
+            Unattributed legacy record.
+          </Typography>
+        )}
+        {hasDetails ? (
+          <>
+            <Typography variant="caption" sx={{ color: ink.muted, fontWeight: 600, display: 'block', mb: 0.5 }}>
+              Detail (already redacted)
+            </Typography>
+            <pre
+              style={{
+                margin: 0, padding: '8px', background: surface.sunken, borderRadius: '4px',
+                fontFamily: typography.mono, fontSize: '0.66rem', color: ink.secondary,
+                overflowX: 'auto', whiteSpace: 'pre-wrap',
+              }}
+            >
+              {JSON.stringify(view.details, null, 2)}
+            </pre>
+          </>
+        ) : (
+          <Typography variant="caption" sx={{ color: ink.muted }}>No further detail.</Typography>
+        )}
+      </AccordionDetails>
+    </Accordion>
+  );
+}
+
+export function FilterSelect<T extends string>({
+  value, onChange, options, allLabel, ariaLabel,
+}: {
+  value: T | 'all';
+  onChange: (v: T | 'all') => void;
+  options: ReadonlyArray<{ value: T; label: string }>;
+  allLabel: string;
+  ariaLabel: string;
+}) {
+  return (
+    <FormControl size="small" sx={{ minWidth: 150 }}>
+      <Select
+        value={value}
+        onChange={(e) => onChange(e.target.value as T | 'all')}
+        // The control has no visible label, so it carries an explicit accessible
+        // name for screen readers and keyboard users.
+        aria-label={ariaLabel}
+        inputProps={{ 'aria-label': ariaLabel }}
+        sx={{
+          height: 30, fontSize: '0.68rem', color: ink.secondary, background: surface.sunken,
+          '.MuiOutlinedInput-notchedOutline': { borderColor: surface.border },
+        }}
+      >
+        <MenuItem value="all" sx={{ fontSize: '0.68rem' }}>{allLabel}</MenuItem>
+        {options.map((o) => (
+          <MenuItem key={o.value} value={o.value} sx={{ fontSize: '0.68rem' }}>{o.label}</MenuItem>
+        ))}
+      </Select>
+    </FormControl>
+  );
+}
+
 export const AuditLogsView: React.FC<AuditLogsProps> = ({ token, open, onClose }) => {
-  const [logs, setLogs] = useState<AuditRecord[]>([]);
+  const [raw, setRaw] = useState<RawAuditRecord[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [filter, setFilter] = useState<AuditFilter>({ actorKind: 'all', outcome: 'all', policyDecision: 'all' });
+  // A monotonic request id. Opening, refreshing, and retrying can overlap; only
+  // the newest load may publish, so an older response can never overwrite newer
+  // rows or drop a stale banner on top of a fresher success.
+  const requestGen = useRef(0);
 
   const fetchLogs = async () => {
+    const gen = ++requestGen.current;
     setLoading(true);
-    try {
-      const resp = await fetch('/api/myai-workspaces/audit', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (resp.ok) {
-        const data = await resp.json();
-        setLogs(data.logs || []);
-      }
-    } catch (err) {
-      console.error('Failed to fetch audit logs:', err);
-    } finally {
-      setLoading(false);
+    const result = await loadAuditRecords(fetch as never, token);
+    if (gen !== requestGen.current) return; // A newer request superseded this one; ignore it.
+    if (result.ok) {
+      setRaw(result.records);
+      setLoaded(true);
+      setError(null);
+    } else {
+      // Keep any previously loaded rows so a failed refresh degrades to a stale
+      // banner instead of silently blanking or, worse, looking current.
+      setError(result.reason);
     }
+    setLoading(false);
   };
 
   useEffect(() => {
-    if (open) {
-      fetchLogs();
-    }
+    if (open) fetchLogs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, token]);
 
-  /**
-   * Audit outcome colours.
-   *
-   * A denied or failed event is a refusal and reads as one. Everything else is
-   * routine and stays neutral: an audit log is mostly a list of ordinary
-   * operations, and colouring "allowed" green would make the log a wall of
-   * green with nothing meaning anything. The contract reserves green for a
-   * completed verification, which an allowlist check is not.
-   */
-  const getEventColors = (event: string) => {
-    const ev = event.toLowerCase();
-    if (ev.includes('denied') || ev.includes('violation') || ev.includes('error')) {
-      return { bg: status.dangerMuted, text: status.danger, border: status.danger };
-    }
-    return { bg: 'transparent', text: ink.secondary, border: surface.border };
-  };
+  const views = useMemo(() => raw.map((r) => toAuditRecordView(r)), [raw]);
+  const visible = useMemo(() => filterAuditRecordViews(views, filter), [views, filter]);
 
   return (
     <Dialog
@@ -75,144 +252,66 @@ export const AuditLogsView: React.FC<AuditLogsProps> = ({ token, open, onClose }
       onClose={onClose}
       maxWidth="md"
       fullWidth
-      PaperProps={{
-        sx: {
-          background: surface.raised,
-          border: `1px solid ${surface.border}`,
-          borderRadius: '12px',
-          maxHeight: '80vh'
-        }
-      }}
+      PaperProps={{ sx: { background: surface.raised, border: `1px solid ${surface.border}`, borderRadius: '12px', maxHeight: '82vh' } }}
     >
       <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pb: 1.5, borderBottom: `1px solid ${surface.border}` }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <SecurityIcon sx={{ color: accent.violet, fontSize: 18 }} />
           <Typography variant="body2" sx={{ color: ink.primary, fontWeight: 600, fontSize: '0.9rem' }}>
-            Authoritative Gateway Security Audit Trail
+            Audit trail
           </Typography>
         </Box>
-        <Button size="small" onClick={fetchLogs} startIcon={<RefreshIcon sx={{ fontSize: 12 }} />} sx={{ color: ink.secondary, textTransform: 'none', fontSize: '0.7rem' }}>
-          Refresh Trail
+        <Button size="small" onClick={fetchLogs} disabled={loading} startIcon={<RefreshIcon sx={{ fontSize: 12 }} />} sx={{ color: ink.secondary, textTransform: 'none', fontSize: '0.7rem' }}>
+          {loading ? 'Refreshing…' : 'Refresh'}
         </Button>
       </DialogTitle>
-      
+
+      <Box sx={{ px: 2, py: 1.25, borderBottom: `1px solid ${surface.border}`, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+        <FilterSelect ariaLabel="Filter by actor kind" allLabel="All actors" value={filter.actorKind ?? 'all'} options={AUDIT_ACTOR_KIND_OPTIONS} onChange={(v) => setFilter((f) => ({ ...f, actorKind: v }))} />
+        <FilterSelect ariaLabel="Filter by outcome" allLabel="All outcomes" value={filter.outcome ?? 'all'} options={AUDIT_OUTCOME_OPTIONS} onChange={(v) => setFilter((f) => ({ ...f, outcome: v }))} />
+        <FilterSelect ariaLabel="Filter by policy decision" allLabel="All policy decisions" value={filter.policyDecision ?? 'all'} options={AUDIT_POLICY_OPTIONS} onChange={(v) => setFilter((f) => ({ ...f, policyDecision: v }))} />
+      </Box>
+
+      {/* A failed load with cached rows is disclosed as stale, never shown as current. */}
+      {error && raw.length > 0 && (
+        <Box role="alert" sx={{ px: 2, py: 1, background: status.dangerMuted, borderBottom: `1px solid ${status.danger}` }}>
+          <Typography variant="caption" sx={{ color: status.danger }}>
+            Showing cached records. {error}
+          </Typography>
+        </Box>
+      )}
+
       <DialogContent sx={{ p: 2 }}>
-        {loading ? (
+        {loading && raw.length === 0 ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', p: 5 }}>
             <CircularProgress size={20} sx={{ color: accent.violet }} />
           </Box>
-        ) : logs.length === 0 ? (
+        ) : error && raw.length === 0 ? (
+          <Box role="alert" sx={{ p: 4, textAlign: 'center' }}>
+            <Typography variant="caption" sx={{ color: status.danger, display: 'block', mb: 1 }}>{error}</Typography>
+            <Button size="small" onClick={fetchLogs} disabled={loading} sx={{ color: ink.secondary, textTransform: 'none', fontSize: '0.7rem' }}>
+              {loading ? 'Retrying…' : 'Try again'}
+            </Button>
+          </Box>
+        ) : visible.length === 0 ? (
           <Box sx={{ p: 4, textAlign: 'center' }}>
-            <Typography variant="caption" sx={{ color: ink.secondary }}>No audit logs recorded yet.</Typography>
+            <Typography variant="caption" sx={{ color: ink.secondary }}>
+              {!loaded ? 'Loading the audit trail…' : views.length === 0 ? 'No audit records yet.' : 'No records match these filters.'}
+            </Typography>
           </Box>
         ) : (
           <List dense disablePadding>
-            {logs.map((log, idx) => {
-              const colors = getEventColors(log.event);
-              return (
-                <ListItem
-                  key={idx}
-                  disablePadding
-                  sx={{
-                    mb: 1.2,
-                    display: 'block'
-                  }}
-                >
-                  <Accordion
-                    disableGutters
-                    sx={{
-                      background: surface.sunken,
-                      border: `1px solid ${colors.border}`,
-                      borderRadius: '6px !important',
-                      color: ink.secondary,
-                      '&:before': { display: 'none' }
-                    }}
-                  >
-                    <AccordionSummary
-                      expandIcon={<ExpandMoreIcon sx={{ fontSize: 16, color: ink.secondary }} />}
-                      sx={{
-                        minHeight: 38,
-                        py: 0,
-                        px: 1.5,
-                        '& .MuiAccordionSummary-content': { margin: '8px 0 !important' }
-                      }}
-                    >
-                      <Stack direction="row" spacing={1.5} alignItems="center" sx={{ width: '100%' }}>
-                        <Chip
-                          label={log.event.toUpperCase()}
-                          size="small"
-                          sx={{
-                            height: 16,
-                            fontSize: '0.52rem',
-                            fontWeight: 900,
-                            backgroundColor: colors.bg,
-                            color: colors.text,
-                            border: `1px solid ${colors.border}`
-                          }}
-                        />
-                        <Typography variant="caption" sx={{ color: ink.secondary, fontFamily: typography.mono, fontSize: '0.62rem' }}>
-                          {new Date(log.timestamp).toLocaleTimeString()}
-                        </Typography>
-                        {log.details?.workspaceId && (
-                          <Chip
-                            label={`Project: ${log.details.workspaceId}`}
-                            size="small"
-                            sx={{ height: 14, fontSize: '0.5rem', background: surface.overlay, color: ink.secondary }}
-                          />
-                        )}
-                        <Typography
-                          variant="body2"
-                          noWrap
-                          sx={{
-                            color: ink.secondary,
-                            fontSize: '0.7rem',
-                            fontFamily: typography.mono,
-                            flexGrow: 1,
-                            maxWidth: '300px'
-                          }}
-                        >
-                          {log.details?.path || log.details?.tool || log.details?.error || 'View Parameters'}
-                        </Typography>
-                      </Stack>
-                    </AccordionSummary>
-                    <AccordionDetails
-                      sx={{
-                        p: 1.5,
-                        background: surface.sunken,
-                        borderTop: `1px solid ${surface.border}`
-                      }}
-                    >
-                      <Typography variant="caption" sx={{ color: ink.secondary, fontWeight: 600, display: 'block', mb: 0.5 }}>
-                        DETAILED JSON PARAMETERS
-                      </Typography>
-                      <pre
-                        style={{
-                          margin: 0,
-                          padding: '8px',
-                          background: surface.sunken,
-                          borderRadius: '4px',
-                          fontFamily: typography.mono,
-                          fontSize: '0.68rem',
-                          color: ink.secondary,
-                          overflowX: 'auto',
-                          whiteSpace: 'pre-wrap'
-                        }}
-                      >
-                        {JSON.stringify(log.details, null, 2)}
-                      </pre>
-                    </AccordionDetails>
-                  </Accordion>
-                </ListItem>
-              );
-            })}
+            {visible.map((view) => (
+              <ListItem key={view.recordId} disablePadding sx={{ mb: 1.2, display: 'block' }}>
+                <AuditRecordRow view={view} />
+              </ListItem>
+            ))}
           </List>
         )}
       </DialogContent>
 
       <DialogActions sx={{ p: 2, pt: 0, borderTop: `1px solid ${surface.border}` }}>
-        <Button size="small" onClick={onClose} sx={{ color: ink.secondary, fontSize: '0.72rem' }}>
-          Close Auditor
-        </Button>
+        <Button size="small" onClick={onClose} sx={{ color: ink.secondary, fontSize: '0.72rem' }}>Close</Button>
       </DialogActions>
     </Dialog>
   );

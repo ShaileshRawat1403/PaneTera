@@ -21,8 +21,8 @@
       "name": "PaneTera",
       "path": "/Users/Shailesh/MYAIAGENTS/PaneTera",
       "type": "repo",
-      "enabled": false,
-      "status": "offline"
+      "enabled": true,
+      "status": "online"
     }
   ]
 }

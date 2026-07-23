@@ -5,7 +5,7 @@ import { evidenceRetentionService } from '../evidence/evidenceRetentionService';
 import { evidenceGraphResolver } from '../evidence/evidenceGraphResolver';
 import { toCanonicalEvidenceText, hashCanonicalText } from '../evidence/evidenceCanonicalizer';
 import { createHash } from 'crypto';
-import { logAudit } from '../audit';
+import { auditResearchOperator, auditResearchSystem } from './researchAudit';
 
 export class ResearchSessionService {
   public async createSession(ownerId: string, title: string, description?: string): Promise<ResearchSession> {
@@ -25,7 +25,7 @@ export class ResearchSessionService {
     };
 
     await researchSessionStore.saveSession(session);
-    logAudit('research.session.create', { sessionId: session.sessionId, ownerId });
+    auditResearchOperator({ event: 'research.session.create', outcome: 'success', sessionId: session.sessionId, ownerId });
     return session;
   }
 
@@ -41,7 +41,7 @@ export class ResearchSessionService {
     session.status = 'archived';
     session.updatedAt = new Date().toISOString();
     await researchSessionStore.saveSession(session);
-    logAudit('research.session.archive', { sessionId, ownerId });
+    auditResearchOperator({ event: 'research.session.archive', outcome: 'success', sessionId, ownerId });
   }
 
   public async deleteSession(ownerId: string, sessionId: string): Promise<void> {
@@ -50,7 +50,7 @@ export class ResearchSessionService {
     if (session.ownerId !== ownerId) throw new Error('Unauthorised');
 
     await researchSessionStore.deleteSession(sessionId);
-    logAudit('research.session.delete', { sessionId, ownerId });
+    auditResearchOperator({ event: 'research.session.delete', outcome: 'success', sessionId, ownerId });
   }
 
   public async createSnapshot(
@@ -82,7 +82,13 @@ export class ResearchSessionService {
         const resolution = evidenceGraphResolver.resolve(ownerId, ref.captureId, ref.extractionId, ref.evidenceId);
         
         if (resolution.status !== 'resolved') {
-          logAudit('research.snapshot.fail', { sessionId, status: resolution.status });
+          auditResearchSystem({
+            event: 'research.snapshot.evidence-rejected',
+            outcome: resolution.status === 'unauthorised' ? 'denied' : 'error',
+            policyDecision: resolution.status === 'unauthorised' ? 'denied' : 'allowed',
+            sessionId,
+            details: { status: resolution.status },
+          });
           hasBrokenEvidence = true;
           continue; // Skip broken or unauthorized evidence
         }
@@ -175,7 +181,10 @@ export class ResearchSessionService {
       session.status = hasBrokenEvidence ? 'partial' : 'ready';
       await researchSessionStore.saveSession(session);
 
-      logAudit('research.snapshot.create', { sessionId, snapshotId, ownerId });
+      auditResearchSystem({
+        event: 'research.snapshot.create', outcome: 'success', sessionId, ownerId,
+        details: { snapshotId, entryCount: entries.length, partial: hasBrokenEvidence },
+      });
       return snapshot;
     });
   }

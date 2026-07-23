@@ -202,6 +202,99 @@ change initiative and authority, not application truth or policy.
 - Delegated governed execution through adapters rather than arbitrary client or
   model authority.
 
+## Planned command and continuity requirements
+
+PaneTera may adopt the convenience of an agent-workbench command palette, but
+each command must be a discoverable route to a real capability rather than an
+alternate source of truth. Planned commands include goal, plan, compact,
+continue, context, Rig, and model selection.
+
+- **Compact** creates a bounded Headroom capsule that the user can inspect,
+  edit, retain, or reject. It must not silently delete history or conceal what
+  was excluded.
+- **Continue** resumes or forks from an identified capsule with provenance. It
+  must not imply that hidden chat state transferred successfully.
+- **Goal** reads and updates the durable objective and success conditions.
+- **Plan** shows steps, authority, expected evidence, verification, and the
+  decision point before consequential execution.
+- **Context** shows attached material, provenance, scope, expiry, and revocation
+  instead of merely reporting a context count.
+- **Rig** remains the canonical surface for MCP servers, tools, applications,
+  models, adapters, and permissions.
+- **Model** selection is task-scoped and explains capability, cost, and latency;
+  it never changes application truth or host policy.
+
+Fast or low-friction execution profiles may alter performance characteristics.
+They must never silently widen filesystem, database, network, browser, or model
+authority. Feedback and voice input are later interaction improvements. A
+decorative desktop companion is not a product requirement.
+
+## Planned local-data connector requirements
+
+SQLite, PostgreSQL, and later database integrations belong in Rig as governed
+connectors and appear in the canvas as native data surfaces. They are not direct
+model connections and are not part of the current UI convergence tranche.
+
+The shared database-connector contract must provide:
+
+- connection identity, health, database type, and provenance without exposing
+  credential material;
+- explicit database, schema, table, file, or query scope;
+- read-only defaults and a preference for dedicated read-only database roles;
+- schema and index inspection without dumping entire databases into context;
+- bounded query execution with timeout, row, and byte limits;
+- a preview of generated SQL and the exact target before execution;
+- result provenance including connector, database, execution time, row count,
+  truncation, and query identity;
+- explicit attachment of selected results as untrusted evidence;
+- separate approval for export;
+- proposal, approval, transaction, verification, and audit for every mutation;
+- expiry and revocation for file and connection grants.
+
+SQLite should be the first adapter because its authority can be expressed as an
+explicit native file grant. Local PostgreSQL follows through localhost or a Unix
+socket with database/schema scope. Mutating SQL, migrations, remote tunnels,
+and broader database types come only after the read-only contract is accepted.
+Credentials must remain in local protected storage or an OS credential service;
+they must never enter prompts, transcripts, browser storage, client bundles, or
+ordinary connection records.
+
+## Planned trust, verification, and delegation requirements
+
+Consequential PaneTera outputs require a navigable trust spine rather than a
+collection of disconnected audit, evidence, and memory views.
+
+- A generic provenance record links a claim or artifact to sources,
+  transformations, captures or runs, actors, grants, freshness, checks, and
+  parent records.
+- A lineage canvas lets a person move from a claim to supporting evidence,
+  governing authority, verification, and the resulting decision.
+- A verification ledger records the exact assertion checked, method, expected
+  and observed result, verifier, status, and evidence. A passing check supports
+  only the assertion it tested; it must not be presented as proof that the
+  complete output is correct.
+- Governed export applies the canonical redaction policy, records the evidence
+  used, and produces an auditable provenance receipt or sidecar appropriate to
+  the artifact.
+- Policy preview is evaluated by the authoritative policy engine and bound to a
+  policy digest. A static UI summary must not become a second policy engine.
+- Run replay records and compares inputs, policies, model and tool identities,
+  versions, environment facts, outputs, checks, and evidence. It is a
+  reproducibility and regression aid, not proof of determinism; missing or
+  changed external state must remain visible.
+- Execution budgets enforce wall-clock and tool-call ceilings. Token and cost
+  limits identify whether their measurements are provider-reported or
+  estimated, and budget extensions require an explicit gate.
+- Every delegated child agent has a distinct audit identity linked to its
+  initiating human and parent run. Its authority is the intersection of the
+  parent's current grant and a narrower delegated scope, never an inherited
+  identity or a wider grant.
+
+Actor-separated audit and expiring, revocable grants are prerequisites for
+governed export, replay attribution, and delegation. Provenance and verification
+precede delegated execution; budgets and policy preview precede multi-agent
+delegation.
+
 ## Non-goals
 
 - A developer-only IDE replacement.
@@ -221,7 +314,16 @@ change initiative and authority, not application truth or policy.
    records to tasks and decisions.
 4. **Context capsules:** bounded resumption for humans and agents.
 5. **Governed action:** proposals, authority, execution, verification, and audit.
-6. **Domain ecosystem:** reusable connectors, surface renderers, and templates
+6. **Command and continuity layer:** capability-backed goal, plan, compact,
+   continue, context, Rig, and model controls.
+7. **Trust spine:** generic provenance, lineage, verification ledger, and
+   governed export.
+8. **Bounded runs:** budgets, reproducibility records, and run comparison/replay.
+9. **Governed local data:** read-only connector contract, SQLite, PostgreSQL,
+   native database canvas, then proposal-gated mutations.
+10. **Governed delegation:** policy preview and distinctly attributed,
+    authority-intersected child agents.
+11. **Domain ecosystem:** reusable connectors, surface renderers, and templates
    for different kinds of builders.
 
 ## Success measures

@@ -3,9 +3,9 @@ import { extractOutline } from './extractors/outline.js';
 import { extractTables } from './extractors/table.js';
 import { extractMetadata, extractStructuredData } from './extractors/metadata.js';
 import { extractLinks, extractCodeBlocks } from './extractors/links.js';
+import { redactText, sanitizeUrl } from '../shared/redactor.js';
 
-// Expose the extractors globally for the background script to invoke
-window.TesseraExtractors = {
+window.PaneTeraExtractors = {
   "browser.article.extract": extractArticle,
   "browser.outline.extract": extractOutline,
   "browser.table.extract": extractTables,
@@ -14,13 +14,29 @@ window.TesseraExtractors = {
   "browser.structuredData.extract": extractStructuredData,
   "browser.codeBlocks.extract": extractCodeBlocks,
   
-  // Phase 1 legacy support
   "browser.page.observe": () => {
+    const rawSel = window.getSelection ? window.getSelection().toString() : '';
+    const cleanSel = redactText(rawSel).redactedText;
+    const cleanTitle = redactText(document.title || '').redactedText;
+    const cleanUrl = sanitizeUrl(window.location.href || '');
     return {
-      title: document.title || '',
-      url: window.location.href || '',
+      title: cleanTitle,
+      url: cleanUrl,
       origin: window.location.origin || '',
-      selectedText: window.getSelection ? window.getSelection().toString() : '',
+      selectedText: cleanSel,
+      capturedAt: new Date().toISOString()
+    };
+  },
+  "browser.selection.observe": () => {
+    const rawSel = window.getSelection ? window.getSelection().toString() : '';
+    const cleanSel = redactText(rawSel).redactedText;
+    const cleanTitle = redactText(document.title || '').redactedText;
+    const cleanUrl = sanitizeUrl(window.location.href || '');
+    return {
+      title: cleanTitle,
+      url: cleanUrl,
+      origin: window.location.origin || '',
+      selectedText: cleanSel,
       capturedAt: new Date().toISOString()
     };
   }

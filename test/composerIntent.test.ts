@@ -168,6 +168,19 @@ describe('honest degraded states', () => {
     assert.strictEqual(envelope.readiness, 'ready');
   });
 
+  it('opens a registered live preview from ordinary language', () => {
+    const envelope = resolveIntent('start live preview for Soothsayer');
+    assert.strictEqual(envelope.family, 'live-app');
+    assert.strictEqual(envelope.args.target, 'Soothsayer');
+    assert.strictEqual(envelope.readiness, 'ready');
+  });
+
+  it('asks which application when a live preview request has no target', () => {
+    const envelope = resolveIntent('open live preview');
+    assert.strictEqual(envelope.family, 'live-app');
+    assert.strictEqual(envelope.readiness, 'needs-clarification');
+  });
+
   it('reports nothing to clear when the tray is empty', () => {
     const envelope = resolveIntent('/clear-context');
     assert.strictEqual(envelope.family, 'headroom');

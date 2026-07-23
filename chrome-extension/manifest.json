@@ -1,9 +1,14 @@
 {
   "manifest_version": 3,
-  "name": "Tessera Browser Operator",
+  "name": "PaneTera Browser Operator",
   "version": "0.1.0",
   "minimum_chrome_version": "116",
-  "description": "Modular browser operator extension linked to Tessera Workbench.",
+  "description": "Browser operator extension for PaneTera Workbench.",
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
   "permissions": [
     "activeTab",
     "scripting",
@@ -28,6 +33,16 @@
     "service_worker": "background.js",
     "type": "module"
   },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://127.0.0.1/*",
+        "http://localhost/*"
+      ],
+      "js": ["paneteraBridge.js"],
+      "run_at": "document_start"
+    }
+  ],
   "side_panel": {
     "default_path": "sidepanel.html"
   },
@@ -40,7 +55,7 @@
         "default": "Ctrl+Shift+K",
         "mac": "Command+Shift+K"
       },
-      "description": "Capture Web Context for Tessera Portal"
+      "description": "Capture Web Context for PaneTera"
     }
   }
 }

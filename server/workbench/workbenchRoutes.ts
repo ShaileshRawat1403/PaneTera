@@ -1,15 +1,47 @@
 import express, { Request, Response } from 'express';
 import { localAppRegistry } from './localAppRegistry';
-import { localAppProbe, ProbeResult } from './localAppProbe';
-import { logAudit } from '../audit';
+import { localAppProbe, type ProbeResult, type ProbeStatus } from './localAppProbe';
+import { logTypedAudit, systemActor, unknownActor, type TypedAuditRecord } from '../auditRecord';
 
 export const workbenchRouter = express.Router();
 
-// Middleware placeholder for extracting user/actor if needed
-const getActor = (req: Request) => {
-  // @ts-ignore
-  return req.user?.id || 'unknown';
-};
+export function auditWorkbenchProbe(input: {
+  appId: string;
+  status: ProbeStatus;
+  safeOrigin?: string;
+}): TypedAuditRecord {
+  const succeeded = input.status === 'reachable' || input.status === 'framing-likely-blocked';
+  return logTypedAudit({
+    event: 'workbench.app.probe',
+    actor: systemActor('workbench-probe'),
+    outcome: succeeded ? 'success' : 'error',
+    policyDecision: 'allowed',
+    details: { appId: input.appId, status: input.status, safeOrigin: input.safeOrigin },
+  });
+}
+
+export function auditWorkbenchClientEvent(input: {
+  event: string;
+  appId?: unknown;
+  operation?: unknown;
+  resultStatus?: unknown;
+  transactionId?: unknown;
+  safeOrigin: string;
+}): TypedAuditRecord {
+  return logTypedAudit({
+    event: input.event,
+    actor: unknownActor('workbench-client-unattributed'),
+    outcome: 'unknown',
+    policyDecision: 'not-applicable',
+    details: {
+      appId: input.appId,
+      operation: input.operation,
+      clientReportedStatus: input.resultStatus,
+      clientTransactionId: input.transactionId,
+      safeOrigin: input.safeOrigin,
+    },
+  });
+}
 
 workbenchRouter.get('/apps', async (req: Request, res: Response) => {
   const apps = localAppRegistry.getEnabledApps();
@@ -18,11 +50,10 @@ workbenchRouter.get('/apps', async (req: Request, res: Response) => {
 
 workbenchRouter.get('/apps/:appId/status', async (req: Request, res: Response) => {
   const appId = req.params.appId;
-  const actor = getActor(req);
 
   const appDef = localAppRegistry.getApp(appId);
   if (!appDef || !appDef.enabled) {
-    logAudit('workbench.app.probe', { appId, actor, status: 'invalid-configuration' });
+    auditWorkbenchProbe({ appId, status: 'invalid-configuration' });
     return res.json({ status: 'invalid-configuration' } as ProbeResult);
   }
 
@@ -52,9 +83,8 @@ workbenchRouter.get('/apps/:appId/status', async (req: Request, res: Response) =
   }
 
   // The backend uses derived safe origin (appDef.url) for audit, not full URL
-  logAudit('workbench.app.probe', { 
-    appId, 
-    actor, 
+  auditWorkbenchProbe({
+    appId,
     status: finalStatus.status,
     safeOrigin: new URL(appDef.url).origin
   });
@@ -63,7 +93,6 @@ workbenchRouter.get('/apps/:appId/status', async (req: Request, res: Response) =
 });
 
 workbenchRouter.post('/audit', async (req: Request, res: Response) => {
-  const actor = getActor(req);
   const body = req.body || {};
 
   const { event, appId, operation, resultStatus, transactionId } = body;
@@ -88,13 +117,13 @@ workbenchRouter.post('/audit', async (req: Request, res: Response) => {
     }
   }
 
-  logAudit(event, {
+  auditWorkbenchClientEvent({
+    event,
     appId,
-    actor,
     transactionId,
     safeOrigin,
     operation,
-    status: resultStatus
+    resultStatus,
   });
 
   return res.json({ success: true });

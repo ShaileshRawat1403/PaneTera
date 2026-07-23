@@ -1,7 +1,7 @@
 import { researchSessionStore } from './researchSessionStore';
 import { ProvenanceValidationResult } from './researchTypes';
 import { hashCanonicalText } from '../evidence/evidenceCanonicalizer';
-import { logAudit } from '../audit';
+import { auditResearchSystem } from './researchAudit';
 
 export class ProvenanceValidationService {
   public async validateSnapshotReference(
@@ -17,7 +17,10 @@ export class ProvenanceValidationService {
     }
 
     if (session.ownerId !== principalOwnerId) {
-      logAudit('provenance_validation', { status: 'denied', sessionId, principalOwnerId });
+      auditResearchSystem({
+        event: 'research.provenance.validation', outcome: 'denied', policyDecision: 'denied', sessionId,
+        ownerId: principalOwnerId, details: { status: 'ownership-denied' },
+      });
       return { valid: false, status: 'unauthorised', warnings: [] };
     }
 
@@ -34,7 +37,10 @@ export class ProvenanceValidationService {
     // Recompute excerpt hash
     const currentHash = hashCanonicalText(entry.excerpt);
     if (currentHash.contentHash !== entry.integrity.contentHash) {
-      logAudit('provenance_validation', { status: 'integrity_failure', snapshotEntryId });
+      auditResearchSystem({
+        event: 'research.provenance.validation', outcome: 'error', sessionId,
+        details: { status: 'integrity-failure', snapshotEntryId },
+      });
       return { valid: false, status: 'integrity-failure', warnings: ['Excerpt integrity check failed'] };
     }
 

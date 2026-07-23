@@ -8,8 +8,10 @@
     "dev:server": "tsx watch server/index.ts",
     "lint": "tsc --noEmit --project tsconfig.json",
     "build": "vite build",
+    "test:audit-migrations": "tsx test/workbenchAudit.test.ts && tsx test/mcpAdapterAudit.test.ts && tsx test/operatorAudit.test.ts && tsx test/operatorPrincipal.test.ts && tsx test/researchAudit.test.ts && tsx test/browserGatewayActorAudit.test.ts",
+    "pretest": "npm run test:audit-migrations",
     "preview": "vite preview",
-    "test": "tsx test/runtimeHardening.test.ts && tsx test/validateCommand.test.ts && tsx test/proposalFlow.test.ts && tsx test/repoSetupProposal.test.ts && tsx test/liveAppWorkbench.test.ts && tsx test/workflowIntent.test.ts && tsx test/browserObservation.test.ts && tsx test/missionControlV1.test.ts && tsx test/staticStructureScan.test.ts && tsx test/orchestrator.test.ts && tsx test/workbenchModeToggle.test.ts && tsx test/browserGateway.test.ts && tsx test/evidenceGraphResolver.test.ts && tsx test/researchPersistence.test.ts && tsx test/researchSession.test.ts && tsx test/provenanceValidation.test.ts && tsx test/evidenceCanonicalizer.test.ts && tsx test/researchAnalysisPipeline.test.ts && tsx test/workspaceReader.test.ts && tsx test/liveWorkbenchProbe.test.ts && tsx test/liveWorkbenchRegistry.test.ts && tsx test/liveWorkbenchSurface.test.ts && tsx test/workstationShell.test.tsx && tsx test/composerIntent.test.ts && tsx test/composerContextTray.test.ts && tsx test/composerMachine.test.ts && tsx test/composerSubmission.test.ts && tsx test/composerCapabilities.test.ts && tsx test/theme.test.ts && tsx test/themeCanonical.test.ts && tsx test/composerSurface.test.tsx && tsx test/transcript.test.tsx && tsx test/composerAttachment.test.tsx && tsx test/rigFoundation.test.ts && tsx test/rigIntegration.test.ts && tsx test/headroom.test.ts"
+    "test": "tsx test/runtimeHardening.test.ts && tsx test/validateCommand.test.ts && tsx test/proposalFlow.test.ts && tsx test/repoSetupProposal.test.ts && tsx test/liveAppWorkbench.test.ts && tsx test/workflowIntent.test.ts && tsx test/browserObservation.test.ts && tsx test/missionControlV1.test.ts && tsx test/staticStructureScan.test.ts && tsx test/orchestrator.test.ts && tsx test/workbenchModeToggle.test.ts && tsx test/browserGateway.test.ts && tsx test/auditRecord.test.ts && tsx test/mcpAudit.test.ts && tsx test/mcpFacadeHandlers.test.ts && tsx test/evidenceGraphResolver.test.ts && tsx test/researchPersistence.test.ts && tsx test/researchSession.test.ts && tsx test/provenanceValidation.test.ts && tsx test/evidenceCanonicalizer.test.ts && tsx test/researchAnalysisPipeline.test.ts && tsx test/workspaceReader.test.ts && tsx test/liveWorkbenchProbe.test.ts && tsx test/liveWorkbenchRegistry.test.ts && tsx test/liveWorkbenchSurface.test.ts && tsx test/workstationShell.test.tsx && tsx test/workstationLayout.test.ts && tsx test/workstationBreakpoint.test.tsx && tsx test/workspaceFileTree.test.ts && tsx test/composerIntent.test.ts && tsx test/composerContextTray.test.ts && tsx test/composerMachine.test.ts && tsx test/composerSubmission.test.ts && tsx test/composerCapabilities.test.ts && tsx test/theme.test.ts && tsx test/themeCanonical.test.ts && tsx test/composerSurface.test.tsx && tsx test/transcript.test.tsx && tsx test/composerAttachment.test.tsx && tsx test/rigFoundation.test.ts && tsx test/rigIntegration.test.ts && tsx test/rigAudit.test.ts && tsx test/rigDataPlaneHandlers.test.ts && tsx test/rigLoadingModel.test.ts && tsx test/rigPanelLifecycle.test.tsx && tsx test/auditRecordView.test.ts && tsx test/auditLogsRender.test.tsx && tsx test/auditLogsPanel.test.tsx && tsx test/headroom.test.ts && tsx test/browserWebContext.test.ts && tsx test/paneSizing.test.ts && tsx test/contextBrief.test.ts && tsx test/webPreviewOutcome.test.ts && tsx test/browserEvidenceSurface.test.ts && tsx test/browserEvidenceSurfaceRender.test.tsx && tsx test/addressSafety.test.ts"
   },
   "dependencies": {
     "@emotion/react": "^11.11.4",
@@ -21,6 +23,7 @@
     "chokidar": "^5.0.0",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
+    "ipaddr.js": "^1.9.1",
     "js-yaml": "^4.1.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -29,6 +32,7 @@
   "devDependencies": {
     "@types/express": "^4.17.21",
     "@types/js-yaml": "^4.0.9",
+    "@types/jsdom": "^28.0.3",
     "@types/node": "^20.14.9",
     "@types/react-dom": "^18.3.7",
     "@types/uuid": "^10.0.0",
@@ -37,6 +41,7 @@
     "eslint": "^8.57.0",
     "eslint-plugin-react": "^7.34.2",
     "eslint-plugin-react-hooks": "^4.6.0",
+    "jsdom": "^29.1.1",
     "tsx": "^4.7.1",
     "typescript": "^5.4.5",
     "vite": "^5.2.10"

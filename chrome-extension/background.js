@@ -1,7 +1,36 @@
 // chrome-extension/background.js
-import { initializeStorageSecurity, setAccessToken, setRefreshToken, getAccessToken, clearTokens, getInstallationId } from './storage.js';
+import {
+  initializeStorageSecurity,
+  setAccessToken,
+  setRefreshToken,
+  getAccessToken,
+  clearTokens,
+  getInstallationId,
+  getPendingPairing,
+  setPendingPairing,
+  clearPendingPairing,
+} from './storage.js';
 import { request } from './transport.js';
-import { validateOrigin } from './shared/validation.js';
+import { normalizePublicHttpUrl, validateOrigin } from './shared/validation.js';
+import { handleExtensionMessage, performCaptureWithAdapters } from './messageRouting.js';
+
+const pendingWebObservations = new Map();
+
+const adapters = {
+  storage: {
+    getAccessToken,
+    setAccessToken,
+    setRefreshToken,
+    getInstallationId,
+    clearTokens,
+    getPendingPairing,
+    setPendingPairing,
+    clearPendingPairing,
+  },
+  transport: { request },
+  chromeApi: chrome,
+  validateOrigin
+};
 
 chrome.runtime.onInstalled.addListener(async () => {
   initializeStorageSecurity();
@@ -9,14 +38,14 @@ chrome.runtime.onInstalled.addListener(async () => {
   // Create context menus for selection and page contexts
   chrome.contextMenus.create({
     id: 'capture-selection',
-    title: 'Send selection to Tessera',
+    title: 'Send selection to PaneTera',
     contexts: ['selection'],
     documentUrlPatterns: ['https://*/*', 'http://*/*']
   });
 
   chrome.contextMenus.create({
     id: 'capture-page',
-    title: 'Send page to Tessera',
+    title: 'Send page to PaneTera',
     contexts: ['page'],
     documentUrlPatterns: ['https://*/*', 'http://*/*']
   });
@@ -28,111 +57,174 @@ chrome.runtime.onInstalled.addListener(async () => {
     chrome.notifications.create({
       type: 'basic',
       iconUrl: 'icon128.png',
-      title: 'Tessera',
+      title: 'PaneTera',
       message: 'Capture shortcut is not assigned. Configure it in chrome://extensions/shortcuts.'
     });
   }
 });
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  handleMessage(message, sendResponse);
-  return true; // Keep message channel open for async response
-});
+function isObservePage(sender) {
+  return sender?.url?.startsWith(chrome.runtime.getURL('observe.html'));
+}
 
-async function handleMessage(message, sendResponse) {
-  try {
-    switch (message.type) {
-      case 'pair': {
-        const installationId = await getInstallationId();
-        const runtimeId = chrome.runtime.id;
-        const resp = await request('/api/browser/pairing/exchange', {
-          method: 'POST',
-          body: JSON.stringify({
-            code: message.code,
-            runtimeId,
-            installationId
-          })
-        });
-
-        if (resp.ok) {
-          const data = await resp.json();
-          await setAccessToken(data.accessToken);
-          await setRefreshToken(data.refreshToken);
-          sendResponse({ success: true });
-        } else {
-          const err = await resp.json();
-          sendResponse({ success: false, error: err.error || 'Failed to exchange pairing code' });
-        }
-        break;
-      }
-
-      case 'check-status': {
-        const token = await getAccessToken();
-        if (!token) {
-          sendResponse({ paired: false });
-          return;
-        }
-
-        try {
-          const resp = await request('/api/browser/session');
-          if (resp.ok) {
-            const data = await resp.json();
-            sendResponse({ paired: true, session: data });
-          } else {
-            // Token invalid
-            await clearTokens();
-            sendResponse({ paired: false });
-          }
-        } catch (e) {
-          sendResponse({ paired: false, error: 'Local server unreachable' });
-        }
-        break;
-      }
-
-      case 'capture': {
-        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-        let activeTab = tabs[0];
-        
-        // Handle full-tab popup testing mode
-        if (activeTab && activeTab.url && activeTab.url.startsWith('chrome-extension://')) {
-          const allTabs = await chrome.tabs.query({ currentWindow: true });
-          activeTab = allTabs.slice().reverse().find(t => t.url && !t.url.startsWith('chrome-extension://') && !t.url.startsWith('chrome://'));
-        }
-
-        const capability = message.capability || 'browser.page.observe';
-        const result = await performCapture({ tab: activeTab, trigger: 'popup', capability });
-        sendResponse(result);
-        break;
-      }
-
-      case 'disconnect': {
-        try {
-          await request('/api/browser/session', { method: 'DELETE' });
-        } catch (e) {
-          console.warn('Network revocation call failed:', e);
-        }
-        await clearTokens();
-        sendResponse({ success: true });
-        break;
-      }
-
-      default:
-        sendResponse({ error: 'Unknown message type' });
+function waitForTabReady(tabId, timeoutMs = 30_000) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    function cleanup() {
+      chrome.tabs.onUpdated.removeListener(onUpdated);
+      chrome.tabs.onRemoved.removeListener(onRemoved);
+      clearTimeout(timer);
     }
-  } catch (err) {
-    console.error('Error handling background execution:', err);
-    sendResponse({ success: false, error: err.message || 'Background execution error' });
+    function succeed(tab) {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(tab);
+    }
+    function fail(error) {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(error);
+    }
+    const timer = setTimeout(() => {
+      fail(new Error('The webpage did not finish loading in time.'));
+    }, timeoutMs);
+    function onUpdated(updatedTabId, changeInfo, tab) {
+      if (updatedTabId !== tabId || changeInfo.status !== 'complete') return;
+      succeed(tab);
+    }
+    function onRemoved(removedTabId) {
+      if (removedTabId === tabId) fail(new Error('The temporary webpage was closed before inspection completed.'));
+    }
+    chrome.tabs.onUpdated.addListener(onUpdated);
+    chrome.tabs.onRemoved.addListener(onRemoved);
+    // Close the fast-load race between tabs.create resolving and registering
+    // onUpdated. The tab may already be complete by this point.
+    chrome.tabs.get(tabId).then((tab) => {
+      if (tab?.status === 'complete') succeed(tab);
+    }).catch(() => fail(new Error('The temporary webpage is no longer available.')));
+  });
+}
+
+async function captureApprovedWebUrl(url) {
+  const normalized = normalizePublicHttpUrl(url);
+  if (!normalized) return { success: false, error: 'Only public HTTP or HTTPS pages can be inspected.' };
+  let tab;
+  try {
+    tab = await chrome.tabs.create({ url: normalized, active: false });
+    if (!tab?.id) throw new Error('Chrome did not create the temporary page.');
+    const readyTab = tab.status === 'complete' ? tab : await waitForTabReady(tab.id);
+    const result = await performCaptureWithAdapters({
+      tab: readyTab,
+      trigger: 'panetera-web-context',
+      capability: 'browser.article.extract',
+    }, adapters);
+    return {
+      success: Boolean(result?.success),
+      captureId: result?.observation?.data?.captureId,
+      error: result?.error,
+    };
+  } catch (error) {
+    return { success: false, error: error?.message || 'The webpage could not be inspected.' };
+  } finally {
+    if (tab?.id) {
+      try { await chrome.tabs.remove(tab.id); } catch {}
+    }
   }
 }
 
-// -----------------------------------------------------------------------------
-// EVENT LISTENERS: Context Menu and Keyboard Shortcut
-// -----------------------------------------------------------------------------
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type === 'capture-web-url') {
+    if (!isObservePage(sender)) {
+      sendResponse({ success: false, error: 'Web inspection must start from the Browser Operator approval page.' });
+      return false;
+    }
+    captureApprovedWebUrl(message.url).then(sendResponse);
+    return true;
+  }
 
+  if (message?.type === 'web-observation-complete') {
+    if (!isObservePage(sender)) {
+      sendResponse({ success: false, error: 'Invalid web inspection completion source.' });
+      return false;
+    }
+    const pending = pendingWebObservations.get(message.requestId);
+    if (pending) {
+      pendingWebObservations.delete(message.requestId);
+      pending(message.result || { success: false, error: 'The inspection returned no result.' });
+    }
+    sendResponse({ success: true });
+    return false;
+  }
+
+  handleExtensionMessage(message, adapters, sendResponse, sender);
+  return true; // Keep message channel open for async response
+});
+
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name !== 'panetera-local-bridge') return;
+  port.onMessage.addListener((message) => {
+    if (message?.type === 'request-web-observation') {
+      const normalized = normalizePublicHttpUrl(message.url);
+      if (!normalized) {
+        port.postMessage({ success: false, error: 'Only public HTTP or HTTPS pages can be inspected.', requestId: message.requestId });
+        return;
+      }
+      // Validate through the authenticated transport instead of reading the
+      // volatile access token directly. The transport restores an access
+      // token from the persisted refresh token after an extension reload.
+      request('/api/browser/session').then((sessionResponse) => {
+        if (!sessionResponse.ok) {
+          port.postMessage({ success: false, error: 'Connect the Browser Operator in Rig first.', requestId: message.requestId });
+          return;
+        }
+        let approvalTabId;
+        const onApprovalClosed = (tabId) => {
+          if (tabId !== approvalTabId) return;
+          settle({ success: false, error: 'Page inspection was cancelled.' });
+        };
+        const settle = (result) => {
+          chrome.tabs.onRemoved.removeListener(onApprovalClosed);
+          pendingWebObservations.delete(message.requestId);
+          try { port.postMessage({ ...result, requestId: message.requestId }); } catch {}
+        };
+        pendingWebObservations.set(message.requestId, settle);
+        chrome.tabs.create({
+          url: chrome.runtime.getURL(`observe.html?requestId=${encodeURIComponent(message.requestId)}&url=${encodeURIComponent(normalized)}`),
+          active: true,
+        }).then((tab) => {
+          approvalTabId = tab.id;
+          chrome.tabs.onRemoved.addListener(onApprovalClosed);
+        }).catch((error) => settle({ success: false, error: error?.message || 'Could not open the inspection approval.' }));
+      }).catch(() => {
+        try {
+          port.postMessage({ success: false, error: 'The local PaneTera server is unreachable.', requestId: message.requestId });
+        } catch {}
+      });
+      return;
+    }
+    handleExtensionMessage(message, adapters, (response) => {
+      try {
+        port.postMessage({ ...response, requestId: message.requestId });
+      } catch {
+        // The local page or extension was reloaded before the reply completed.
+      }
+    }, { url: port.sender?.url || '' });
+  });
+  port.onDisconnect.addListener(() => {
+    for (const [requestId, settle] of pendingWebObservations) {
+      settle({ success: false, error: 'PaneTera disconnected before inspection completed.' });
+      pendingWebObservations.delete(requestId);
+    }
+  });
+});
+
+// Event Listeners: Context Menu and Keyboard Shortcut
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId === 'capture-selection' || info.menuItemId === 'capture-page') {
     const selectionText = info.menuItemId === 'capture-selection' ? info.selectionText : undefined;
-    await performCapture({ tab, trigger: 'context-menu', selectionText });
+    await performCaptureWithAdapters({ tab, trigger: 'context-menu', selectionText }, adapters);
   }
 });
 
@@ -141,152 +233,7 @@ chrome.commands.onCommand.addListener(async (command) => {
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     let activeTab = tabs[0];
     if (activeTab) {
-      await performCapture({ tab: activeTab, trigger: 'shortcut', capability: 'browser.page.observe' });
+      await performCaptureWithAdapters({ tab: activeTab, trigger: 'shortcut', capability: 'browser.page.observe' }, adapters);
     }
   }
 });
-
-// -----------------------------------------------------------------------------
-// SHARED CAPTURE LOGIC
-// -----------------------------------------------------------------------------
-
-async function performCapture({ tab, trigger, selectionText, capability = 'browser.page.observe' }) {
-  try {
-    if (!tab) {
-      throw new Error('No active tab found');
-    }
-
-    if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
-      throw new Error('This Chrome page cannot be captured. Open a normal HTTP or HTTPS page.');
-    }
-
-    let captureData = null;
-
-    // We need to inject the bundle to get extraction capabilities
-    try {
-      await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        files: ['dist/capture.bundle.js']
-      });
-      
-      const results = await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        func: (cap) => {
-          if (window.TesseraExtractors && window.TesseraExtractors[cap]) {
-            return window.TesseraExtractors[cap]();
-          }
-          throw new Error(`Capability ${cap} not found in extractors bundle`);
-        },
-        args: [capability]
-      });
-      
-      if (results && results.length > 0 && results[0].result) {
-        captureData = results[0].result;
-      } else {
-        throw new Error('Failed to extract DOM elements or structured evidence');
-      }
-    } catch (e) {
-      throw new Error('Script injection or extraction blocked. Please grant site permissions.');
-    }
-
-    // Always revalidate the current tab origin immediately before dispatch
-    const freshTab = await chrome.tabs.get(tab.id);
-    const actualUrl = freshTab.url || '';
-    
-    // For Phase 1 fallback, captureData was { origin: ... }. For Phase 2 contracts, origin is at captureData.source.origin
-    const expectedOrigin = captureData.source ? captureData.source.origin : captureData.origin;
-    
-    if (!validateOrigin(expectedOrigin, actualUrl)) {
-      throw new Error('Origin verification mismatch: Target navigated');
-    }
-
-    const transactionId = 'tx-' + Math.random().toString(36).substring(2) + '-' + Date.now();
-    const idempotencyKey = 'idem-' + Math.random().toString(36).substring(2) + '-' + Date.now();
-    
-    let payload;
-    
-    // Check if this is a Phase 2 ExtractionResult contract or Phase 1 observation payload
-    if (capability !== 'browser.page.observe' && capability !== 'browser.selection.observe') {
-      // Phase 2 Payload
-      payload = {
-        protocolVersion: "1.0",
-        capabilityVersion: "1.0",
-        transactionId,
-        idempotencyKey,
-        issuedAt: new Date().toISOString(),
-        expiresAt: new Date(Date.now() + 30000).toISOString(),
-        capability: capability,
-        riskLevel: "inspect",
-        target: { tabId: tab.id, frameId: 0, expectedOrigin },
-        approval: { required: false, status: "not-required", grantId: null },
-        constraints: { maxElements: 5000, maxOutputBytes: 2000000, timeoutMs: 5000 },
-        payload: captureData // captureData is the ExtractionResult contract
-      };
-    } else {
-      // Phase 1 Payload
-      // Add selectionText if it came from context menu
-      if (selectionText) {
-        captureData.selectedText = selectionText;
-        capability = 'browser.selection.observe';
-      }
-      
-      payload = {
-        protocolVersion: "1.0",
-        capabilityVersion: "1.0",
-        transactionId,
-        idempotencyKey,
-        issuedAt: new Date().toISOString(),
-        expiresAt: new Date(Date.now() + 30000).toISOString(),
-        capability: capability,
-        riskLevel: "inspect",
-        target: { tabId: tab.id, frameId: 0, expectedOrigin },
-        approval: { required: false, status: "not-required", grantId: null },
-        constraints: { maxElements: 1, maxOutputBytes: 10000, timeoutMs: 5000 },
-        payload: {
-          title: captureData.title,
-          url: captureData.url,
-          selectedText: captureData.selectedText
-        }
-      };
-    }
-
-    const resp = await request('/api/browser/observations', {
-      method: 'POST',
-      body: JSON.stringify(payload)
-    });
-
-    if (resp.ok) {
-      const observation = await resp.json();
-      if (trigger !== 'popup') {
-        chrome.notifications.create({
-          type: 'basic',
-          iconUrl: 'icon128.png',
-          title: 'Tessera',
-          message: 'Context sent successfully'
-        });
-      }
-      return { success: true, observation };
-    } else {
-      const err = await resp.json();
-      const errorMessage = err.error || 'Failed to submit observation';
-      if (trigger !== 'popup') {
-        chrome.notifications.create({
-          type: 'basic',
-          iconUrl: 'icon128.png',
-          title: 'Tessera capture failed',
-          message: errorMessage
-        });
-      }
-      return { success: false, error: errorMessage };
-    }
-  } catch (e) {
-    if (trigger !== 'popup') {
-      chrome.notifications.create({
-        type: 'basic',
-        iconUrl: 'icon128.png',
-        title: 'Tessera capture failed',
-        message: e.message || 'Unknown error'
-      });
-    }
-    return { success: false, error: e.message || 'Unknown error' };
-  }

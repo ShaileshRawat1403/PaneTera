@@ -4,7 +4,16 @@
 import { spawn, ChildProcess } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
-import { logAudit } from './audit';
+import {
+  logTypedAudit,
+  humanActor,
+  systemActor,
+  unknownActor,
+  type AuditOutcome,
+  type PolicyDecision,
+  type TypedAuditRecord,
+} from './auditRecord';
+import type { OperatorPrincipal } from './operatorPrincipal';
 
 interface PolicyConfig {
   denyPaths: string[];
@@ -14,6 +23,39 @@ interface PolicyConfig {
 
 // Global active adapters map
 const activeAdapters = new Map<string, McpWorkspaceAdapter>();
+
+export function auditWorkspaceAdapter(input: {
+  event: string;
+  workspaceId: string;
+  outcome: AuditOutcome;
+  policyDecision?: PolicyDecision;
+  details?: Record<string, unknown>;
+}): TypedAuditRecord {
+  return logTypedAudit({
+    event: input.event,
+    actor: systemActor('workspace-adapter'),
+    outcome: input.outcome,
+    policyDecision: input.policyDecision ?? 'allowed',
+    details: { workspaceId: input.workspaceId, ...(input.details ?? {}) },
+  });
+}
+
+export function auditWorkspaceCaller(input: {
+  event: string;
+  workspaceId: string;
+  outcome: AuditOutcome;
+  policyDecision: PolicyDecision;
+  details?: Record<string, unknown>;
+  principal?: OperatorPrincipal;
+}): TypedAuditRecord {
+  return logTypedAudit({
+    event: input.event,
+    actor: input.principal ? humanActor(input.principal) : unknownActor('workspace-caller-unattributed'),
+    outcome: input.outcome,
+    policyDecision: input.policyDecision,
+    details: { workspaceId: input.workspaceId, ...(input.details ?? {}) },
+  });
+}
 
 export class McpWorkspaceAdapter {
   private childProcess: ChildProcess | null = null;
@@ -29,7 +71,7 @@ export class McpWorkspaceAdapter {
     // Verify workspace path existence
     if (!fs.existsSync(this.workspacePath)) {
       const err = `Workspace path ${this.workspacePath} does not exist.`;
-      logAudit('adapter error', { workspaceId: this.workspaceId, path: this.workspacePath, error: err });
+      auditWorkspaceAdapter({ event: 'workspace.adapter.error', workspaceId: this.workspaceId, outcome: 'error', details: { error: err } });
       throw new Error(err);
     }
 
@@ -41,15 +83,19 @@ export class McpWorkspaceAdapter {
       stdio: ['pipe', 'pipe', 'pipe']
     });
 
-    logAudit('adapter start', { workspaceId: this.workspaceId, path: this.workspacePath });
-
     this.childProcess.stderr?.on('data', (data) => {
       // Forward stderr messages to portal backend logs (useful for debug)
       console.error(`[MCP WORKSPACE SERVER ${this.workspaceId} STDERR]`, data.toString().trim());
     });
 
-    this.childProcess.on('close', (code) => {
-      logAudit('adapter stop', { workspaceId: this.workspaceId, exitCode: code });
+    this.childProcess.on('close', (code, signal) => {
+      const expectedStop = code === 0 || signal === 'SIGTERM';
+      auditWorkspaceAdapter({
+        event: 'workspace.adapter.stopped',
+        workspaceId: this.workspaceId,
+        outcome: expectedStop ? 'success' : 'error',
+        details: { exitCode: code, signal },
+      });
       this.childProcess = null;
       this.pendingRequests.forEach(req => req.reject(new Error('MCP server process exited')));
       this.pendingRequests.clear();
@@ -57,7 +103,7 @@ export class McpWorkspaceAdapter {
     });
 
     this.childProcess.on('error', (err) => {
-      logAudit('adapter error', { workspaceId: this.workspaceId, error: err.message });
+      auditWorkspaceAdapter({ event: 'workspace.adapter.error', workspaceId: this.workspaceId, outcome: 'error', details: { error: err.message } });
       console.error(`[MCP ADAPTER ERROR ${this.workspaceId}]`, err.message);
     });
 
@@ -91,6 +137,13 @@ export class McpWorkspaceAdapter {
 
     // Wait a brief moment to ensure startup
     await new Promise(resolve => setTimeout(resolve, 500));
+
+    // Spawning only proves that the launch was requested. Do not record a
+    // successful start until the process has survived the startup window.
+    if (!this.childProcess || this.childProcess.exitCode !== null) {
+      throw new Error(`MCP workspace server ${this.workspaceId} exited during startup.`);
+    }
+    auditWorkspaceAdapter({ event: 'workspace.adapter.started', workspaceId: this.workspaceId, outcome: 'success' });
   }
 
   public stop(): void {
@@ -111,7 +164,7 @@ export class McpWorkspaceAdapter {
   }
 
   // Authoritative host policy validation check
-  private validateAccessPolicy(toolName: string, args: any): void {
+  private validateAccessPolicy(toolName: string, args: any, principal?: OperatorPrincipal): void {
     const policyPath = path.resolve(__dirname, 'myai-policy.json');
     let policy: PolicyConfig = { denyPaths: [], denyExtensions: [], defaultRiskPolicy: {} };
     try {
@@ -131,14 +184,22 @@ export class McpWorkspaceAdapter {
       const ext = path.extname(relPath).toLowerCase();
       const baseName = path.basename(relPath).toLowerCase();
       if (policy.denyExtensions.includes(ext) || policy.denyExtensions.includes(baseName) || baseName.startsWith('.env')) {
-        logAudit('file read denied', { workspaceId: this.workspaceId, path: relPath, reason: 'Denied file extension/name' });
+        auditWorkspaceCaller({
+          event: 'workspace.read.denied', workspaceId: this.workspaceId, outcome: 'denied', policyDecision: 'denied',
+          principal,
+          details: { tool: toolName, reason: 'denied file extension or name' },
+        });
         throw new Error(`Access Denied: Reading or scanning of file '${relPath}' is forbidden by host policy rules.`);
       }
 
       // 2. Check for denied directories / traversal
       const normalized = path.normalize(relPath);
       if (normalized.startsWith('..') || path.isAbsolute(normalized)) {
-        logAudit('file read denied', { workspaceId: this.workspaceId, path: relPath, reason: 'Directory traversal attempt' });
+        auditWorkspaceCaller({
+          event: 'workspace.read.denied', workspaceId: this.workspaceId, outcome: 'denied', policyDecision: 'denied',
+          principal,
+          details: { tool: toolName, reason: 'workspace boundary violation' },
+        });
         throw new Error(`Access Denied: Path '${relPath}' goes outside permitted workspace boundary.`);
       }
 
@@ -149,19 +210,24 @@ export class McpWorkspaceAdapter {
       });
 
       if (isDeniedPath) {
-        logAudit('file read denied', { workspaceId: this.workspaceId, path: relPath, reason: 'Matches denyPaths configuration' });
+        auditWorkspaceCaller({
+          event: 'workspace.read.denied', workspaceId: this.workspaceId, outcome: 'denied', policyDecision: 'denied',
+          principal,
+          details: { tool: toolName, reason: 'denied workspace path' },
+        });
         throw new Error(`Access Denied: Path '${relPath}' matches denied folders in host security rules.`);
       }
     }
   }
 
-  public async call(toolName: string, args: any): Promise<any> {
+  public async call(toolName: string, args: any, principal?: OperatorPrincipal): Promise<any> {
+    // Policy must run before starting an adapter: a denied request receives no
+    // process-launch side effect.
+    this.validateAccessPolicy(toolName, args, principal);
+
     if (!this.childProcess) {
       await this.start();
     }
-
-    // Wrap call with authoritative policy check first
-    this.validateAccessPolicy(toolName, args);
 
     const id = this.messageId++;
     const request = {
@@ -179,28 +245,46 @@ export class McpWorkspaceAdapter {
         if (this.pendingRequests.has(id)) {
           this.pendingRequests.delete(id);
           reject(new Error(`Timeout: Tool request '${toolName}' timed out after 5000ms.`));
-          logAudit('adapter error', { workspaceId: this.workspaceId, error: `Tool ${toolName} timed out.` });
+          auditWorkspaceAdapter({
+            event: 'workspace.tool.failed', workspaceId: this.workspaceId, outcome: 'error',
+            details: { tool: toolName, reason: 'timeout' },
+          });
         }
       }, 5000);
 
       this.pendingRequests.set(id, {
         resolve: (res) => {
           clearTimeout(timeout);
+          auditWorkspaceAdapter({
+            event: 'workspace.tool.completed', workspaceId: this.workspaceId, outcome: 'success',
+            details: { tool: toolName },
+          });
           resolve(res);
         },
         reject: (err) => {
           clearTimeout(timeout);
+          auditWorkspaceAdapter({
+            event: 'workspace.tool.failed', workspaceId: this.workspaceId, outcome: 'error',
+            details: { tool: toolName, error: err instanceof Error ? err.message : String(err) },
+          });
           reject(err);
         }
       });
 
       try {
         this.childProcess!.stdin!.write(JSON.stringify(request) + '\n');
-        logAudit('file read allowed', { workspaceId: this.workspaceId, tool: toolName, args });
+        auditWorkspaceCaller({
+          event: 'workspace.tool.dispatched', workspaceId: this.workspaceId, outcome: 'pending', policyDecision: 'allowed',
+          principal,
+          details: { tool: toolName },
+        });
       } catch (err: any) {
         clearTimeout(timeout);
         this.pendingRequests.delete(id);
-        logAudit('adapter error', { workspaceId: this.workspaceId, error: err.message });
+        auditWorkspaceAdapter({
+          event: 'workspace.tool.failed', workspaceId: this.workspaceId, outcome: 'error',
+          details: { tool: toolName, error: err.message },
+        });
         reject(err);
       }
     });

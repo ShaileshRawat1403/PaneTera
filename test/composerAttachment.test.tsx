@@ -175,7 +175,9 @@ describe('native picker wiring', () => {
       'info.isFile()',
       'info.isDirectory()',
       'randomUUID()',
-      "logAudit('local_context_selected'",
+      "event: 'local_context_selected'",
+      'correlation: { grantId: grant.id }',
+      'scopeFingerprint: fingerprint(grant.path)',
     ]) {
       assert.ok(server.includes(proof), `missing ${proof}`);
     }

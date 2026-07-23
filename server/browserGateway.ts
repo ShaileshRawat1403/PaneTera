@@ -1,14 +1,18 @@
 // server/browserGateway.ts
 import { Router, Request, Response, NextFunction } from 'express';
-import { logAudit } from './audit';
+import crypto from 'node:crypto';
+import { browserExtensionActor, logTypedAudit } from './auditRecord';
+import { auditBrowserExtensionEvent, auditBrowserPairRequested, auditBrowserPortalDisconnect } from './browserGatewayAudit';
+import { authenticatePortalRequest, operatorPrincipalForRequest } from './operatorPrincipal';
 
 export const browserRouter = Router();
 
 export interface BrowserSession {
+  sessionId: string;
   accessToken: string;
   refreshToken: string;
   runtimeId: string;
-  installationId: string; // Used as subjectId/ownerId for the session
+  installationId: string;
   pairedAt?: Date;
 }
 
@@ -28,25 +32,34 @@ export type {
   ExtractionResult 
 };
 
-
 import { browserEvidenceStore } from './browserEvidenceStore';
+import { buildPhase1ObservationPayload, buildStoredExtraction, validateBrowserEnvelope } from './browserGatewayValidation';
 
-// In-Memory Database for Alpha Session
 let activePairingCode: string | null = null;
 let pairingCodeExpires: Date | null = null;
 let failedAttempts = 0;
 
 const sessions = new Map<string, BrowserSession>();
-const refreshTokens = new Map<string, BrowserSession>(); // Maps refreshToken string to session
+const refreshTokens = new Map<string, BrowserSession>();
 const processedIdempotencyKeys = new Set<string>();
 
-// Helper to sanitize input strings
+const ALLOWED_READONLY_CAPABILITIES = new Set([
+  'browser.page.observe',
+  'browser.selection.observe',
+  'browser.article.extract',
+  'browser.outline.extract',
+  'browser.table.extract',
+  'browser.links.extract',
+  'browser.codeBlocks.extract',
+  'browser.metadata.extract',
+  'browser.structuredData.extract'
+]);
+
 function sanitizeText(text: any): string {
   if (typeof text !== 'string') return '';
   return text.trim();
 }
 
-// Security: Enforce Bearer authentication matching extension sessions
 export function requireExtensionToken(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization?.split(' ')[1];
   if (!authHeader || !sessions.has(authHeader)) {
@@ -56,7 +69,6 @@ export function requireExtensionToken(req: Request, res: Response, next: NextFun
   next();
 }
 
-// Helper to validate loopback request origin binding
 export function checkLoopbackBinding(req: Request, res: Response, next: NextFunction) {
   const ip = req.ip || req.socket.remoteAddress || '';
   const isLoopback = ip.includes('127.0.0.1') || ip.includes('::1') || ip.includes('localhost') || ip === '::ffff:127.0.0.1';
@@ -66,62 +78,105 @@ export function checkLoopbackBinding(req: Request, res: Response, next: NextFunc
   next();
 }
 
-// Mount loopback check globally on this router
 browserRouter.use(checkLoopbackBinding);
 
-// POST /api/browser/pairing/start -> Initiated by authenticated portal workspace UI
-browserRouter.post('/pairing/start', (req: Request, res: Response) => {
-  // Validate master token manually
+function requirePortalToken(req: Request, res: Response, next: NextFunction) {
   const portalToken = process.env.PORTAL_TOKEN || '';
-  const authHeader = req.headers.authorization?.split(' ')[1];
-  if (!authHeader || authHeader !== portalToken) {
-    return res.status(401).json({ error: 'Unauthorized master workspace token required' });
+  if (!authenticatePortalRequest(req, portalToken)) {
+    return res.status(401).json({ error: 'PaneTera authorization required' });
   }
+  next();
+}
 
-  // Generate 8-character pairing code: XXXX-XXXX
+// POST /api/browser/pairing/start -> Initiated by authenticated portal workspace UI
+browserRouter.post('/pairing/start', requirePortalToken, (req: Request, res: Response) => {
   const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
   let generated = '';
   for (let i = 0; i < 8; i++) {
     if (i === 4) generated += '-';
-    generated += chars[Math.floor(Math.random() * chars.length)];
+    const randIndex = crypto.randomInt(0, chars.length);
+    generated += chars[randIndex];
   }
 
   activePairingCode = generated;
   pairingCodeExpires = new Date(Date.now() + 2 * 60 * 1000); // 2 minutes expiry
   failedAttempts = 0;
 
-  res.json({ code: generated });
+  auditBrowserPairRequested(operatorPrincipalForRequest(req));
+
+  res.json({ code: generated, expiresAt: pairingCodeExpires.toISOString() });
+});
+
+// Portal-facing connection summary. Tokens and refresh credentials never
+// cross this boundary; Rig only receives identity, time, and health metadata.
+browserRouter.get('/pairing/status', requirePortalToken, (_req: Request, res: Response) => {
+  const unique = new Map<string, BrowserSession>();
+  for (const session of sessions.values()) unique.set(session.sessionId, session);
+  res.json({
+    gateway: 'current',
+    pending: Boolean(activePairingCode && pairingCodeExpires && pairingCodeExpires > new Date()),
+    sessions: Array.from(unique.values()).map((session) => ({
+      sessionId: session.sessionId,
+      runtimeId: session.runtimeId,
+      installationId: session.installationId,
+      pairedAt: session.pairedAt?.toISOString() ?? null,
+    })),
+  });
+});
+
+browserRouter.delete('/pairing/pending', requirePortalToken, (_req: Request, res: Response) => {
+  activePairingCode = null;
+  pairingCodeExpires = null;
+  failedAttempts = 0;
+  return res.json({ success: true });
+});
+
+browserRouter.delete('/pairing/sessions/:sessionId', requirePortalToken, (req: Request, res: Response) => {
+  const session = Array.from(sessions.values()).find((candidate) => candidate.sessionId === req.params.sessionId);
+  if (!session) return res.status(404).json({ error: 'Browser connection not found' });
+  sessions.delete(session.accessToken);
+  refreshTokens.delete(session.refreshToken);
+  auditBrowserPortalDisconnect(session, operatorPrincipalForRequest(req));
+  return res.json({ success: true });
 });
 
 // POST /api/browser/pairing/exchange -> Extension exchanges code for session tokens
 browserRouter.post('/pairing/exchange', (req: Request, res: Response) => {
   const { code, runtimeId, installationId } = req.body;
 
-  if (!code || !runtimeId || !installationId) {
-    return res.status(400).json({ error: 'Missing pairing parameters' });
+  if (
+    typeof code !== 'string' || code.length > 16 ||
+    typeof runtimeId !== 'string' || runtimeId.length < 1 || runtimeId.length > 100 ||
+    typeof installationId !== 'string' || installationId.length < 1 || installationId.length > 100
+  ) {
+    return res.status(400).json({ error: 'Invalid pairing parameters' });
   }
 
   if (failedAttempts >= 5) {
-    return res.status(429).json({ error: 'Too many failed attempts. Please regenerate code in the Workbench.' });
+    return res.status(429).json({ error: 'Too many failed attempts. Start a new connection from Rig.' });
   }
 
   if (!activePairingCode || !pairingCodeExpires || new Date() > pairingCodeExpires) {
     return res.status(400).json({ error: 'Pairing code expired or not initialized' });
   }
 
-  const formattedCode = sanitizeText(code).replace(/-/g, '');
-  const targetCode = activePairingCode.replace(/-/g, '');
+  const formattedCode = sanitizeText(code).replace(/-/g, '').toUpperCase();
+  const targetCode = activePairingCode.replace(/-/g, '').toUpperCase();
 
-  if (formattedCode !== targetCode) {
+  const codeBuf = Buffer.from(formattedCode);
+  const targetBuf = Buffer.from(targetCode);
+
+  if (codeBuf.length !== targetBuf.length || !crypto.timingSafeEqual(codeBuf, targetBuf)) {
     failedAttempts++;
     return res.status(400).json({ error: 'Invalid pairing code' });
   }
 
-  // Generate access & refresh tokens
-  const accessToken = 'tok-' + Math.random().toString(36).substring(2) + '-' + Date.now();
-  const refreshToken = 'ref-' + Math.random().toString(36).substring(2) + '-' + Date.now();
+  const sessionId = 'sess-' + crypto.randomUUID();
+  const accessToken = 'tok_' + crypto.randomBytes(32).toString('base64url');
+  const refreshToken = 'ref_' + crypto.randomBytes(32).toString('base64url');
 
   const newSession: BrowserSession = {
+    sessionId,
     accessToken,
     refreshToken,
     runtimeId: sanitizeText(runtimeId),
@@ -132,27 +187,22 @@ browserRouter.post('/pairing/exchange', (req: Request, res: Response) => {
   sessions.set(accessToken, newSession);
   refreshTokens.set(refreshToken, newSession);
 
-  // Clear pairing code
   activePairingCode = null;
   pairingCodeExpires = null;
 
-  logAudit('browser.pair', {
-    actor: `extension:${runtimeId}`,
-    installationId,
-    capability: 'browser.pair',
-    policyDecision: 'allowed',
-    status: 'success',
-    details: 'Browser extension paired successfully.'
-  });
+  auditBrowserExtensionEvent('browser.pair', newSession);
 
   res.json({ accessToken, refreshToken });
 });
 
-// POST /api/browser/token/refresh -> Refreshes temporary access token
+// POST /api/browser/token/refresh
 browserRouter.post('/token/refresh', (req: Request, res: Response) => {
   const { refreshToken, installationId } = req.body;
-  if (!refreshToken || !installationId) {
-    return res.status(400).json({ error: 'Missing parameters' });
+  if (
+    typeof refreshToken !== 'string' || refreshToken.length < 1 || refreshToken.length > 200 ||
+    typeof installationId !== 'string' || installationId.length < 1 || installationId.length > 100
+  ) {
+    return res.status(400).json({ error: 'Invalid refresh parameters' });
   }
 
   const session = refreshTokens.get(refreshToken);
@@ -160,12 +210,8 @@ browserRouter.post('/token/refresh', (req: Request, res: Response) => {
     return res.status(401).json({ error: 'Invalid refresh token or installation mismatch' });
   }
 
-  // Generate new access token
-  const newAccessToken = 'tok-' + Math.random().toString(36).substring(2) + '-' + Date.now();
-  
-  // Revoke old session key
+  const newAccessToken = 'tok_' + crypto.randomBytes(32).toString('base64url');
   sessions.delete(session.accessToken);
-
   session.accessToken = newAccessToken;
   sessions.set(newAccessToken, session);
 
@@ -177,7 +223,7 @@ browserRouter.get('/health', (req: Request, res: Response) => {
   res.json({ status: 'ok' });
 });
 
-// GET /api/browser/session -> Fetch paired session stats
+// GET /api/browser/session
 browserRouter.get('/session', requireExtensionToken, (req: Request, res: Response) => {
   const session = (req as any).browserSession as BrowserSession;
   res.json({
@@ -188,81 +234,34 @@ browserRouter.get('/session', requireExtensionToken, (req: Request, res: Respons
   });
 });
 
-// DELETE /api/browser/session -> Disconnect extension session
+// DELETE /api/browser/session
 browserRouter.delete('/session', requireExtensionToken, (req: Request, res: Response) => {
   const session = (req as any).browserSession as BrowserSession;
   sessions.delete(session.accessToken);
   refreshTokens.delete(session.refreshToken);
 
-  logAudit('browser.disconnect', {
-    actor: `extension:${session.runtimeId}`,
-    installationId: session.installationId,
-    capability: 'browser.disconnect',
-    policyDecision: 'allowed',
-    status: 'success',
-    details: 'Browser extension disconnected.'
-  });
+  auditBrowserExtensionEvent('browser.disconnect', session);
 
   res.json({ success: true });
 });
 
 // POST /api/browser/observations -> Adds captured DOM info to feed
 browserRouter.post('/observations', requireExtensionToken, (req: Request, res: Response) => {
-  const envelope = req.body;
-  if (!envelope || !envelope.target || !envelope.payload) {
-    return res.status(400).json({ error: 'Invalid envelope structure' });
-  }
-
-  const { title, url, selectedText } = envelope.payload;
-  const expectedOrigin = envelope.target.expectedOrigin;
-
-  if (!url || !title) {
-    return res.status(400).json({ error: 'Missing URL or Title parameters' });
-  }
-
+  const validated = validateBrowserEnvelope(req.body, ALLOWED_READONLY_CAPABILITIES);
+  if (!validated.ok) return res.status(400).json({ error: validated.error });
+  const envelope = validated.value;
   const { idempotencyKey } = envelope;
-  if (idempotencyKey) {
-    if (processedIdempotencyKeys.has(idempotencyKey)) {
-      return res.status(400).json({ error: 'Duplicate transaction key (idempotency enforcement)' });
-    }
-    processedIdempotencyKeys.add(idempotencyKey);
-    if (processedIdempotencyKeys.size > 1000) {
-      const first = processedIdempotencyKeys.values().next().value;
-      if (first) processedIdempotencyKeys.delete(first);
-    }
-  }
-
-  // Enforce origin verification bounds
-  let derivedOrigin = '';
-  try {
-    derivedOrigin = new URL(url || envelope.payload.source?.url || '').origin;
-  } catch (e) {
-    return res.status(400).json({ error: 'Invalid payload target URL format' });
-  }
-
-  if (expectedOrigin.toLowerCase() !== derivedOrigin.toLowerCase()) {
-    return res.status(400).json({ error: 'Security Exception: expected target origin mismatch' });
-  }
-
-  const maxBytes = envelope.constraints?.maxOutputBytes || 2000000;
-  const payloadString = JSON.stringify(envelope.payload);
-  const contentBytes = typeof Blob !== 'undefined' ? new Blob([payloadString]).size : Buffer.byteLength(payloadString, 'utf8');
-  if (contentBytes > maxBytes) {
-    return res.status(400).json({ error: 'Payload size limit exceeded constraints bounds' });
-  }
-  if (contentBytes > 2000000) {
-    return res.status(400).json({ error: 'Payload size limit exceeded maximum bounds (2MB)' });
-  }
+  if (processedIdempotencyKeys.has(idempotencyKey)) return res.status(409).json({ error: 'Duplicate transaction key' });
 
   const session = (req as any).browserSession as BrowserSession;
   
   const ownership: EvidenceOwnership = {
-    ownerId: session.installationId, // Bound strictly to the authenticated user/workspace
+    ownerId: session.installationId,
     createdBy: {
       type: "browser-extension",
       actorId: session.runtimeId
     },
-    sourceSessionId: session.accessToken // Optional trace to the session
+    sourceSessionId: session.sessionId
   };
   
   const trust: BrowserTrust = {
@@ -271,69 +270,69 @@ browserRouter.post('/observations', requireExtensionToken, (req: Request, res: R
     instructionAuthority: "none"
   };
 
-  // Retention duration constraint: remove observations older than 1 hour
   browserEvidenceStore.applyRetentionPolicy();
+  const captureId = 'capture-' + crypto.randomUUID();
+  let elementsMatched = 0;
 
-  const captureId = 'capture-' + Math.random().toString(36).substring(2) + '-' + Date.now();
-  
-  if (envelope.capability === 'browser.page.observe' || envelope.capability === 'browser.selection.observe') {
-    // Phase 1 Observation
+  if (envelope.isPhase1) {
+    const phase1 = buildPhase1ObservationPayload(envelope);
+    if (!phase1.ok) return res.status(400).json({ error: phase1.error });
     const newObs: ObservationItem = {
       captureId,
       ownership,
       trust,
       captureType: "page-selection",
-      title: sanitizeText(title),
-      url: sanitizeText(url),
-      origin: sanitizeText(expectedOrigin),
-      selectedText: sanitizeText(selectedText || ''),
+      title: phase1.value.title,
+      url: phase1.value.url,
+      origin: phase1.value.origin,
+      selectedText: phase1.value.selectedText,
       capturedAt: new Date().toISOString()
     };
 
     browserEvidenceStore.storeObservation(newObs);
 
-    logAudit('browser.observe', {
-      actor: `extension:${session.runtimeId}`,
-      installationId: session.installationId,
-      capability: envelope.capability,
-      targetUrl: newObs.url,
-      captureId,
+    logTypedAudit({
+      event: 'browser.observe',
+      // Server-derived from the authenticated session, not from the request
+      // body. The id is a fingerprint of the durable installation, so the
+      // session bearer never becomes an actor identity.
+      actor: browserExtensionActor(session),
+      outcome: 'success',
       policyDecision: 'allowed',
-      status: 'success',
-      details: `Observed context: "${newObs.title}"`
+      correlation: { captureId },
+      details: {
+        capability: envelope.capability,
+        targetUrl: newObs.url,
+        note: `Observed context: "${newObs.title}"`,
+      },
     });
   } else {
-    // Phase 2 Extraction
-    const extractionPayload = envelope.payload as ExtractionResult;
-    
-    // Explicitly enforce backend ownership and trust to ignore extension payload values
-    extractionPayload.parentCaptureId = captureId;
-    extractionPayload.ownership = ownership;
-    extractionPayload.trust = trust;
-    
-    if (extractionPayload.evidence && Array.isArray(extractionPayload.evidence.items)) {
-      extractionPayload.evidence.items.forEach((item: any) => {
-        item.extractionId = extractionPayload.extractionId;
-        item.ownership = ownership;
-        item.trust = trust;
-      });
-    }
-    
+    const extraction = buildStoredExtraction(envelope, ownership, trust, captureId);
+    if (!extraction.ok) return res.status(400).json({ error: extraction.error });
+    const extractionPayload = extraction.value;
     browserEvidenceStore.storeExtraction(extractionPayload);
+    elementsMatched = extractionPayload.evidence.elementsMatched;
 
-    logAudit('browser.extract', {
-      actor: `extension:${session.runtimeId}`,
-      installationId: session.installationId,
-      capability: envelope.capability,
-      targetUrl: extractionPayload.source.url,
-      extractionId: extractionPayload.extractionId,
+    logTypedAudit({
+      event: 'browser.extract',
+      actor: browserExtensionActor(session),
+      outcome: 'success',
       policyDecision: 'allowed',
-      status: 'success',
-      details: `Extracted ${envelope.capability} from "${extractionPayload.source.title}"`
+      correlation: { extractionId: extractionPayload.extractionId, captureId },
+      details: {
+        capability: envelope.capability,
+        targetUrl: extractionPayload.source.url,
+        note: `Extracted ${envelope.capability} from "${extractionPayload.source.title}"`,
+      },
     });
   }
 
-  // Return normalized response envelope
+  processedIdempotencyKeys.add(idempotencyKey);
+  if (processedIdempotencyKeys.size > 1000) {
+    const first = processedIdempotencyKeys.values().next().value;
+    if (first) processedIdempotencyKeys.delete(first);
+  }
+
   res.json({
     transactionId: envelope.transactionId,
     status: "completed",
@@ -341,10 +340,10 @@ browserRouter.post('/observations', requireExtensionToken, (req: Request, res: R
     actualTarget: {
       tabId: envelope.target.tabId,
       frameId: envelope.target.frameId || 0,
-      origin: expectedOrigin
+      origin: envelope.target.expectedOrigin
     },
     evidence: {
-      elementsMatched: 1
+      elementsMatched
     },
     data: {
       captureId
@@ -354,9 +353,8 @@ browserRouter.post('/observations', requireExtensionToken, (req: Request, res: R
   });
 });
 
-// GET /api/browser/observations -> Poll list of observations (Master Token OR Extension Token allowed)
+// GET /api/browser/observations
 browserRouter.get('/observations', (req: Request, res: Response, next: NextFunction) => {
-  // Authentication check: supports either master token OR active extension token
   const authHeader = req.headers.authorization?.split(' ')[1];
   const portalToken = process.env.PORTAL_TOKEN || '';
   
@@ -371,16 +369,14 @@ browserRouter.get('/observations', (req: Request, res: Response, next: NextFunct
     return res.status(401).json({ error: 'Unauthorized session' });
   }
 
-  // Cursor-based filtering
   const after = req.query.after as string;
   const filteredObs = browserEvidenceStore.getObservations(after);
   const filteredExt = browserEvidenceStore.getExtractions(after);
   return res.json({ observations: filteredObs, extractions: filteredExt });
 });
 
-// GET /api/browser/observations/:captureId -> Single observation lookup
+// GET /api/browser/observations/:captureId
 browserRouter.get('/observations/:captureId', (req: Request, res: Response) => {
-  // Auth check
   const authHeader = req.headers.authorization?.split(' ')[1];
   const portalToken = process.env.PORTAL_TOKEN || '';
   if (!authHeader || (authHeader !== portalToken && !sessions.has(authHeader))) {

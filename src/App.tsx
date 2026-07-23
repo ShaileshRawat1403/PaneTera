@@ -1,6 +1,6 @@
 // src/App.tsx
 import React, { useState, useEffect, useRef } from 'react';
-import { Box, Paper, Typography, TextField, Button, CircularProgress, Chip, IconButton, Dialog, Grid, Stack, Tooltip, Snackbar, Alert, Menu, MenuItem } from '@mui/material';
+import { Box, Paper, Typography, TextField, Button, CircularProgress, Chip, IconButton, Dialog, Stack, Tooltip, Snackbar, Alert, Menu, MenuItem } from '@mui/material';
 import TranscriptTurn from './components/transcript/TranscriptTurn';
 import type { TranscriptMessage } from './components/transcript/TranscriptTurn';
 import { Composer } from './components/composer/Composer';
@@ -22,6 +22,12 @@ import { describeResolution, resolveAppName } from './composer/appRegistry';
 import { PreviewPanel, FeedItem } from './components/PreviewPanel';
 import { InteractiveComponent } from './components/InteractiveComponent';
 import { WorkstationShell } from './components/workstation/WorkstationShell';
+import { PaneDivider } from './components/workstation/PaneDivider';
+import {
+  maxConversationWidth,
+  maxNestedPaneWidth,
+  usePersistentPaneWidth,
+} from './components/workstation/paneSizing';
 import { workstationGuidance } from './components/workstation/guidance';
 import type { HeadroomCapsuleView } from './components/headroom/HeadroomPanel';
 import type { UiComponent } from '../shared/uiComponent';
@@ -46,9 +52,17 @@ import { WorkbenchFailureState } from './components/workbench/WorkbenchFailureSt
 import { LiveWorkbenchSurface } from './components/workbench/LiveWorkbenchSurface';
 import { LiveWorkbenchToolbar } from './components/workbench/LiveWorkbenchToolbar';
 import { WebPreviewSurface } from './components/workbench/WebPreviewSurface';
+import type { BrowserEvidenceRecord } from './components/workbench/browserEvidenceSurfaceModel';
+import {
+  describeOutcome,
+  failedToDisplay,
+  summariseOutcome,
+} from './components/workbench/webPreviewOutcome';
 // Web-preview and workspace-route matching now happen inside the single
 // resolver. App consumes resolved envelopes and does not classify.
 import type { WebPreviewRequest } from './utils/webPreviewIntent';
+import { requestBrowserOperatorStatus, requestWebObservation } from './utils/browserOperatorBridge';
+import { buildBrowserEvidenceBlock, firstAttachedWebContext, shouldInspectActiveWebPreview } from './utils/browserEvidenceContext';
 
 const RigPanel = React.lazy(async () => {
   const module = await import('./components/rig/RigPanel');
@@ -77,6 +91,12 @@ const HeadroomPanel = React.lazy(async () => {
  */
 type Message = TranscriptMessage;
 
+type WebPreviewInspectionState =
+  | { kind: 'idle' }
+  | { kind: 'requesting' }
+  | { kind: 'evidence'; record: BrowserEvidenceRecord }
+  | { kind: 'error'; detail: string };
+
 const App: React.FC = () => {
 
   const [messages, setMessages] = useState<Message[]>([]);
@@ -90,6 +110,7 @@ const App: React.FC = () => {
   const [activeHeadroomCapsule, setActiveHeadroomCapsule] = useState<HeadroomCapsuleView | null>(null);
   const [rigRequestKey, setRigRequestKey] = useState(0);
   const [headroomRequestKey, setHeadroomRequestKey] = useState(0);
+  const [projectPickerRequestKey, setProjectPickerRequestKey] = useState(0);
   const [headroomSessionId] = useState(() => {
     const existing = sessionStorage.getItem('panetera-headroom-session');
     if (existing) return existing;
@@ -118,6 +139,27 @@ const App: React.FC = () => {
   const [localAppDef, setLocalAppDef] = React.useState<any>(null);
   const [webPreview, setWebPreview] = useState<WebPreviewRequest | null>(null);
   const [webPreviewRevision, setWebPreviewRevision] = useState(0);
+  const [webPreviewInspection, setWebPreviewInspection] = useState<WebPreviewInspectionState>({ kind: 'idle' });
+  const webPreviewInspectionAttempt = useRef(0);
+  /**
+   * Whether Browser Operator has a live session.
+   *
+   * Held here because the web preview needs it to decide which remedy to offer
+   * when a site refuses framing: inspecting through the operator, or connecting
+   * it first. Defaulting to not-connected is the safe direction, since offering
+   * to connect something already connected is a small annoyance while offering
+   * to inspect with something absent is another false promise.
+   */
+  const [browserOperatorConnected, setBrowserOperatorConnected] = useState(false);
+
+  /**
+   * Guards against announcing the same preview attempt twice.
+   *
+   * The surface owns the probe and reports its result up. React may deliver
+   * that callback more than once for a given attempt, and a transcript that
+   * says the same thing twice reads as two separate attempts.
+   */
+  const announcedPreview = useRef<string | null>(null);
 
   React.useEffect(() => {
     if (prefs.activeAppId && workbenchMode === 'local-app') {
@@ -160,6 +202,26 @@ const App: React.FC = () => {
 
 
   const [activeWorkspace, setActiveWorkspace] = useState<Workspace | null>(null);
+  // Budgeted against the canvas, not the viewport. The explorer sits inside the
+  // canvas, so a viewport-relative cap let the two limits compose: at 1280px a
+  // 640px conversation plus a 614px explorer left the authoritative surface
+  // 19px of usable width.
+  const workspaceExplorerMax = React.useCallback(() => {
+    if (typeof window === 'undefined') return 560;
+    const conversation = maxConversationWidth(window.innerWidth, {
+      min: 280,
+      absoluteMax: 640,
+      dividerWidth: 7,
+    });
+    const canvas = window.innerWidth - conversation - 7;
+    return maxNestedPaneWidth(canvas, { min: 260, absoluteMax: 680, nestedMaxShare: 0.5 });
+  }, []);
+  const [workspaceExplorerWidth, setWorkspaceExplorerWidth] = usePersistentPaneWidth(
+    'panetera-project-explorer-width',
+    380,
+    260,
+    workspaceExplorerMax,
+  );
   const [isAuditLogsOpen, setIsAuditLogsOpen] = useState(false);
 
   const [workspaceFiles, setWorkspaceFiles] = useState<any[]>([]);
@@ -497,6 +559,33 @@ const App: React.FC = () => {
     }
   }, []);
 
+  /**
+   * Track whether Browser Operator has a live, extension-confirmed session.
+   *
+   * Only used to choose which remedy the web preview offers when a site refuses
+   * framing. A failed lookup leaves this false, which offers "connect" rather
+   * than promising an inspection that might not be possible.
+   */
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    const read = () => {
+      requestBrowserOperatorStatus()
+        .then((value) => {
+          if (!cancelled) setBrowserOperatorConnected(value.paired);
+        })
+        .catch(() => {
+          if (!cancelled) setBrowserOperatorConnected(false);
+        });
+    };
+    read();
+    const timer = setInterval(read, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [token]);
+
   // Fetch workspaces & health once authenticated
   useEffect(() => {
     if (!token) return;
@@ -659,6 +748,61 @@ const App: React.FC = () => {
 
   const addMessage = (msg: Message) => {
     setMessages(prev => [...prev, msg]);
+  };
+
+  const clearWebPreviewInspection = () => {
+    webPreviewInspectionAttempt.current += 1;
+    setWebPreviewInspection({ kind: 'idle' });
+  };
+
+  /** Run the explicit, extension-owned approval journey and put its evidence in the canvas. */
+  const inspectWebPreview = async () => {
+    if (!webPreview || !browserOperatorConnected) return;
+    const requested = webPreview;
+    const attempt = webPreviewInspectionAttempt.current + 1;
+    webPreviewInspectionAttempt.current = attempt;
+    setWebPreviewInspection({ kind: 'requesting' });
+    setActiveReply('Waiting for Browser Operator approval…');
+
+    try {
+      const { captureId } = await requestWebObservation(requested.url);
+      const response = await fetch(`/api/browser/observations/${encodeURIComponent(captureId)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const body: unknown = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const detail = body && typeof body === 'object' && 'error' in body
+          ? String((body as { error: unknown }).error)
+          : `Browser evidence lookup failed (${response.status})`;
+        throw new Error(detail);
+      }
+      if (!body || typeof body !== 'object') {
+        throw new Error('Browser Operator returned an invalid evidence record.');
+      }
+      if (webPreviewInspectionAttempt.current !== attempt) return;
+
+      const record = body as BrowserEvidenceRecord;
+      setWebPreviewInspection({ kind: 'evidence', record });
+      const observedUrl = record.source?.url || record.url || requested.url;
+      addMessage({
+        role: 'assistant',
+        content:
+          `Browser Operator captured approval-gated evidence from ${observedUrl}. ` +
+          'It is untrusted and is now shown in the canvas.',
+        intent: 'web_preview',
+      });
+      setActiveReply(`Showing Browser Operator evidence from ${requested.name}.`);
+    } catch (error: unknown) {
+      if (webPreviewInspectionAttempt.current !== attempt) return;
+      const detail = error instanceof Error ? error.message : String(error);
+      setWebPreviewInspection({ kind: 'error', detail });
+      addMessage({
+        role: 'assistant',
+        content: `I did not inspect ${requested.url}: ${detail}`,
+        intent: 'needs_capability',
+      });
+      setActiveReply('No webpage evidence was added.');
+    }
   };
 
   const handleAddWorkspace = async () => {
@@ -871,20 +1015,25 @@ const App: React.FC = () => {
     openRig: () => setRigRequestKey((value) => value + 1),
     openHeadroom: () => setHeadroomRequestKey((value) => value + 1),
     webOpen: (plan) => {
+      clearWebPreviewInspection();
       setWebPreview({ url: plan.url, name: plan.label });
       setActiveComponent(null);
-      setActiveReply(`Opened ${plan.label} in the canvas.`);
-      addMessage({
-        role: 'assistant',
-        content: `I opened ${plan.url} in the canvas as an untrusted web preview. It receives no PaneTera authority or credentials. If the site refuses embedded viewing, use “Open in browser” above the preview.`,
-        intent: 'web_preview',
-      });
+      setActiveReply(`Opening ${plan.label}…`);
+      // Nothing is claimed here. The surface probes, and `handlePreviewOutcome`
+      // composes the message from what it found.
+      //
+      // This previously asserted "I opened <url> in the canvas" the instant the
+      // plan ran, before anything had been attempted, which produced a blank
+      // canvas underneath a success message against hpanel.hostinger.com.
+      announcedPreview.current = null;
     },
     webClose: () => {
+      clearWebPreviewInspection();
       setWebPreview(null);
       addMessage({ role: 'assistant', content: 'I closed the web preview.', intent: 'web_preview' });
     },
     webReload: () => {
+      clearWebPreviewInspection();
       setWebPreviewRevision(current => current + 1);
       addMessage({ role: 'assistant', content: 'I reloaded the web preview.', intent: 'web_preview' });
     },
@@ -950,7 +1099,7 @@ const App: React.FC = () => {
     // the placeholder the derivation is meant to prevent. The composer
     // declares that capability for itself.
     chat: async (plan) => {
-    setLoading(true);
+      setLoading(true);
 
       const useWorkspaceOrchestrator = plan.endpoint === 'orchestrator';
       const endpoint = useWorkspaceOrchestrator ? '/api/orchestrator/chat' : '/api/chat';
@@ -966,7 +1115,49 @@ const App: React.FC = () => {
             changedUnderstanding: activeHeadroomCapsule.changedUnderstanding,
           }))}\n</headroom-capsule>`
         : null;
-      const effectiveMessage = capsuleBlock ? `${plan.message}\n\n${capsuleBlock}` : plan.message;
+      let effectiveMessage = capsuleBlock ? `${plan.message}\n\n${capsuleBlock}` : plan.message;
+
+      // A web reference is only an address until the Browser Operator produces
+      // evidence. Open the canvas immediately, then pause for explicit per-site
+      // approval and attach the resulting server-sanitised extraction.
+      const attachedWebContext = firstAttachedWebContext(plan.context);
+      const webContext = attachedWebContext ?? (
+        webPreview && shouldInspectActiveWebPreview(plan.rawInput)
+          ? { kind: 'web', locator: webPreview.url, label: webPreview.name }
+          : null
+      );
+      if (webContext) {
+        clearWebPreviewInspection();
+        setWebPreview({ url: webContext.locator, name: webContext.label });
+        setActiveComponent(null);
+        setActiveReply('Waiting for Browser Operator approval to inspect this page…');
+        try {
+          const { captureId } = await requestWebObservation(webContext.locator);
+          const evidenceResponse = await fetch(`/api/browser/observations/${encodeURIComponent(captureId)}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const evidence = await evidenceResponse.json().catch(() => ({}));
+          if (!evidenceResponse.ok) {
+            throw new Error(evidence?.error || `Browser evidence lookup failed (${evidenceResponse.status})`);
+          }
+          effectiveMessage = `${effectiveMessage}\n\nThe PaneTera Browser Operator inspected the page successfully. Answer from the browser extraction below; do not claim that the page or browser extension is unavailable.\n\n${buildBrowserEvidenceBlock(evidence)}`;
+          setActiveReply(`Inspected ${webContext.label}. Preparing the answer…`);
+        } catch (error: unknown) {
+          const reason = error instanceof Error ? error.message : String(error);
+          addMessage({
+            role: 'assistant',
+            // "I opened X in the preview" was asserted here too, on a path
+            // where the preview may never have rendered. The inspection is what
+            // this branch actually knows about, so it is all it claims.
+            content: `I did not inspect ${webContext.locator}: ${reason}`,
+            intent: 'needs_capability',
+          });
+          setActiveReply('No webpage evidence was added.');
+          setActiveQuery(plan.rawInput);
+          setLoading(false);
+          return;
+        }
+      }
       const requestBody = useWorkspaceOrchestrator
         ? {
             message: effectiveMessage,
@@ -1393,15 +1584,15 @@ const App: React.FC = () => {
                 variant="subtitle2"
                 sx={{ color: ink.primary, fontWeight: 600, mb: 0.75, fontSize: '0.9375rem' }}
               >
-                What would you like to work on?
+                No conversation yet
               </Typography>
               <Typography
                 variant="caption"
                 sx={{ color: ink.secondary, display: 'block', lineHeight: 1.6, fontSize: '0.78rem' }}
               >
                 {activeWorkspace
-                  ? 'Ask about this project, open a website, or describe what you want to accomplish.'
-                  : 'Choose a project above, open a website, or describe what you want to accomplish.'}
+                  ? 'Ask about this project or describe the result you want below.'
+                  : 'Start in the composer below. Your requests and PaneTera’s findings will stay here.'}
               </Typography>
             </Box>
           ) : (
@@ -1453,9 +1644,9 @@ const App: React.FC = () => {
 
     return (
       <Box sx={{ flexGrow: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <Grid container spacing={3} sx={{ flexGrow: 1, minHeight: 0, height: '100%', p: 3, overflow: 'hidden' }}>
+        <Box sx={{ flexGrow: 1, minHeight: 0, height: '100%', p: 3, overflow: 'hidden', display: 'grid', gridTemplateColumns: `${workspaceExplorerWidth}px 7px minmax(0, 1fr)`, gap: 0 }}>
           {/* Left panel: FileTree navigation only */}
-          <Grid item xs={12} md={4} sx={{ height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0, borderRight: { md: `1px solid ${surface.border}` }, pr: { md: 2 } }}>
+          <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0, pr: 2, overflow: 'hidden' }}>
             <WorkspaceFileTree
               token={token}
               workspace={activeWorkspace}
@@ -1463,10 +1654,19 @@ const App: React.FC = () => {
               onSelectFile={handleSelectFile}
               onFilesLoaded={(files) => setWorkspaceFiles(files)}
             />
-          </Grid>
+          </Box>
+
+          <PaneDivider
+            label="Resize project explorer and inspector"
+            value={workspaceExplorerWidth}
+            min={260}
+            max={workspaceExplorerMax()}
+            onChange={setWorkspaceExplorerWidth}
+            onReset={() => setWorkspaceExplorerWidth(380)}
+          />
 
           {/* Right panel: dashboard cards, actions, preview panel, citations trace */}
-          <Grid item xs={12} md={8} sx={{ height: '100%', display: 'flex', flexDirection: 'column', gap: 2.5, minHeight: 0, overflowY: 'auto', pl: { md: 2 } }}>
+          <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', gap: 2.5, minHeight: 0, overflowY: 'auto', pl: 2 }}>
             {/* Workspace Intelligence Stack card */}
             <WorkspaceIntelligenceCard
               files={workspaceFiles}
@@ -1548,8 +1748,8 @@ const App: React.FC = () => {
               records={traceRecords}
               onSelectFile={handleSelectFile}
             />
-          </Grid>
-        </Grid>
+          </Box>
+        </Box>
       </Box>
     );
   };
@@ -1879,8 +2079,67 @@ const App: React.FC = () => {
                   Choose a project or describe your goal
                 </Typography>
                 <Typography variant="body2" sx={{ color: ink.secondary, lineHeight: 1.7 }}>
-                  Whatever you start will take shape here: a live application, a document,
-                  a result, or evidence you can inspect.
+                  Whatever you start takes shape here: a live application, a document, a
+                  result, or evidence you can inspect.
+                </Typography>
+
+                {/*
+                  A small set of actions that actually do something. Each opens a
+                  surface that works today, so nothing here advertises a flow that
+                  is not built. Describing a goal is not a card because the
+                  composer, which owns that, is a keystroke away rather than
+                  behind a button that would only pretend to focus it.
+                */}
+                <Box
+                  sx={{
+                    mt: 1,
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                    gap: 1.25,
+                  }}
+                >
+                  {[
+                    {
+                      title: 'Choose a project',
+                      detail: 'Open one of your registered projects.',
+                      onClick: () => setProjectPickerRequestKey((value) => value + 1),
+                    },
+                    {
+                      title: 'Connect a capability',
+                      detail: 'Add a tool or MCP server in Rig.',
+                      onClick: () => setRigRequestKey((value) => value + 1),
+                    },
+                  ].map((action) => (
+                    <Button
+                      key={action.title}
+                      onClick={action.onClick}
+                      sx={{
+                        textAlign: 'left',
+                        alignItems: 'flex-start',
+                        flexDirection: 'column',
+                        gap: 0.5,
+                        p: 1.5,
+                        border: `1px solid ${surface.border}`,
+                        borderRadius: `${radius.md}px`,
+                        backgroundColor: surface.raised,
+                        textTransform: 'none',
+                        transition: 'background-color 120ms, border-color 120ms',
+                        '&:hover': { backgroundColor: surface.overlay, borderColor: accent.violetBorder },
+                        '&:focus-visible': { outline: 'none', boxShadow: elevation.focusRing },
+                      }}
+                    >
+                      <Typography variant="subtitle2" sx={{ color: ink.primary, fontWeight: 600 }}>
+                        {action.title}
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: ink.secondary, lineHeight: 1.5 }}>
+                        {action.detail}
+                      </Typography>
+                    </Button>
+                  ))}
+                </Box>
+
+                <Typography variant="caption" sx={{ color: ink.muted, mt: 0.5 }}>
+                  Or describe your goal in the composer.
                 </Typography>
               </Box>
             </Box>
@@ -1891,7 +2150,37 @@ const App: React.FC = () => {
               key={`${webPreview.url}:${webPreviewRevision}`}
               name={webPreview.name}
               url={webPreview.url}
-              onClose={() => setWebPreview(null)}
+              onClose={() => {
+                clearWebPreviewInspection();
+                setWebPreview(null);
+              }}
+              operator={browserOperatorConnected ? 'connected' : 'not-connected'}
+              onConnectOperator={() => setRigRequestKey((value) => value + 1)}
+              onInspectWithOperator={inspectWebPreview}
+              inspection={webPreviewInspection}
+              onClearEvidence={clearWebPreviewInspection}
+              onOutcome={(outcome) => {
+                // One announcement per attempt, composed from what the probe
+                // established rather than from the request.
+                const attempt = `${webPreview.url}:${webPreviewRevision}`;
+                if (announcedPreview.current === attempt) return;
+                announcedPreview.current = attempt;
+
+                addMessage({
+                  role: 'assistant',
+                  content: describeOutcome(outcome, {
+                    url: webPreview.url,
+                    siteName: webPreview.name,
+                    operator: browserOperatorConnected ? 'connected' : 'not-connected',
+                  }),
+                  // Any failure to display, not only a header refusal. An
+                  // unreachable address previously produced a transcript line
+                  // saying PaneTera could not open the page beside a status
+                  // line saying the site was in the canvas.
+                  intent: failedToDisplay(outcome) ? 'needs_capability' : 'web_preview',
+                });
+                setActiveReply(summariseOutcome(outcome, { siteName: webPreview.name }));
+              }}
             />
           ) : workbenchMode === 'local-app' ? (
             !prefs.activeAppId ? (
@@ -1971,7 +2260,15 @@ const App: React.FC = () => {
                 governanceStatus={governanceSummary}
                 rigRequestKey={rigRequestKey}
                 headroomRequestKey={headroomRequestKey}
+                projectPickerRequestKey={projectPickerRequestKey}
                 onOpenAudit={() => setIsAuditLogsOpen(true)}
+                // Everything except the empty state counts as canvas content.
+                // The narrow layout uses this to signal the canvas and to avoid
+                // stranding a person on an empty canvas with the composer out of
+                // reach. Kept in sync with the canvasNode chain above.
+                canvasHasContent={Boolean(
+                  webPreview || workbenchMode === 'local-app' || activeComponent || activeWorkspace,
+                )}
               />
           );
       })()}

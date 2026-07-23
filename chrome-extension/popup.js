@@ -9,6 +9,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnCapture = document.getElementById('btnCapture');
   const btnDisconnect = document.getElementById('btnDisconnect');
   const errorMsg = document.getElementById('errorMsg');
+  const pendingPanel = document.getElementById('pendingPanel');
+  const btnApprovePairing = document.getElementById('btnApprovePairing');
+  const btnDismissPairing = document.getElementById('btnDismissPairing');
 
   // Format code input automatic dash (XXXX-XXXX)
   pairingCodeInput.addEventListener('input', (e) => {
@@ -33,11 +36,14 @@ document.addEventListener('DOMContentLoaded', () => {
         statusBadge.textContent = 'Online / Gov Sandbox';
         statusBadge.className = 'status-badge status-connected';
         setupPanel.style.display = 'none';
+        pendingPanel.style.display = 'none';
         actionPanel.style.display = 'block';
       } else {
         statusBadge.textContent = 'Disconnected';
         statusBadge.className = 'status-badge status-disconnected';
-        setupPanel.style.display = 'block';
+        const hasPending = Boolean(response && response.pendingPairing);
+        pendingPanel.style.display = hasPending ? 'block' : 'none';
+        setupPanel.style.display = hasPending ? 'none' : 'block';
         actionPanel.style.display = 'none';
       }
     });
@@ -64,6 +70,21 @@ document.addEventListener('DOMContentLoaded', () => {
         showError(response ? response.error : 'Connection timeout');
       }
     });
+  });
+
+  btnApprovePairing.addEventListener('click', () => {
+    btnApprovePairing.disabled = true;
+    btnApprovePairing.textContent = 'Connecting…';
+    chrome.runtime.sendMessage({ type: 'approve-pending-pairing' }, (response) => {
+      btnApprovePairing.disabled = false;
+      btnApprovePairing.textContent = 'Allow connection';
+      if (response?.success) updateUI();
+      else showError(response?.error || 'Connection failed');
+    });
+  });
+
+  btnDismissPairing.addEventListener('click', () => {
+    chrome.runtime.sendMessage({ type: 'dismiss-pending-pairing' }, updateUI);
   });
 
   btnCapture.addEventListener('click', () => {

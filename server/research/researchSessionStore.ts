@@ -3,7 +3,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { getTesseraAppDataDir } from '../appData';
 import { ResearchSession, ResearchSessionSnapshot } from './researchTypes';
-import { logAudit } from '../audit';
+import { auditResearchSystem } from './researchAudit';
 
 function validateSession(data: any, expectedSessionId: string): asserts data is ResearchSession {
   if (!data || typeof data !== 'object') throw new Error('Session is not an object');
@@ -105,7 +105,7 @@ export class ResearchSessionStore {
       return sessionData;
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
-      logAudit({ operation: 'load_session_failure', status: 'error', details: msg, sessionId });
+      auditResearchSystem({ event: 'research.store.session-load-failed', outcome: 'error', sessionId, details: { error: msg } });
       throw e;
     } finally {
       release();
@@ -176,7 +176,10 @@ export class ResearchSessionStore {
       return snapshotData;
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
-      logAudit({ operation: 'load_snapshot_failure', status: 'error', details: msg, sessionId, snapshotId });
+      auditResearchSystem({
+        event: 'research.store.snapshot-load-failed', outcome: 'error', sessionId,
+        details: { snapshotId, error: msg },
+      });
       throw e;
     } finally {
       release();

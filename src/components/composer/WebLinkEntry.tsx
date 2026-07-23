@@ -6,9 +6,8 @@
 // value when focus moves, so "did it attach or not" becomes a race the person
 // cannot see.
 //
-// Attaching a link does not open the preview. Opening a surface is an intent,
-// expressed through `/open`; this menu adds context. Conflating them would mean
-// writing an address down always navigated somewhere.
+// Attaching a link alone does not act. A later submitted question may open the
+// preview and request explicit Browser Operator inspection for this address.
 
 import React, { useState } from 'react';
 import { Box, Button, Paper, TextField, Typography } from '@mui/material';

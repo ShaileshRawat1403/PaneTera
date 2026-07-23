@@ -20,8 +20,17 @@ import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 import AccountTreeIcon from '@mui/icons-material/AccountTree';
 import HubIcon from '@mui/icons-material/Hub';
 import LayersIcon from '@mui/icons-material/Layers';
+import ForumIcon from '@mui/icons-material/Forum';
+import DashboardIcon from '@mui/icons-material/Dashboard';
 import { accent, elevation, ink, radius, status, surface } from '../../theme/tokens';
 import { transition } from '../../theme/motion';
+import { PaneDivider } from './PaneDivider';
+import { maxConversationWidth, usePersistentPaneWidth } from './paneSizing';
+import {
+  type WorkstationPlane,
+  shouldSignalCanvas,
+  useIsStacked,
+} from './workstationLayout';
 
 export interface GovernanceSummary {
   gatewayConnected: boolean;
@@ -35,6 +44,9 @@ export interface GovernanceSummary {
   currentObjective?: string | null;
 }
 
+/** Width of the draggable separator, in pixels. */
+const DIVIDER_WIDTH = 7;
+
 export interface WorkstationShellProps {
   conversation: React.ReactNode;
   canvas: React.ReactNode;
@@ -44,8 +56,18 @@ export interface WorkstationShellProps {
   renderHeadroom: (closeHeadroom: () => void) => React.ReactNode;
   rigRequestKey?: number;
   headroomRequestKey?: number;
+  /** Bumped to open the project picker from outside the top bar. */
+  projectPickerRequestKey?: number;
   governanceStatus: GovernanceSummary;
   onOpenAudit: () => void;
+  /**
+   * Whether the canvas currently holds something other than the empty state.
+   *
+   * Used only by the stacked (narrow) layout, to signal on the Canvas toggle
+   * that content is waiting there. The shell cannot introspect the opaque
+   * canvas node, so the caller reports this.
+   */
+  canvasHasContent?: boolean;
 }
 
 /** Shared focus treatment. Visible focus is a contract requirement. */
@@ -76,13 +98,48 @@ export function WorkstationShell({
   renderHeadroom,
   rigRequestKey = 0,
   headroomRequestKey = 0,
+  projectPickerRequestKey = 0,
   governanceStatus,
   onOpenAudit,
+  canvasHasContent = false,
 }: WorkstationShellProps) {
   const [activityOpen, setActivityOpen] = useState(false);
   const [rigOpen, setRigOpen] = useState(false);
   const [headroomOpen, setHeadroomOpen] = useState(false);
   const [workspaceAnchorEl, setWorkspaceAnchorEl] = useState<null | HTMLElement>(null);
+  // The project picker anchors to the top-bar button. A ref lets the empty
+  // canvas open it too, so "Choose a project" is actionable from where the
+  // person is looking rather than only from the top bar.
+  const chooseProjectRef = React.useRef<HTMLButtonElement>(null);
+
+  // Narrow-viewport layout. Below the workstation threshold the two planes stack
+  // into one switched column instead of shrinking side by side. The person lands
+  // on the conversation, where the composer is, and the switch is persistent so
+  // it is always one action away. The canvas request is honoured whatever it
+  // holds, including its empty state, which carries its own guidance.
+  const stacked = useIsStacked();
+  const [activePlane, setActivePlane] = useState<WorkstationPlane>('conversation');
+  const canvasSignal = shouldSignalCanvas(activePlane, canvasHasContent);
+  // Derived from the contract's 60% canvas floor rather than a picked
+  // percentage. The divider counts against the budget because it is usable
+  // width the canvas does not receive either.
+  const conversationMax = React.useCallback(
+    () =>
+      typeof window === 'undefined'
+        ? 640
+        : maxConversationWidth(window.innerWidth, {
+            min: 340,
+            absoluteMax: 640,
+            dividerWidth: DIVIDER_WIDTH,
+          }),
+    [],
+  );
+  const [conversationWidth, setConversationWidth] = usePersistentPaneWidth(
+    'panetera-conversation-width',
+    400,
+    340,
+    conversationMax,
+  );
 
   React.useEffect(() => {
     if (rigRequestKey <= 0) return;
@@ -97,6 +154,13 @@ export function WorkstationShell({
     setRigOpen(false);
     setHeadroomOpen(true);
   }, [headroomRequestKey]);
+
+  React.useEffect(() => {
+    if (projectPickerRequestKey <= 0) return;
+    // Anchor to the real top-bar button, so the picker appears where it always
+    // does rather than in an arbitrary spot.
+    if (chooseProjectRef.current) setWorkspaceAnchorEl(chooseProjectRef.current);
+  }, [projectPickerRequestKey]);
 
   const toggleActivity = () => {
     setRigOpen(false);
@@ -121,6 +185,80 @@ export function WorkstationShell({
   };
 
   const { gatewayConnected } = governanceStatus;
+
+  /**
+   * One toggle in the narrow-layout plane switch.
+   *
+   * Presented as toggle buttons with `aria-pressed`, not an ARIA tabs pattern.
+   * A partial tabs implementation is worse than none: the earlier version had
+   * `role="tab"` without `tabpanel`, `aria-controls`, roving focus, or arrow
+   * keys, which announces a contract to assistive technology that the widget
+   * does not honour. Two pressable buttons are a smaller promise, honestly kept.
+   *
+   * The availability signal is conveyed in text, not only by the dot. The dot is
+   * decorative and hidden from assistive technology; a visually hidden phrase
+   * carries the same meaning to a screen reader, so "content is waiting on the
+   * canvas" is not sighted-only information.
+   */
+  const renderPlaneToggle = ({
+    label,
+    icon,
+    active,
+    signal,
+    onSelect,
+  }: {
+    label: string;
+    icon: React.ReactNode;
+    active: boolean;
+    signal: boolean;
+    onSelect: () => void;
+  }) => (
+    <Button
+      key={label}
+      aria-pressed={active}
+      onClick={onSelect}
+      startIcon={icon}
+      sx={{
+        flex: 1,
+        gap: 0.5,
+        py: 0.75,
+        borderRadius: `${radius.sm}px`,
+        border: `1px solid ${active ? accent.violetBorder : 'transparent'}`,
+        backgroundColor: active ? accent.violetMuted : 'transparent',
+        color: active ? ink.primary : ink.secondary,
+        fontWeight: 600,
+        transition: transition(['background-color', 'color', 'border-color']),
+        '&:hover': { color: ink.primary, backgroundColor: active ? accent.violetHover : surface.overlay },
+        ...focusRing,
+      }}
+    >
+      {label}
+      {signal && (
+        <>
+          <Box
+            aria-hidden
+            sx={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: status.brass, ml: 0.25 }}
+          />
+          <Box
+            component="span"
+            sx={{
+              position: 'absolute',
+              width: 1,
+              height: 1,
+              padding: 0,
+              margin: '-1px',
+              overflow: 'hidden',
+              clip: 'rect(0 0 0 0)',
+              whiteSpace: 'nowrap',
+              border: 0,
+            }}
+          >
+            , content waiting
+          </Box>
+        </>
+      )}
+    </Button>
+  );
 
   return (
     <Box
@@ -191,6 +329,7 @@ export function WorkstationShell({
 
           <Tooltip title="Switch project">
             <Button
+              ref={chooseProjectRef}
               onClick={openWorkspacePopover}
               aria-label="Switch project"
               aria-haspopup="true"
@@ -302,51 +441,120 @@ export function WorkstationShell({
         </Box>
       </Box>
 
-      {/* 2. Two-plane layout: conversation and authoritative canvas */}
-      <Box
-        sx={{
-          flexGrow: 1,
-          display: 'grid',
-          gridTemplateColumns: {
-            xs: 'minmax(320px, 38vw) minmax(440px, 1fr)',
-            md: 'clamp(340px, 28vw, 400px) minmax(0, 1fr)',
-          },
-          minHeight: 0,
-          overflow: 'hidden',
-        }}
-      >
-        <Box
-          component="aside"
-          aria-label="PaneTera conversation"
-          sx={{
-            borderRight: `1px solid ${surface.border}`,
-            display: 'flex',
-            flexDirection: 'column',
-            minWidth: 0,
-            backgroundColor: surface.raised,
-          }}
-        >
-          {conversation}
-        </Box>
+      {/* 2. Two planes. Split side by side at workstation widths; stacked into
+          one switched column when the window is too narrow to hold both.
+
+          One subtree, not two. The conversation and canvas nodes are mounted
+          exactly once and kept in a fixed sibling order — conversation, divider,
+          canvas — across both layouts. Only the container's display, the grid
+          template, and each child's visibility change. This is deliberate and
+          load-bearing: an earlier version rendered two conditional branches, so
+          crossing the breakpoint reordered the siblings and React remounted the
+          panes, discarding a half-written composer draft and restarting any
+          live preview. Changing style on stable nodes cannot do that. */}
+      <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
+        {stacked && (
+          // The switch is chrome, not a plane, so it lives outside the pane
+          // subtree and cannot disturb it. Rendering it only when stacked never
+          // touches the conversation or canvas nodes below.
+          <Box
+            role="group"
+            aria-label="Choose which pane to show"
+            sx={{
+              display: 'flex',
+              gap: 0.5,
+              px: 1,
+              py: 0.75,
+              borderBottom: `1px solid ${surface.border}`,
+              backgroundColor: surface.raised,
+            }}
+          >
+            {renderPlaneToggle({
+              label: 'Conversation',
+              icon: <ForumIcon sx={{ fontSize: 16 }} />,
+              active: activePlane === 'conversation',
+              signal: false,
+              onSelect: () => setActivePlane('conversation'),
+            })}
+            {renderPlaneToggle({
+              label: 'Canvas',
+              icon: <DashboardIcon sx={{ fontSize: 16 }} />,
+              active: activePlane === 'canvas',
+              signal: canvasSignal,
+              onSelect: () => setActivePlane('canvas'),
+            })}
+          </Box>
+        )}
 
         <Box
-          component="main"
-          aria-label="PaneTera main canvas"
-          data-testid="workstation-canvas"
           sx={{
-            display: 'flex',
-            flexDirection: 'column',
-            minWidth: 0,
-            position: 'relative',
             flexGrow: 1,
-            // Deliberately flat. The canvas is the authoritative surface, so
-            // whatever it holds should be the only thing competing for
-            // attention. The former grid and violet bloom carried no
-            // information.
-            backgroundColor: surface.base,
+            minHeight: 0,
+            overflow: 'hidden',
+            // Split is a three-column grid; stacked is a single flex column.
+            // The element is the same in both, so switching between them keeps
+            // its children mounted.
+            ...(stacked
+              ? { display: 'flex', flexDirection: 'column' }
+              : {
+                  display: 'grid',
+                  gridTemplateColumns: `${conversationWidth}px 7px minmax(0, 1fr)`,
+                }),
           }}
         >
-          {canvas}
+          <Box
+            component="aside"
+            aria-label="PaneTera conversation"
+            sx={{
+              flexDirection: 'column',
+              minWidth: 0,
+              minHeight: 0,
+              flexGrow: 1,
+              backgroundColor: surface.raised,
+              // Split: always shown, with a right border. Stacked: shown only
+              // when selected, with no border. `display:none` keeps the node
+              // and its state; the browser does not unload a hidden iframe.
+              borderRight: stacked ? 'none' : `1px solid ${surface.border}`,
+              display: stacked ? (activePlane === 'conversation' ? 'flex' : 'none') : 'flex',
+            }}
+          >
+            {conversation}
+          </Box>
+
+          {/* Kept as a stable middle sibling so the pane order never changes.
+              `display:contents` lets the divider itself act as the grid column
+              in split; `display:none` hides the whole wrapper when stacked. */}
+          <Box sx={{ display: stacked ? 'none' : 'contents' }}>
+            <PaneDivider
+              label="Resize conversation and canvas"
+              value={conversationWidth}
+              min={340}
+              max={conversationMax()}
+              onChange={setConversationWidth}
+              onReset={() => setConversationWidth(400)}
+            />
+          </Box>
+
+          <Box
+            component="main"
+            aria-label="PaneTera main canvas"
+            data-testid="workstation-canvas"
+            sx={{
+              flexDirection: 'column',
+              minWidth: 0,
+              minHeight: 0,
+              position: 'relative',
+              flexGrow: 1,
+              // Deliberately flat. The canvas is the authoritative surface, so
+              // whatever it holds should be the only thing competing for
+              // attention. The former grid and violet bloom carried no
+              // information.
+              backgroundColor: surface.base,
+              display: stacked ? (activePlane === 'canvas' ? 'flex' : 'none') : 'flex',
+            }}
+          >
+            {canvas}
+          </Box>
         </Box>
       </Box>
 

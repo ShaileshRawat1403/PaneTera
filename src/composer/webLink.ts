@@ -10,8 +10,9 @@
 //   - freshness is 'not-measured', because nothing was ever measured;
 //   - authority stays 'none', as for every context item.
 //
-// Attaching a link deliberately does not open the preview. Opening a surface is
-// an intent (`/open`), and the `+` menu adds context rather than acting.
+// Attaching a link alone deliberately does not act. When the person submits a
+// question with that reference included, App opens the preview and asks the
+// Browser Operator for explicit per-site inspection approval.
 
 import { extractWebPreviewRequest, isPublicWebPreviewUrl } from '../utils/webPreviewIntent';
 

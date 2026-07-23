@@ -1,6 +1,6 @@
 import { Request } from 'express';
-import { logAudit } from '../audit';
 import * as crypto from 'crypto';
+import { emitMcpFacadeAudit } from './mcpAudit';
 
 export interface McpClientPrincipal {
   clientId: string;
@@ -28,13 +28,14 @@ export function validateMcpClient(req: Request): { status: number, error?: strin
   // 1. Validate Bearer Token First (401)
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    logAudit('mcp.auth.rejected', {
-      clientId: 'unknown',
-      capability: 'mcp.connect',
-      policyDecision: 'denied',
-      status: 'failed',
-      details: 'Missing or malformed authorization header'
-    });
+    emitMcpFacadeAudit({
+        principal: null,
+        event: 'mcp.auth.rejected',
+        capability: 'mcp.connect',
+        policyDecision: 'denied',
+        outcome: 'denied',
+        detail: 'Missing or malformed authorization header',
+      })
     return { status: 401, error: 'Unauthorized: Missing or malformed authorization header' };
   }
 
@@ -42,38 +43,41 @@ export function validateMcpClient(req: Request): { status: number, error?: strin
   const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
 
   if (revokedTokens.has(tokenHash)) {
-    logAudit('mcp.auth.rejected', {
-      clientId: 'unknown',
-      capability: 'mcp.connect',
-      policyDecision: 'denied',
-      status: 'failed',
-      details: 'Credential revoked'
-    });
+    emitMcpFacadeAudit({
+        principal: null,
+        event: 'mcp.auth.rejected',
+        capability: 'mcp.connect',
+        policyDecision: 'denied',
+        outcome: 'denied',
+        detail: 'Credential revoked',
+      })
     return { status: 401, error: 'Unauthorized: Credential revoked' };
   }
 
   const principal = credentialRegistry.get(tokenHash);
   if (!principal) {
-    logAudit('mcp.auth.rejected', {
-      clientId: 'unknown',
-      capability: 'mcp.connect',
-      policyDecision: 'denied',
-      status: 'failed',
-      details: 'Invalid credential'
-    });
+    emitMcpFacadeAudit({
+        principal: null,
+        event: 'mcp.auth.rejected',
+        capability: 'mcp.connect',
+        policyDecision: 'denied',
+        outcome: 'denied',
+        detail: 'Invalid credential',
+      })
     return { status: 401, error: 'Unauthorized: Invalid credential' };
   }
 
   // 2. Validate Host (403)
   const host = req.headers.host || '';
   if (!host.includes('127.0.0.1') && !host.includes('localhost')) {
-    logAudit('mcp.auth.rejected', {
-      clientId: principal.clientId,
-      capability: 'mcp.connect',
-      policyDecision: 'denied',
-      status: 'failed',
-      details: `Host rejection: ${host}`
-    });
+    emitMcpFacadeAudit({
+        principal: principal,
+        event: 'mcp.auth.rejected',
+        capability: 'mcp.connect',
+        policyDecision: 'denied',
+        outcome: 'denied',
+        detail: `Host rejection: ${host}`,
+      })
     return { status: 403, error: 'Forbidden: Invalid Host' };
   }
 
@@ -81,23 +85,25 @@ export function validateMcpClient(req: Request): { status: number, error?: strin
   const origin = req.headers.origin;
   if (origin) {
     if (origin.startsWith('http://') && !origin.includes('127.0.0.1') && !origin.includes('localhost')) {
-      logAudit('mcp.auth.rejected', {
-        clientId: principal.clientId,
+      emitMcpFacadeAudit({
+        principal: principal,
+        event: 'mcp.auth.rejected',
         capability: 'mcp.connect',
         policyDecision: 'denied',
-        status: 'failed',
-        details: `Origin rejection: ${origin}`
-      });
+        outcome: 'denied',
+        detail: `Origin rejection: ${origin}`,
+      })
       return { status: 403, error: 'Forbidden: Invalid Origin' };
     }
     if (origin.startsWith('chrome-extension://')) {
-      logAudit('mcp.auth.rejected', {
-        clientId: principal.clientId,
+      emitMcpFacadeAudit({
+        principal: principal,
+        event: 'mcp.auth.rejected',
         capability: 'mcp.connect',
         policyDecision: 'denied',
-        status: 'failed',
-        details: `Origin rejection (chrome-extension): ${origin}`
-      });
+        outcome: 'denied',
+        detail: `Origin rejection (chrome-extension): ${origin}`,
+      })
       return { status: 403, error: 'Forbidden: Invalid Origin (chrome-extension)' };
     }
   }

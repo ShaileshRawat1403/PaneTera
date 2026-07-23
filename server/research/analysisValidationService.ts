@@ -1,4 +1,4 @@
-import { logAudit } from "../audit";
+import { auditResearchOperator, auditResearchSystem } from "./researchAudit";
 import { ProvenanceValidationService } from "./provenanceValidationService";
 import { ResearchSessionSnapshot, ProvenanceStatus } from "./researchTypes";
 import { buildEvidencePack, serializeEvidencePackForProvider } from "./evidencePackBuilder";
@@ -44,33 +44,41 @@ export class AnalysisValidationService {
     // 1. Check persistent store
     const existing = await this.store.getAnalysis(sessionId, analysisId);
     if (existing) {
-      logAudit({ operation: "research.analysis.request", sessionId, status: "idempotency_hit_store" });
+      auditResearchOperator({
+        event: 'research.analysis.request', outcome: 'success', sessionId, ownerId,
+        details: { status: 'idempotency-hit-store', analysisId },
+      });
       return existing;
     }
 
     // 2. Check in-flight map
     if (this.idempotencyMap.has(idempotencyKey)) {
-      logAudit({ operation: "research.analysis.request", sessionId, status: "idempotency_hit_inflight" });
+      auditResearchOperator({
+        event: 'research.analysis.request', outcome: 'pending', sessionId, ownerId,
+        details: { status: 'idempotency-hit-inflight', analysisId },
+      });
       return this.idempotencyMap.get(idempotencyKey)!;
     }
 
     const analysisPromise = (async () => {
-      logAudit({
-        operation: "research.analysis.request",
-        ownerId,
-        sessionId,
-        snapshotId: snapshot.snapshotId,
-        transactionId,
-        status: "started"
+      auditResearchOperator({
+        event: 'research.analysis.request', outcome: 'pending', sessionId, ownerId,
+        details: { snapshotId: snapshot.snapshotId, clientTransactionId: transactionId, status: 'started' },
       });
 
       let pack;
       try {
         pack = buildEvidencePack(snapshot);
-        logAudit({ operation: "research.analysis.pack.build", sessionId, snapshotId: snapshot.snapshotId, status: "success" });
+        auditResearchSystem({
+          event: 'research.analysis.pack.build', outcome: 'success', sessionId,
+          details: { snapshotId: snapshot.snapshotId },
+        });
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
-        logAudit({ operation: "research.analysis.pack.build", sessionId, snapshotId: snapshot.snapshotId, status: "error", details: msg });
+        auditResearchSystem({
+          event: 'research.analysis.pack.build', outcome: 'error', sessionId,
+          details: { snapshotId: snapshot.snapshotId, error: msg },
+        });
         throw e;
       }
 
@@ -88,10 +96,16 @@ export class AnalysisValidationService {
     let providerResponse;
     try {
       providerResponse = await this.provider.generateCandidate(request);
-      logAudit({ operation: "research.analysis.provider.invoke", sessionId, providerId: this.provider.providerId, status: "success" });
+      auditResearchSystem({
+        event: 'research.analysis.provider.invoke', outcome: 'success', sessionId,
+        details: { providerId: this.provider.providerId },
+      });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
-      logAudit({ operation: "research.analysis.provider.invoke", sessionId, providerId: this.provider.providerId, status: "error", details: msg });
+      auditResearchSystem({
+        event: 'research.analysis.provider.invoke', outcome: 'error', sessionId,
+        details: { providerId: this.provider.providerId, error: msg },
+      });
       this.rejectAnalysis(ownerId, sessionId, snapshot, "Provider failure: " + msg, analysisId);
       throw e;
     }
@@ -99,10 +113,13 @@ export class AnalysisValidationService {
     let parsedCandidate;
     try {
       parsedCandidate = parseStructuredOutput(providerResponse.rawOutput);
-      logAudit({ operation: "research.analysis.parse", sessionId, status: "success", candidateClaimCount: parsedCandidate.claims.length });
+      auditResearchSystem({
+        event: 'research.analysis.parse', outcome: 'success', sessionId,
+        details: { candidateClaimCount: parsedCandidate.claims.length },
+      });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
-      logAudit({ operation: "research.analysis.parse", sessionId, status: "error", details: msg });
+      auditResearchSystem({ event: 'research.analysis.parse', outcome: 'error', sessionId, details: { error: msg } });
       this.rejectAnalysis(ownerId, sessionId, snapshot, "Parse failure: " + msg, analysisId);
       throw e;
     }
@@ -191,9 +208,15 @@ export class AnalysisValidationService {
 
       if (valStatus === "blocked") {
         summary.claimsBlocked++;
-        logAudit({ operation: "research.claim.block", sessionId, claimId: candidate.candidateClaimId });
+        auditResearchSystem({
+          event: 'research.claim.blocked', outcome: 'success', sessionId,
+          details: { claimId: candidate.candidateClaimId, validationStatus: valStatus },
+        });
       } else {
-        logAudit({ operation: "research.claim.validate", sessionId, claimId: candidate.candidateClaimId, validationStatus: valStatus });
+        auditResearchSystem({
+          event: 'research.claim.validated', outcome: 'success', sessionId,
+          details: { claimId: candidate.candidateClaimId, validationStatus: valStatus },
+        });
       }
 
       validatedClaims.push({
@@ -241,11 +264,20 @@ export class AnalysisValidationService {
     await this.store.saveAnalysis(analysis);
 
     if (finalStatus === "rejected") {
-      logAudit({ operation: "research.analysis.reject", sessionId, analysisId, status: "rejected" });
+      auditResearchSystem({
+        event: 'research.analysis.completed', outcome: 'success', sessionId,
+        details: { analysisId, analysisStatus: 'rejected' },
+      });
     } else if (finalStatus === "completed-with-warnings") {
-      logAudit({ operation: "research.analysis.complete_with_warnings", sessionId, analysisId, status: "completed-with-warnings" });
+      auditResearchSystem({
+        event: 'research.analysis.completed', outcome: 'success', sessionId,
+        details: { analysisId, analysisStatus: 'completed-with-warnings' },
+      });
     } else {
-      logAudit({ operation: "research.analysis.complete", sessionId, analysisId, status: "completed" });
+      auditResearchSystem({
+        event: 'research.analysis.completed', outcome: 'success', sessionId,
+        details: { analysisId, analysisStatus: 'completed' },
+      });
     }
 
     return analysis;
@@ -264,14 +296,9 @@ export class AnalysisValidationService {
   }
 
   private rejectAnalysis(ownerId: string, sessionId: string, snapshot: ResearchSessionSnapshot, reason: string, analysisId: string) {
-    logAudit({
-      operation: "research.analysis.reject",
-      ownerId,
-      sessionId,
-      snapshotId: snapshot.snapshotId,
-      analysisId,
-      status: "rejected",
-      details: reason
+    auditResearchSystem({
+      event: 'research.analysis.failed', outcome: 'error', sessionId, ownerId,
+      details: { snapshotId: snapshot.snapshotId, analysisId, error: reason },
     });
   }
 }

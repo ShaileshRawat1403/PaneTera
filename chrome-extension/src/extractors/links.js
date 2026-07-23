@@ -1,4 +1,6 @@
-import { getBaseContract, isVisible, createEvidenceItem } from './utils.js';
+// chrome-extension/src/extractors/links.js
+import { appendEvidenceRecord, getBaseContract, isVisible, createEvidenceItem, extractSafeText, redactExtractionText } from './utils.js';
+import { sanitizeUrl } from '../../shared/redactor.js';
 
 export function extractLinks() {
   const contract = getBaseContract("browser.links.extract");
@@ -6,26 +8,25 @@ export function extractLinks() {
   
   const data = [];
   
-  links.forEach((link, index) => {
-    if (!isVisible(link)) return;
+  for (let index = 0; index < links.length; index++) {
+    const link = links[index];
+    if (!isVisible(link)) continue;
     
-    const text = link.textContent.trim();
-    const href = link.href;
+    const { safeText } = extractSafeText(link);
+    const cleanText = redactExtractionText(safeText, contract).redactedText;
+    const cleanHref = sanitizeUrl(link.href);
     
-    if (!href || href.startsWith('javascript:')) return;
+    if (!cleanHref || cleanHref.startsWith('javascript:')) continue;
     
     const item = createEvidenceItem('link', 'links.visible.v1', null, index);
     
-    contract.evidence.items.push(item);
-    contract.evidence.elementsMatched++;
-    contract.evidence.contentBytes += new Blob([text + href]).size;
-    
-    data.push({
+    const appended = appendEvidenceRecord(contract, item, cleanText + cleanHref, data, {
       evidenceId: item.evidenceId,
-      text,
-      href
-    });
-  });
+      text: cleanText,
+      href: cleanHref
+    }, 'Link collection stopped at the evidence limit.');
+    if (!appended) break;
+  }
 
   contract.data = { links: data };
   return contract;
@@ -33,18 +34,18 @@ export function extractLinks() {
 
 export function extractCodeBlocks() {
   const contract = getBaseContract("browser.codeBlocks.extract");
-  // Can be <pre><code> or just <pre> or element with specific class
   const preElements = Array.from(document.querySelectorAll('pre'));
   
   const data = [];
   
-  preElements.forEach((pre, index) => {
-    if (!isVisible(pre)) return;
+  for (let index = 0; index < preElements.length; index++) {
+    const pre = preElements[index];
+    if (!isVisible(pre)) continue;
     
     const codeElem = pre.querySelector('code');
-    const text = codeElem ? codeElem.textContent : pre.textContent;
+    const { safeText } = extractSafeText(codeElem || pre);
+    const { redactedText } = redactExtractionText(safeText, contract);
     
-    // Attempt to guess language from class (e.g., language-javascript, hljs-json)
     let language = 'unknown';
     const classes = Array.from(pre.classList).concat(codeElem ? Array.from(codeElem.classList) : []);
     const langClass = classes.find(c => c.startsWith('language-') || c.startsWith('lang-') || c.startsWith('hljs-'));
@@ -54,16 +55,13 @@ export function extractCodeBlocks() {
     
     const item = createEvidenceItem('code', 'code.visible.v1', null, index);
     
-    contract.evidence.items.push(item);
-    contract.evidence.elementsMatched++;
-    contract.evidence.contentBytes += new Blob([text]).size;
-    
-    data.push({
+    const appended = appendEvidenceRecord(contract, item, redactedText, data, {
       evidenceId: item.evidenceId,
       language,
-      code: text
-    });
-  });
+      code: redactedText
+    }, 'Code-block collection stopped at the evidence limit.');
+    if (!appended) break;
+  }
 
   contract.data = { codeBlocks: data };
   return contract;

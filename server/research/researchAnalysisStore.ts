@@ -3,7 +3,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { getTesseraAppDataDir } from '../appData';
 import { ResearchAnalysis, AnalysisClaim, ValidatedProvenanceRef, ClaimValidationFailure } from './analysisTypes';
-import { logAudit } from '../audit';
+import { auditResearchSystem } from './researchAudit';
 import { researchSessionStore } from './researchSessionStore';
 
 export async function validateResearchAnalysis(
@@ -184,12 +184,9 @@ export class ResearchAnalysisStore {
       return analysisData as ResearchAnalysis;
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
-      logAudit({
-        operation: 'load_analysis_failure',
-        status: 'error',
-        details: msg,
-        sessionId,
-        analysisId
+      auditResearchSystem({
+        event: 'research.store.analysis-load-failed', outcome: 'error', sessionId,
+        details: { analysisId, error: msg },
       });
       throw e;
     } finally {
@@ -238,11 +235,9 @@ export class ResearchAnalysisStore {
           analyses.push(analysisData as ResearchAnalysis);
         } catch (e) {
           // Skip corrupted ones, log it but do not throw
-          logAudit({
-            operation: 'load_analysis_failure',
-            status: 'corrupted',
-            details: `Failed to parse ${file}: ${e instanceof Error ? e.message : String(e)}`,
-            sessionId
+          auditResearchSystem({
+            event: 'research.store.analysis-load-failed', outcome: 'error', sessionId,
+            details: { status: 'corrupted', file, error: e instanceof Error ? e.message : String(e) },
           });
         }
       }

@@ -34,6 +34,14 @@ async function runTests() {
   assert.notStrictEqual(hashCanonicalText('Hello  World').contentHash, hashCanonicalText('Hello World').contentHash);
   assert.notStrictEqual(hashCanonicalText('Hello\tWorld').contentHash, hashCanonicalText('Hello World').contentHash);
 
+  assert.strictEqual(toCanonicalEvidenceText({
+    evidenceId: 'metadata-1', extractionId: 'extraction-1', kind: 'metadata',
+    content: 'description text', contentBytes: 16,
+    locator: { recipeId: 'metadata.document.v1' },
+    ownership: { ownerId: 'owner', createdBy: { type: 'browser-extension', actorId: 'extension' } },
+    trust: { sourceType: 'browser-dom', trustLevel: 'untrusted', instructionAuthority: 'none' }
+  }), 'description text', 'browser metadata must remain canonicalizable');
+
   console.log('Evidence Canonicalizer tests passed.');
 }
 

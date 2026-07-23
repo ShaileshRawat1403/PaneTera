@@ -33,6 +33,9 @@ export function toCanonicalEvidenceText(item: EvidenceItem): string {
       const language = item.locator?.language || 'unknown';
       return `${language}\n${content}`;
     }
+
+    case 'metadata':
+      return content;
       
     default:
       throw new Error(`Unsupported evidence kind: ${item.kind}`);

@@ -1,4 +1,5 @@
-import { getBaseContract, isVisible, createEvidenceItem } from './utils.js';
+// chrome-extension/src/extractors/outline.js
+import { appendEvidenceRecord, getBaseContract, isVisible, createEvidenceItem, extractSafeText, redactExtractionText } from './utils.js';
 
 export function extractOutline() {
   const contract = getBaseContract("browser.outline.extract");
@@ -7,31 +8,29 @@ export function extractOutline() {
   const data = [];
   let currentStart = 0;
 
-  headings.forEach((heading, index) => {
-    if (!isVisible(heading)) return;
+  for (let index = 0; index < headings.length; index++) {
+    const heading = headings[index];
+    if (!isVisible(heading)) continue;
     
-    const text = heading.textContent.trim();
-    if (!text) return;
+    const { safeText } = extractSafeText(heading);
+    const cleanText = redactExtractionText(safeText, contract).redactedText;
+    if (!cleanText) continue;
     
     const level = parseInt(heading.tagName.substring(1), 10);
     
-    // Simulate text range if we were building a full text blob, but for outline we just store the items
-    const textLength = text.length;
+    const textLength = cleanText.length;
     const textRange = { start: currentStart, end: currentStart + textLength };
-    currentStart += textLength + 1; // +1 for newline or space if concatenated
+    currentStart += textLength + 1;
     
     const item = createEvidenceItem('heading', 'outline.visible.v1', textRange, index);
     
-    contract.evidence.items.push(item);
-    contract.evidence.elementsMatched++;
-    contract.evidence.contentBytes += new Blob([text]).size;
-    
-    data.push({
+    const appended = appendEvidenceRecord(contract, item, cleanText, data, {
       evidenceId: item.evidenceId,
       level,
-      text
-    });
-  });
+      text: cleanText
+    }, 'Outline collection stopped at the evidence limit.');
+    if (!appended) break;
+  }
 
   contract.data = { outline: data };
   return contract;
