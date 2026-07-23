@@ -22,6 +22,7 @@ import { describeResolution, resolveAppName } from './composer/appRegistry';
 import { PreviewPanel, FeedItem } from './components/PreviewPanel';
 import { InteractiveComponent } from './components/InteractiveComponent';
 import { WorkstationShell } from './components/workstation/WorkstationShell';
+import { CanvasStart } from './components/workstation/CanvasStart';
 import { PaneDivider } from './components/workstation/PaneDivider';
 import {
   maxConversationWidth,
@@ -33,6 +34,7 @@ import type { HeadroomCapsuleView } from './components/headroom/HeadroomPanel';
 import type { UiComponent } from '../shared/uiComponent';
 import SearchIcon from '@mui/icons-material/Search';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import SouthIcon from '@mui/icons-material/South';
 import type { WorkbenchMode } from './components/workbench/WorkbenchModeToggle';
 import { WorkspaceNavigator, Workspace } from './components/workbench/WorkspaceNavigator';
 import { WorkspaceFileTree } from './components/workbench/WorkspaceFileTree';
@@ -1579,7 +1581,12 @@ const App: React.FC = () => {
             // One empty state, not two near-identical ones. The heading is the
             // same question either way; only the hint changes with whether a
             // project is open, which is the part that actually differs.
-            <Box sx={{ m: 'auto', textAlign: 'left', py: 4, maxWidth: 300 }}>
+            //
+            // Anchored to the bottom of the transcript with `mt: auto` so it sits
+            // just above the composer rather than floating in the middle of a
+            // dead region. A quiet downward cue ties the guidance to the input it
+            // is asking the person to use.
+            <Box sx={{ mt: 'auto', textAlign: 'left', pt: 4, maxWidth: 320 }}>
               <Typography
                 variant="subtitle2"
                 sx={{ color: ink.primary, fontWeight: 600, mb: 0.75, fontSize: '0.9375rem' }}
@@ -1592,8 +1599,14 @@ const App: React.FC = () => {
               >
                 {activeWorkspace
                   ? 'Ask about this project or describe the result you want below.'
-                  : 'Start in the composer below. Your requests and PaneTera’s findings will stay here.'}
+                  : 'Your requests and PaneTera’s findings will stay here.'}
               </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 1.25, color: ink.muted }}>
+                <SouthIcon aria-hidden sx={{ fontSize: 14 }} />
+                <Typography variant="caption" sx={{ color: ink.muted, fontWeight: 600 }}>
+                  Start in the composer
+                </Typography>
+              </Box>
             </Box>
           ) : (
             // Turns are list items, so they need a list. Only the turns belong
@@ -1955,7 +1968,11 @@ const App: React.FC = () => {
               <Box sx={{ flexGrow: 1, overflowY: 'auto' }}>
                 {renderChatTranscript()}
               </Box>
-              {/* Bottom Chat Input Dock with suggestions bar above it */}
+              {/* Persistent composer dock. The guidance line and prompt-ideas
+                  affordance share one row directly above the input, so the three
+                  read as a single grouped control rather than a stack of loose
+                  fragments. The dock sits on the deepest surface so the composer's
+                  own raised, violet-focus input reads as the primary target. */}
               <Box
                 sx={{
                   px: 2,
@@ -1965,21 +1982,24 @@ const App: React.FC = () => {
                   backgroundColor: surface.base,
                 }}
               >
-                <Typography
-                  role={guidance.kind === 'attention' ? 'alert' : 'status'}
-                  variant="caption"
-                  sx={{
-                    display: 'block',
-                    mb: 0.75,
-                    color: guidance.kind === 'attention' ? status.danger : ink.secondary,
-                  }}
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  sx={{ mb: 1, alignItems: 'center', justifyContent: 'space-between' }}
                 >
-                  <Box component="span" sx={{ color: ink.primary, fontWeight: 600, textTransform: 'capitalize' }}>
-                    {guidance.kind}
-                  </Box>
-                  {' · '}{guidance.text}
-                </Typography>
-                <Stack direction="row" spacing={1} sx={{ mb: 1, alignItems: 'center' }}>
+                  <Typography
+                    role={guidance.kind === 'attention' ? 'alert' : 'status'}
+                    variant="caption"
+                    sx={{
+                      minWidth: 0,
+                      color: guidance.kind === 'attention' ? status.danger : ink.secondary,
+                    }}
+                  >
+                    <Box component="span" sx={{ color: ink.primary, fontWeight: 600, textTransform: 'capitalize' }}>
+                      {guidance.kind}
+                    </Box>
+                    {' · '}{guidance.text}
+                  </Typography>
                   <Button
                     size="small"
                     startIcon={<AutoAwesomeIcon sx={{ fontSize: '14px !important' }} />}
@@ -1987,7 +2007,7 @@ const App: React.FC = () => {
                     aria-label="Open prompt ideas"
                     aria-haspopup="true"
                     aria-expanded={Boolean(suggestionsAnchorEl)}
-                    sx={{ minHeight: 30, px: 1.1, textTransform: 'none', borderRadius: `${radius.sm}px`, color: ink.secondary, fontSize: '0.72rem', '&:hover': { color: ink.primary, backgroundColor: surface.sunken }, '&:focus-visible': { outline: `2px solid ${accent.violet}`, outlineOffset: 2 } }}
+                    sx={{ flexShrink: 0, minHeight: 30, px: 1.1, textTransform: 'none', borderRadius: `${radius.sm}px`, color: ink.secondary, fontSize: '0.72rem', '&:hover': { color: ink.primary, backgroundColor: surface.sunken }, '&:focus-visible': { outline: `2px solid ${accent.violet}`, outlineOffset: 2 } }}
                   >
                     Prompt ideas
                   </Button>
@@ -2035,114 +2055,10 @@ const App: React.FC = () => {
           };
 
           const emptyCanvasNode = (
-            <Box
-              sx={{
-                flexGrow: 1,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                p: { xs: 3, md: 6 },
-              }}
-            >
-              {/*
-                No card, no border, no inset highlight. An empty canvas has
-                nothing authoritative in it yet, so framing emptiness in a
-                container gives it a presence it has not earned. The words sit
-                directly on the canvas and leave when work arrives.
-              */}
-              <Box
-                sx={{
-                  width: '100%',
-                  maxWidth: 620,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 1.5,
-                }}
-              >
-                <Typography
-                  variant="overline"
-                  sx={{ color: ink.muted, fontWeight: 600, fontSize: '0.6875rem' }}
-                >
-                  Ready when you are
-                </Typography>
-                <Typography
-                  variant="h4"
-                  component="h1"
-                  sx={{
-                    color: ink.primary,
-                    fontSize: { xs: '1.5rem', md: '1.75rem' },
-                    lineHeight: 1.25,
-                    letterSpacing: '-0.02em',
-                    fontWeight: 600,
-                  }}
-                >
-                  Choose a project or describe your goal
-                </Typography>
-                <Typography variant="body2" sx={{ color: ink.secondary, lineHeight: 1.7 }}>
-                  Whatever you start takes shape here: a live application, a document, a
-                  result, or evidence you can inspect.
-                </Typography>
-
-                {/*
-                  A small set of actions that actually do something. Each opens a
-                  surface that works today, so nothing here advertises a flow that
-                  is not built. Describing a goal is not a card because the
-                  composer, which owns that, is a keystroke away rather than
-                  behind a button that would only pretend to focus it.
-                */}
-                <Box
-                  sx={{
-                    mt: 1,
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-                    gap: 1.25,
-                  }}
-                >
-                  {[
-                    {
-                      title: 'Choose a project',
-                      detail: 'Open one of your registered projects.',
-                      onClick: () => setProjectPickerRequestKey((value) => value + 1),
-                    },
-                    {
-                      title: 'Connect a capability',
-                      detail: 'Add a tool or MCP server in Rig.',
-                      onClick: () => setRigRequestKey((value) => value + 1),
-                    },
-                  ].map((action) => (
-                    <Button
-                      key={action.title}
-                      onClick={action.onClick}
-                      sx={{
-                        textAlign: 'left',
-                        alignItems: 'flex-start',
-                        flexDirection: 'column',
-                        gap: 0.5,
-                        p: 1.5,
-                        border: `1px solid ${surface.border}`,
-                        borderRadius: `${radius.md}px`,
-                        backgroundColor: surface.raised,
-                        textTransform: 'none',
-                        transition: 'background-color 120ms, border-color 120ms',
-                        '&:hover': { backgroundColor: surface.overlay, borderColor: accent.violetBorder },
-                        '&:focus-visible': { outline: 'none', boxShadow: elevation.focusRing },
-                      }}
-                    >
-                      <Typography variant="subtitle2" sx={{ color: ink.primary, fontWeight: 600 }}>
-                        {action.title}
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: ink.secondary, lineHeight: 1.5 }}>
-                        {action.detail}
-                      </Typography>
-                    </Button>
-                  ))}
-                </Box>
-
-                <Typography variant="caption" sx={{ color: ink.muted, mt: 0.5 }}>
-                  Or describe your goal in the composer.
-                </Typography>
-              </Box>
-            </Box>
+            <CanvasStart
+              onChooseProject={() => setProjectPickerRequestKey((value) => value + 1)}
+              onConnectCapability={() => setRigRequestKey((value) => value + 1)}
+            />
           );
 
           const canvasNode = webPreview ? (

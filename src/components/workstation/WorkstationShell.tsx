@@ -285,6 +285,10 @@ export function WorkstationShell({
           justifyContent: 'space-between',
           px: { xs: 1.5, md: 2.5 },
           backgroundColor: surface.raised,
+          // Restrained depth: a hairline shadow lifts the bar a single step off
+          // the workspace beneath it, without adding height or drawing the eye.
+          boxShadow: elevation.raised,
+          zIndex: 1,
         }}
       >
         {/* Left: identity and project */}
@@ -341,6 +345,13 @@ export function WorkstationShell({
                 gap: 0.75,
                 py: 0.625,
                 minWidth: 0,
+                // The project selector is the current workspace context, so it
+                // reads as a filled control rather than a bare label. Grouped
+                // with the identity to its left, the two form one context block;
+                // the utilities on the right stay quieter by comparison.
+                backgroundColor: surface.sunken,
+                borderColor: surface.border,
+                '&:hover': { color: ink.primary, backgroundColor: surface.overlay, borderColor: surface.borderStrong },
               }}
             >
               <AccountTreeIcon sx={{ fontSize: 16, color: ink.muted }} />
