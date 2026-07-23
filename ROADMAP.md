@@ -5,6 +5,8 @@ Portal phases below remain as foundation history; new capability families must
 follow the canonical product and safety requirements in
 `docs/PRODUCT_SCOPE_AND_INFORMATION_ARCHITECTURE.md` and must not be presented
 as implemented until they pass the current checkpoint's acceptance standard.
+The sequencing and acceptance gates for the requested aesthetic and utility
+work are defined in `docs/PANETERA_UI_UX_AND_UTILITY_PLAN.md`.
 
 ## Current convergence tranche
 
