@@ -14,8 +14,12 @@
 export const surface = {
   /** Deepest ground, behind everything. */
   base: '#181614',
+  /** The authoritative canvas plane, one step up from base so it reads as its own surface. */
+  canvas: '#1B1917',
   /** Default panel: composer, cards, drawers. */
   raised: '#211E1B',
+  /** An interactive panel under the pointer. One warm step above `raised`. */
+  raisedHover: '#26221F',
   /** Panel above a panel: menus, popovers. */
   overlay: '#2A2622',
   /** Pressed or recessed wells. */
@@ -58,6 +62,8 @@ export const accent = {
   violet: '#B9A5E8',
   violetMuted: 'rgba(185, 165, 232, 0.16)',
   violetHover: 'rgba(185, 165, 232, 0.24)',
+  /** The fill under a selected or open control, a touch stronger than hover. */
+  violetSelected: 'rgba(185, 165, 232, 0.20)',
   violetBorder: 'rgba(185, 165, 232, 0.52)',
 } as const;
 
@@ -110,6 +116,10 @@ export const typography = {
 export const elevation = {
   /** Panels sitting on the base surface. */
   raised: '0 1px 2px rgba(0, 0, 0, 0.32)',
+  /** A resting interactive card. */
+  card: '0 1px 2px rgba(0, 0, 0, 0.28)',
+  /** An interactive card lifting under the pointer or keyboard focus. */
+  cardHover: '0 8px 20px rgba(0, 0, 0, 0.40)',
   /** Menus and popovers. */
   overlay: '0 12px 32px rgba(0, 0, 0, 0.44)',
   /** Focus ring, drawn as a shadow so it costs no layout. */

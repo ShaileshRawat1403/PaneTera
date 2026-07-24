@@ -13,7 +13,7 @@
 // Slice boundaries: no persistence, no transport, no filesystem read, no
 // execution, no Headroom envelope assembly.
 
-import React, { KeyboardEvent, useMemo, useReducer, useRef, useState } from 'react';
+import React, { KeyboardEvent, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { Box, Button, IconButton, Paper, TextField, Tooltip, Typography } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import SendIcon from '@mui/icons-material/Send';
@@ -76,6 +76,11 @@ interface Props {
   /** What the host can actually do. Drives which menu rows exist at all. */
   availability?: Partial<AttachmentAvailability>;
   placeholder?: string;
+  /**
+   * Bumped by the host to request focus (e.g. from the canvas "Describe your goal"
+   * start). Moving focus is all it does: it inserts and submits nothing.
+   */
+  focusRequestKey?: number;
 }
 
 const DEFAULT_AVAILABILITY: AttachmentAvailability = {
@@ -107,6 +112,7 @@ export const Composer: React.FC<Props> = ({
   onRequestAttachment,
   availability,
   placeholder = 'Ask PaneTera, type / for actions…',
+  focusRequestKey,
 }) => {
   const [tray, setTray] = useState<ContextTray>(EMPTY_TRAY);
   const [webEntryOpen, setWebEntryOpen] = useState(false);
@@ -116,6 +122,15 @@ export const Composer: React.FC<Props> = ({
 
   const included = includedItems(tray);
   const measurement = trayMeasurement(tray);
+
+  // Take focus when the host bumps the request key. The first run is the initial
+  // mount, which must not steal focus on load. WorkstationShell issues this request
+  // only after the conversation plane is visible.
+  const firstFocusRun = useRef(true);
+  useEffect(() => {
+    if (firstFocusRun.current) { firstFocusRun.current = false; return; }
+    inputRef.current?.focus();
+  }, [focusRequestKey]);
 
   // Context clearing is performed here, by the component that owns the tray, so
   // the composer declares it rather than the host. A host-side no-op would be

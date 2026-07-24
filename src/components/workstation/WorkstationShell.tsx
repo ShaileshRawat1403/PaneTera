@@ -22,6 +22,7 @@ import HubIcon from '@mui/icons-material/Hub';
 import LayersIcon from '@mui/icons-material/Layers';
 import ForumIcon from '@mui/icons-material/Forum';
 import DashboardIcon from '@mui/icons-material/Dashboard';
+import { PaneMark } from './PaneMark';
 import { accent, elevation, ink, radius, status, surface } from '../../theme/tokens';
 import { transition } from '../../theme/motion';
 import { PaneDivider } from './PaneDivider';
@@ -68,6 +69,15 @@ export interface WorkstationShellProps {
    * canvas node, so the caller reports this.
    */
   canvasHasContent?: boolean;
+  /**
+   * Bumped to bring the conversation plane forward. On the stacked layout the
+   * composer lives on the conversation plane, so a canvas action that wants the
+   * composer (the "Describe your goal" start) must switch here first; otherwise
+   * the composer has no layout box and cannot take focus.
+   */
+  revealConversationKey?: number;
+  /** Called after a requested conversation reveal is active and ready for focus. */
+  onConversationRevealed?: () => void;
 }
 
 /** Shared focus treatment. Visible focus is a contract requirement. */
@@ -82,10 +92,13 @@ const focusRing = {
 const topBarButton = {
   color: ink.secondary,
   px: 1.25,
+  minHeight: 34,
   borderRadius: `${radius.sm}px`,
   border: '1px solid transparent',
   transition: transition(['background-color', 'color', 'border-color']),
   '&:hover': { color: ink.primary, backgroundColor: surface.overlay },
+  // A practical 44px target on touch, where a hairline control is hard to hit.
+  '@media (pointer: coarse)': { minHeight: 44 },
   ...focusRing,
 } as const;
 
@@ -102,6 +115,8 @@ export function WorkstationShell({
   governanceStatus,
   onOpenAudit,
   canvasHasContent = false,
+  revealConversationKey = 0,
+  onConversationRevealed,
 }: WorkstationShellProps) {
   const [activityOpen, setActivityOpen] = useState(false);
   const [rigOpen, setRigOpen] = useState(false);
@@ -120,6 +135,21 @@ export function WorkstationShell({
   const stacked = useIsStacked();
   const [activePlane, setActivePlane] = useState<WorkstationPlane>('conversation');
   const canvasSignal = shouldSignalCanvas(activePlane, canvasHasContent);
+
+  // Bring the conversation plane forward first, then acknowledge the request on a
+  // later render. The acknowledgement is what asks the composer to focus. Issuing
+  // both requests in one render lets the child focus effect run while its stacked
+  // plane is still display:none, which browsers correctly refuse.
+  const handledRevealKey = React.useRef(revealConversationKey);
+  React.useEffect(() => {
+    if (handledRevealKey.current === revealConversationKey) return;
+    if (activePlane !== 'conversation') {
+      setActivePlane('conversation');
+      return;
+    }
+    handledRevealKey.current = revealConversationKey;
+    onConversationRevealed?.();
+  }, [activePlane, onConversationRevealed, revealConversationKey]);
   // Derived from the contract's 60% canvas floor rather than a picked
   // percentage. The divider counts against the budget because it is usable
   // width the canvas does not receive either.
@@ -312,6 +342,7 @@ export function WorkstationShell({
                 }}
               />
             </Tooltip>
+            <PaneMark size={18} />
             <Typography
               sx={{
                 fontWeight: 650,
@@ -384,7 +415,7 @@ export function WorkstationShell({
               sx={{
                 ...topBarButton,
                 color: headroomOpen ? ink.primary : ink.secondary,
-                backgroundColor: headroomOpen ? accent.violetMuted : 'transparent',
+                backgroundColor: headroomOpen ? accent.violetSelected : 'transparent',
                 borderColor: headroomOpen ? accent.violetBorder : 'transparent',
               }}
             >
@@ -403,7 +434,7 @@ export function WorkstationShell({
               sx={{
                 ...topBarButton,
                 color: rigOpen ? ink.primary : ink.secondary,
-                backgroundColor: rigOpen ? accent.violetMuted : 'transparent',
+                backgroundColor: rigOpen ? accent.violetSelected : 'transparent',
                 borderColor: rigOpen ? accent.violetBorder : 'transparent',
               }}
             >

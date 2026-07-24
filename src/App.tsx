@@ -113,6 +113,13 @@ const App: React.FC = () => {
   const [rigRequestKey, setRigRequestKey] = useState(0);
   const [headroomRequestKey, setHeadroomRequestKey] = useState(0);
   const [projectPickerRequestKey, setProjectPickerRequestKey] = useState(0);
+  // Bumped to ask the composer to take focus (e.g. from the canvas "Describe your
+  // goal" start). It moves focus only; it inserts and submits nothing.
+  const [composerFocusKey, setComposerFocusKey] = useState(0);
+  // Paired with the focus request: on the stacked layout the composer lives on the
+  // conversation plane, so the canvas "Describe your goal" start reveals that plane
+  // before the focus lands.
+  const [revealConversationKey, setRevealConversationKey] = useState(0);
   const [headroomSessionId] = useState(() => {
     const existing = sessionStorage.getItem('panetera-headroom-session');
     if (existing) return existing;
@@ -2028,6 +2035,7 @@ const App: React.FC = () => {
                   onSubmit={handleSubmission}
                   resolverContext={composerResolverContext}
                   onRequestAttachment={requestAttachment}
+                  focusRequestKey={composerFocusKey}
                   availability={{
                     hasProjectPicker: true,
                     hasLocalFilePicker: true,
@@ -2058,6 +2066,7 @@ const App: React.FC = () => {
             <CanvasStart
               onChooseProject={() => setProjectPickerRequestKey((value) => value + 1)}
               onConnectCapability={() => setRigRequestKey((value) => value + 1)}
+              onDescribeGoal={() => setRevealConversationKey((value) => value + 1)}
             />
           );
 
@@ -2182,6 +2191,8 @@ const App: React.FC = () => {
                 rigRequestKey={rigRequestKey}
                 headroomRequestKey={headroomRequestKey}
                 projectPickerRequestKey={projectPickerRequestKey}
+                revealConversationKey={revealConversationKey}
+                onConversationRevealed={() => setComposerFocusKey((value) => value + 1)}
                 onOpenAudit={() => setIsAuditLogsOpen(true)}
                 // Everything except the empty state counts as canvas content.
                 // The narrow layout uses this to signal the canvas and to avoid

@@ -9,22 +9,35 @@
 process.env.NODE_ENV = 'test';
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-import { describe, it } from 'node:test';
+import { before, describe, it } from 'node:test';
 import assert from 'node:assert';
 import { readFileSync } from 'node:fs';
+import { installDom } from './domEnv';
 import React from 'react';
-import ReactDOMServer from 'react-dom/server';
-import { JSDOM } from 'jsdom';
 import { CanvasStart } from '../src/components/workstation/CanvasStart';
 
-function markup(): string {
-  return ReactDOMServer.renderToStaticMarkup(
-    React.createElement(CanvasStart, { onChooseProject: () => {}, onConnectCapability: () => {} }),
-  );
+async function markup(): Promise<string> {
+  const win = installDom();
+  const { createRoot } = await import('react-dom/client');
+  const { act } = await import('react');
+  const container = win.document.createElement('div');
+  win.document.body.appendChild(container);
+  const root = createRoot(container);
+  await act(async () => {
+    root.render(React.createElement(CanvasStart, {
+      onChooseProject: () => {},
+      onConnectCapability: () => {},
+      onDescribeGoal: () => {},
+    }));
+  });
+  const html = container.innerHTML;
+  await act(async () => { root.unmount(); });
+  return html;
 }
 
 describe('the canvas start presents one primary path and a quieter secondary', () => {
-  const html = markup();
+  let html = '';
+  before(async () => { html = await markup(); });
 
   it('marks Choose a project as the primary action', () => {
     assert.ok(html.includes('data-variant="primary"'), 'a primary action exists');
@@ -42,8 +55,9 @@ describe('the canvas start presents one primary path and a quieter secondary', (
     assert.ok(!html.includes('<h2') && !html.includes('variant="h3"'), 'no competing large headings');
   });
 
-  it('keeps the composer path available in words, not as a fake button', () => {
-    assert.ok(/describe your goal in the composer/i.test(html), 'the composer path is stated');
+  it('states the composer path in words as well as offering it as a real action', () => {
+    assert.ok(/describe your goal in the composer/i.test(html), 'the composer path is stated in words');
+    assert.ok(/data-variant="describe-goal"[\s\S]*?Describe your goal/.test(html), 'and offered as a real start');
   });
 
   it('does not imply a project or capability already exists', () => {
@@ -51,23 +65,6 @@ describe('the canvas start presents one primary path and a quieter secondary', (
     assert.ok(!/connected|available now|active/i.test(html), 'no invented status');
   });
 });
-
-function installDom() {
-  const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'http://localhost/', pretendToBeVisual: true });
-  const win = dom.window as unknown as Window & typeof globalThis;
-  const globals = globalThis as Record<string, unknown>;
-  globals.window = win;
-  globals.document = win.document;
-  globals.getComputedStyle = win.getComputedStyle.bind(win);
-  Object.defineProperty(globals, 'navigator', { value: win.navigator, configurable: true });
-  for (const name of ['HTMLElement', 'Element', 'Node', 'Text', 'DocumentFragment', 'Event', 'CustomEvent', 'MouseEvent', 'KeyboardEvent', 'MutationObserver', 'NodeList']) {
-    const value = (win as unknown as Record<string, unknown>)[name];
-    if (value) globals[name] = value;
-  }
-  globals.requestAnimationFrame = (cb: (t: number) => void) => setTimeout(() => cb(Date.now()), 0);
-  globals.cancelAnimationFrame = (id: number) => clearTimeout(id);
-  return win;
-}
 
 describe('the start actions invoke their handlers', () => {
   it('routes primary to choose-project and secondary to connect-capability', async () => {
@@ -78,6 +75,7 @@ describe('the start actions invoke their handlers', () => {
 
     let chose = 0;
     let connected = 0;
+    let described = 0;
     const container = win.document.createElement('div');
     win.document.body.appendChild(container);
     const root = createRoot(container);
@@ -85,15 +83,19 @@ describe('the start actions invoke their handlers', () => {
       root.render(React.createElement(CanvasStart, {
         onChooseProject: () => { chose += 1; },
         onConnectCapability: () => { connected += 1; },
+        onDescribeGoal: () => { described += 1; },
       }));
     });
     const primary = container.querySelector('[data-variant="primary"]') as HTMLButtonElement;
     const secondary = container.querySelector('[data-variant="secondary"]') as HTMLButtonElement;
-    assert.ok(primary && secondary, 'both actions render');
+    const describe = container.querySelector('[data-variant="describe-goal"]') as HTMLButtonElement;
+    assert.ok(primary && secondary && describe, 'all three actions render');
     await act(async () => { primary.dispatchEvent(new win.MouseEvent('click', { bubbles: true })); });
     await act(async () => { secondary.dispatchEvent(new win.MouseEvent('click', { bubbles: true })); });
+    await act(async () => { describe.dispatchEvent(new win.MouseEvent('click', { bubbles: true })); });
     assert.strictEqual(chose, 1, 'primary chose a project');
     assert.strictEqual(connected, 1, 'secondary connected a capability');
+    assert.strictEqual(described, 1, 'the third start moves focus to the composer');
     await act(async () => { root.unmount(); });
   });
 });
