@@ -948,36 +948,38 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
         overflow: 'hidden',
       }}
     >
-      {/* Header bar */}
+      {/* Fixed header — same grammar as the Rig/Headroom DrawerShell: consistent
+          spacing and border, an h6 title (the accessible name), and right-aligned
+          actions ending in an explicitly named Close. The leading icon is a
+          decorative identity cue. Clear Feed stays Activity-specific, before Close.
+          Only the feed below scrolls; this header stays put. */}
       <Box
+        component="header"
         sx={{
+          flexShrink: 0,
           display: 'flex',
-          alignItems: 'center',
+          alignItems: 'flex-start',
           justifyContent: 'space-between',
-          px: 2.5,
-          py: 1.5,
+          gap: 2,
+          px: 2,
+          py: 1.75,
           borderBottom: `1px solid ${surface.border}`,
-          background: surface.sunken
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <ViewStreamIcon sx={{ color: accent.violet, fontSize: 16 }} />
-          <Typography variant="caption" sx={{ fontWeight: 800, color: ink.primary, letterSpacing: '0.04em' }}>
-            Activity
-          </Typography>
+        <Box sx={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 1 }}>
+          <ViewStreamIcon aria-hidden sx={{ color: accent.violet, fontSize: 20 }} />
+          <Typography variant="h6">Activity</Typography>
         </Box>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Stack direction="row" gap={0.5} sx={{ flexShrink: 0 }}>
           {previewFeed.length > 0 && (
             <Tooltip title="Clear Feed">
-              <IconButton size="small" onClick={onClearFeed} sx={{ color: ink.secondary }}>
+              <IconButton size="small" onClick={onClearFeed} sx={{ color: ink.secondary }} aria-label="Clear Activity feed">
                 <ClearAllIcon fontSize="small" />
               </IconButton>
             </Tooltip>
           )}
-          <IconButton size="small" onClick={onClose} sx={{ color: ink.secondary }} aria-label="Close Activity">
-            <CloseIcon fontSize="small" />
-          </IconButton>
-        </Box>
+          <Button onClick={onClose} aria-label="Close Activity">Close</Button>
+        </Stack>
       </Box>
 
       {loading && (

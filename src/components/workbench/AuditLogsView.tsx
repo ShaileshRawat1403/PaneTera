@@ -12,13 +12,12 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
-  Box, Dialog, DialogTitle, DialogContent, DialogActions, Typography, List, ListItem,
+  Box, Dialog, DialogTitle, DialogContent, Typography, List, ListItem,
   Button, Chip, Stack, CircularProgress, Accordion, AccordionSummary, AccordionDetails,
   Select, MenuItem, FormControl,
 } from '@mui/material';
 import { accent, ink, status, surface, typography } from '../../theme/tokens';
 import SecurityIcon from '@mui/icons-material/Security';
-import RefreshIcon from '@mui/icons-material/Refresh';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import {
   toAuditRecordView,
@@ -252,36 +251,47 @@ export const AuditLogsView: React.FC<AuditLogsProps> = ({ token, open, onClose }
       onClose={onClose}
       maxWidth="md"
       fullWidth
+      aria-labelledby="audit-trail-title"
       PaperProps={{ sx: { background: surface.raised, border: `1px solid ${surface.border}`, borderRadius: '12px', maxHeight: '82vh' } }}
     >
-      <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pb: 1.5, borderBottom: `1px solid ${surface.border}` }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <SecurityIcon sx={{ color: accent.violet, fontSize: 18 }} />
-          <Typography variant="body2" sx={{ color: ink.primary, fontWeight: 600, fontSize: '0.9rem' }}>
-            Audit trail
-          </Typography>
+      {/* Fixed header — same grammar as the Rig/Headroom DrawerShell: an h6 title
+          (the accessible name) with a decorative icon, and right-aligned actions
+          ending in an explicitly named Close. Filters and the stale banner live in
+          the scrolling body below, so this header stays put. */}
+      {/* component="div": MUI's DialogTitle is an <h2> by default, which would wrap
+          the h6 title in a second heading (an invalid nested-heading structure). As a
+          div it is just the title bar; the only heading is the h6 below. The explicit
+          id also stops MUI from copying aria-labelledby onto it, which would otherwise
+          make the dialog's accessible name swallow the Refresh/Close button text. */}
+      <DialogTitle id="audit-titlebar" component="div" sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2, px: 2, py: 1.75, borderBottom: `1px solid ${surface.border}` }}>
+        <Box sx={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 1 }}>
+          <SecurityIcon aria-hidden sx={{ color: accent.violet, fontSize: 20 }} />
+          <Typography id="audit-trail-title" variant="h6">Audit trail</Typography>
         </Box>
-        <Button size="small" onClick={fetchLogs} disabled={loading} startIcon={<RefreshIcon sx={{ fontSize: 12 }} />} sx={{ color: ink.secondary, textTransform: 'none', fontSize: '0.7rem' }}>
-          {loading ? 'Refreshing…' : 'Refresh'}
-        </Button>
+        <Stack direction="row" gap={0.5} sx={{ flexShrink: 0 }}>
+          <Button onClick={fetchLogs} disabled={loading} aria-label="Refresh audit trail">
+            {loading ? 'Refreshing…' : 'Refresh'}
+          </Button>
+          <Button onClick={onClose} aria-label="Close Audit">Close</Button>
+        </Stack>
       </DialogTitle>
 
-      <Box sx={{ px: 2, py: 1.25, borderBottom: `1px solid ${surface.border}`, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-        <FilterSelect ariaLabel="Filter by actor kind" allLabel="All actors" value={filter.actorKind ?? 'all'} options={AUDIT_ACTOR_KIND_OPTIONS} onChange={(v) => setFilter((f) => ({ ...f, actorKind: v }))} />
-        <FilterSelect ariaLabel="Filter by outcome" allLabel="All outcomes" value={filter.outcome ?? 'all'} options={AUDIT_OUTCOME_OPTIONS} onChange={(v) => setFilter((f) => ({ ...f, outcome: v }))} />
-        <FilterSelect ariaLabel="Filter by policy decision" allLabel="All policy decisions" value={filter.policyDecision ?? 'all'} options={AUDIT_POLICY_OPTIONS} onChange={(v) => setFilter((f) => ({ ...f, policyDecision: v }))} />
-      </Box>
-
-      {/* A failed load with cached rows is disclosed as stale, never shown as current. */}
-      {error && raw.length > 0 && (
-        <Box role="alert" sx={{ px: 2, py: 1, background: status.dangerMuted, borderBottom: `1px solid ${status.danger}` }}>
-          <Typography variant="caption" sx={{ color: status.danger }}>
-            Showing cached records. {error}
-          </Typography>
-        </Box>
-      )}
-
       <DialogContent sx={{ p: 2 }}>
+        <Box sx={{ mb: 1.5, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+          <FilterSelect ariaLabel="Filter by actor kind" allLabel="All actors" value={filter.actorKind ?? 'all'} options={AUDIT_ACTOR_KIND_OPTIONS} onChange={(v) => setFilter((f) => ({ ...f, actorKind: v }))} />
+          <FilterSelect ariaLabel="Filter by outcome" allLabel="All outcomes" value={filter.outcome ?? 'all'} options={AUDIT_OUTCOME_OPTIONS} onChange={(v) => setFilter((f) => ({ ...f, outcome: v }))} />
+          <FilterSelect ariaLabel="Filter by policy decision" allLabel="All policy decisions" value={filter.policyDecision ?? 'all'} options={AUDIT_POLICY_OPTIONS} onChange={(v) => setFilter((f) => ({ ...f, policyDecision: v }))} />
+        </Box>
+
+        {/* A failed load with cached rows is disclosed as stale, never shown as current. */}
+        {error && raw.length > 0 && (
+          <Box role="alert" sx={{ mb: 1.5, px: 1.5, py: 1, background: status.dangerMuted, border: `1px solid ${status.danger}`, borderRadius: 1 }}>
+            <Typography variant="caption" sx={{ color: status.danger }}>
+              Showing cached records. {error}
+            </Typography>
+          </Box>
+        )}
+
         {loading && raw.length === 0 ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', p: 5 }}>
             <CircularProgress size={20} sx={{ color: accent.violet }} />
@@ -309,10 +319,6 @@ export const AuditLogsView: React.FC<AuditLogsProps> = ({ token, open, onClose }
           </List>
         )}
       </DialogContent>
-
-      <DialogActions sx={{ p: 2, pt: 0, borderTop: `1px solid ${surface.border}` }}>
-        <Button size="small" onClick={onClose} sx={{ color: ink.secondary, fontSize: '0.72rem' }}>Close</Button>
-      </DialogActions>
     </Dialog>
   );
 };

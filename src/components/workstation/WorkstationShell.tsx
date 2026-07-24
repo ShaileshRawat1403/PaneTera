@@ -601,7 +601,9 @@ export function WorkstationShell({
         onClose={toggleActivity}
         variant="temporary"
         // Drawer in MUI v5 exposes the paper slot as PaperProps rather than
-        // slotProps.paper, unlike Popover above.
+        // slotProps.paper, unlike Popover above. The panel (PreviewPanel) owns its
+        // own fixed header and body-only scroll, matching Rig/Headroom, so it is
+        // rendered directly rather than wrapped in a second scroll container.
         PaperProps={{
           role: 'region',
           'aria-label': 'Activity drawer',
@@ -611,15 +613,10 @@ export function WorkstationShell({
             borderLeft: `1px solid ${surface.border}`,
             boxShadow: elevation.overlay,
             color: ink.primary,
-            p: 0,
           },
         }}
       >
-        <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-          <Box sx={{ flexGrow: 1, overflowY: 'auto', p: 0 }}>
-            {renderActivity(() => setActivityOpen(false))}
-          </Box>
-        </Box>
+        {renderActivity(() => setActivityOpen(false))}
       </Drawer>
 
       <Drawer
