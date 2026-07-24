@@ -25,6 +25,7 @@ import type { RigCapability, RigConnection, RigPermission, ProvenanceRecord } fr
 import { resolveProvenanceView } from './provenanceModel';
 import { StructuredResult } from './StructuredResult';
 import { BrowserOperatorConnection } from './BrowserOperatorConnection';
+import { DrawerShell } from '../workstation/DrawerShell';
 import { loadRigConnections, loadRigProvenance, resolveRigConnectionsView, resolveRigInteractionMode } from './rigLoadingModel';
 import {
   resolveConnectionCard,
@@ -403,22 +404,16 @@ function RigPanelSession({ token, onClose, onResourcesChanged }: Props): React.R
   };
 
   return (
-    <Box component="section" aria-labelledby="rig-title" sx={{ height: '100%', overflowY: 'auto', p: 2 }}>
-      <Stack direction="row" alignItems="center" justifyContent="space-between" gap={2}>
-        <Box>
-          <Typography id="rig-title" variant="h6">Rig</Typography>
-          <Typography variant="caption" sx={{ color: ink.secondary }}>
-            MCP connections, capabilities, permissions, and evidence.
-          </Typography>
-        </Box>
-        <Stack direction="row" gap={0.5}>
-          <Button aria-label="Refresh Rig connections" disabled={connectionsLoading} onClick={() => { void load(); void loadProvenance(); }}>
-            {connectionsLoading ? 'Refreshing…' : 'Refresh'}
-          </Button>
-          <Button onClick={onClose} aria-label="Close Rig">Close</Button>
-        </Stack>
-      </Stack>
-
+    <DrawerShell
+      titleId="rig-title"
+      title="Rig"
+      description="MCP connections, capabilities, permissions, and evidence."
+      onClose={onClose}
+      closeLabel="Close Rig"
+      onRefresh={() => { void load(); void loadProvenance(); }}
+      refreshing={connectionsLoading}
+      refreshLabel="Refresh Rig connections"
+    >
       {notice && (
         <Alert
           severity={notice.severity}
@@ -938,6 +933,6 @@ function RigPanelSession({ token, onClose, onResourcesChanged }: Props): React.R
           <Button color="error" variant="contained" onClick={removeConnection} disabled={Boolean(busy) || !canMutate}>Remove connection</Button>
         </DialogActions>
       </Dialog>
-    </Box>
+    </DrawerShell>
   );
 }

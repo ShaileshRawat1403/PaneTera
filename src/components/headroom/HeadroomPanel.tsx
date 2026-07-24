@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Divider, Stack, TextField, Typography } from '@mui/material';
+import { DrawerShell } from '../workstation/DrawerShell';
 import { ink, radius, surface, typography } from '../../theme/tokens';
 import { StructuredResult } from '../rig/StructuredResult';
 
@@ -211,14 +212,13 @@ export function HeadroomPanel({
   };
 
   return (
-    <Box component="section" aria-labelledby="headroom-title" sx={{ height: '100%', overflowY: 'auto', p: 2 }}>
-      <Stack direction="row" alignItems="center" justifyContent="space-between">
-        <Box>
-          <Typography id="headroom-title" variant="h6">Headroom</Typography>
-          <Typography variant="caption" sx={{ color: ink.secondary }}>Bounded context, decisions, freshness, and resumption.</Typography>
-        </Box>
-        <Button onClick={onClose}>Close</Button>
-      </Stack>
+    <DrawerShell
+      titleId="headroom-title"
+      title="Headroom"
+      description="Bounded context, decisions, freshness, and resumption."
+      onClose={onClose}
+      closeLabel="Close Headroom"
+    >
       {notice && (
         <Alert
           severity={notice.severity}
@@ -323,6 +323,6 @@ export function HeadroomPanel({
           <Button color="error" variant="contained" onClick={deleteCapsule} disabled={busy}>Delete capsule</Button>
         </DialogActions>
       </Dialog>
-    </Box>
+    </DrawerShell>
   );
 }
