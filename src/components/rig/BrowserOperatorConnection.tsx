@@ -14,7 +14,7 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import ExtensionIcon from '@mui/icons-material/Extension';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import { accent, ink, radius, status, surface, typography } from '../../theme/tokens';
+import { accent, ink, radius, status, surface, typography } from '../../theme/cssTokens';
 import { requestBrowserOperatorStatus } from '../../utils/browserOperatorBridge';
 
 interface BrowserSessionSummary {

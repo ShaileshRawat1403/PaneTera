@@ -7,7 +7,7 @@ import { WorkstationShell } from '../src/components/workstation/WorkstationShell
 import type { GovernanceSummary } from '../src/components/workstation/WorkstationShell';
 import { extractWebPreviewRequest, isPublicWebPreviewUrl, resolvePublicWebPreviewSandbox, resolveWebPreviewIntent } from '../src/utils/webPreviewIntent';
 import { resolveConversationRoute } from '../src/utils/paneteraIntent';
-import { status as statusTokens } from '../src/theme/tokens';
+import { status as statusTokens } from '../src/theme/cssTokens';
 import { workstationGuidance } from '../src/components/workstation/guidance';
 
 describe('Workstation guidance uses one relevant line', () => {

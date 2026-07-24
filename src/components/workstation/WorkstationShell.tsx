@@ -22,8 +22,11 @@ import HubIcon from '@mui/icons-material/Hub';
 import LayersIcon from '@mui/icons-material/Layers';
 import ForumIcon from '@mui/icons-material/Forum';
 import DashboardIcon from '@mui/icons-material/Dashboard';
+import DarkModeIcon from '@mui/icons-material/DarkMode';
+import LightModeIcon from '@mui/icons-material/LightMode';
 import { PaneMark } from './PaneMark';
-import { accent, elevation, ink, radius, status, surface } from '../../theme/tokens';
+import { accent, elevation, ink, radius, status, surface } from '../../theme/cssTokens';
+import { themeToggleLabel, useThemeMode } from '../../theme/themeMode';
 import { transition } from '../../theme/motion';
 import { PaneDivider } from './PaneDivider';
 import { maxConversationWidth, usePersistentPaneWidth } from './paneSizing';
@@ -118,6 +121,7 @@ export function WorkstationShell({
   revealConversationKey = 0,
   onConversationRevealed,
 }: WorkstationShellProps) {
+  const { mode: themeMode, toggleMode } = useThemeMode();
   const [activityOpen, setActivityOpen] = useState(false);
   const [rigOpen, setRigOpen] = useState(false);
   const [headroomOpen, setHeadroomOpen] = useState(false);
@@ -349,6 +353,14 @@ export function WorkstationShell({
                 color: ink.primary,
                 letterSpacing: '-0.01em',
                 fontSize: '0.9375rem',
+                // Keep the product name available to assistive technology while
+                // reclaiming enough mobile width for the governance controls.
+                position: { xs: 'absolute', sm: 'static' },
+                width: { xs: 1, sm: 'auto' },
+                height: { xs: 1, sm: 'auto' },
+                overflow: { xs: 'hidden', sm: 'visible' },
+                clipPath: { xs: 'inset(50%)', sm: 'none' },
+                whiteSpace: 'nowrap',
               }}
             >
               PaneTera
@@ -359,7 +371,7 @@ export function WorkstationShell({
             orientation="vertical"
             variant="middle"
             flexItem
-            sx={{ borderColor: surface.border, height: 16, my: 'auto' }}
+            sx={{ borderColor: surface.border, height: 16, my: 'auto', display: { xs: 'none', sm: 'block' } }}
           />
 
           <Tooltip title="Switch project">
@@ -477,6 +489,23 @@ export function WorkstationShell({
             >
               <Box component="span" sx={{ display: { xs: 'none', md: 'inline' } }}>
                 Activity
+              </Box>
+            </Button>
+          </Tooltip>
+
+          <Tooltip title={themeToggleLabel(themeMode)}>
+            <Button
+              size="small"
+              startIcon={themeMode === 'dark'
+                ? <LightModeIcon sx={{ fontSize: 16 }} />
+                : <DarkModeIcon sx={{ fontSize: 16 }} />}
+              aria-label={themeToggleLabel(themeMode)}
+              aria-pressed={themeMode === 'light'}
+              onClick={toggleMode}
+              sx={topBarButton}
+            >
+              <Box component="span" sx={{ display: { xs: 'none', lg: 'inline' } }}>
+                {themeMode === 'dark' ? 'Light' : 'Dark'}
               </Box>
             </Button>
           </Tooltip>

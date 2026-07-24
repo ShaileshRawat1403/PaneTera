@@ -105,6 +105,15 @@ describe('exactly one theme exists', () => {
     assert.ok(main.includes('paneteraTheme'));
     assert.ok(main.includes("from './theme/paneteraTheme'"));
   });
+
+  it('keeps component colours mode-aware instead of importing the dark raw palette', () => {
+    const offenders = sourceFiles()
+      .map((file) => ({ file, relative: path.relative(SRC, file).split(path.sep).join('/') }))
+      .filter(({ relative }) => !relative.startsWith('theme/'))
+      .filter(({ file }) => /theme\/tokens['"]/.test(code(readFileSync(file, 'utf8'))))
+      .map(({ relative }) => relative);
+    assert.deepStrictEqual(offenders, [], 'components must consume theme/cssTokens so both modes reach them');
+  });
 });
 
 describe('global stylesheet defers to the theme', () => {

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Divider, Stack, TextField, Typography } from '@mui/material';
 import { DrawerShell } from '../workstation/DrawerShell';
-import { ink, radius, surface, typography } from '../../theme/tokens';
+import { ink, radius, surface, typography } from '../../theme/cssTokens';
 import { StructuredResult } from '../rig/StructuredResult';
 import { createLoadGeneration } from './loadGeneration';
 

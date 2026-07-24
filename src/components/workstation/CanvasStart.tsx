@@ -14,7 +14,7 @@
 
 import React from 'react';
 import { Box, Button, Stack, Typography } from '@mui/material';
-import { accent, elevation, ink, radius, surface, typography } from '../../theme/tokens';
+import { accent, elevation, ink, radius, surface, typography } from '../../theme/cssTokens';
 import { enterStyles, transition } from '../../theme/motion';
 
 export interface CanvasStartProps {

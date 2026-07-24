@@ -11,9 +11,20 @@ process.env.NODE_ENV = 'test';
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { accent, ink, status, surface, typography } from '../src/theme/tokens';
+import {
+  accent,
+  ink,
+  lightAccent,
+  lightInk,
+  lightStatus,
+  lightSurface,
+  status,
+  surface,
+  typography,
+} from '../src/theme/tokens';
+import { accent as cssAccent, status as cssStatus } from '../src/theme/cssTokens';
 import { chipEnterStyles, duration, easing, enterStyles, scrollBehavior, transition } from '../src/theme/motion';
-import { paneteraTheme } from '../src/theme/paneteraTheme';
+import { paneteraTheme, paneteraThemes } from '../src/theme/paneteraTheme';
 import { statusColour as liveAppStatusColour } from '../src/components/workbench/LiveWorkbenchToolbar';
 import { riskColours } from '../src/components/ProposedActionCard';
 import { toolColour } from '../src/components/transcript/TranscriptTurn';
@@ -48,7 +59,7 @@ function contrast(a: string, b: string): number {
 describe('surfaces are warm graphite, not cool grey', () => {
   // The tell: in a cool grey the blue channel exceeds the red. Every PaneTera
   // surface must lean the other way, which is what "warm" means in practice.
-  const surfaces = Object.entries(surface);
+  const surfaces = Object.entries(surface).filter(([, value]) => value.startsWith('#'));
 
   for (const [name, hex] of surfaces) {
     it(`${name} is warm`, () => {
@@ -60,6 +71,11 @@ describe('surfaces are warm graphite, not cool grey', () => {
   it('parchment text is warm too', () => {
     const [r, , b] = rgb(ink.primary);
     assert.ok(r > b, 'parchment white must be warmer than neutral white');
+  });
+
+  it('uses a warm neutral modal scrim rather than a cool overlay', () => {
+    assert.ok(surface.backdrop.startsWith('rgba(24, 22, 20,'), surface.backdrop);
+    assert.ok(lightSurface.backdrop.startsWith('rgba(33, 28, 24,'), lightSurface.backdrop);
   });
 
   it('rejects the previous cool palette', () => {
@@ -117,6 +133,37 @@ describe('contrast meets WCAG AA', () => {
   it('text on accent fills is legible', () => {
     assert.ok(contrast(ink.onAccent, accent.violet) >= 4.5);
     assert.ok(contrast(ink.onAccent, status.brass) >= 4.5);
+  });
+});
+
+describe('light mode keeps the same contrast contract', () => {
+  const backgrounds = [lightSurface.base, lightSurface.raised, lightSurface.overlay, lightSurface.sunken];
+
+  for (const background of backgrounds) {
+    it(`primary, secondary, and muted text are AA on ${background}`, () => {
+      for (const colour of [lightInk.primary, lightInk.secondary, lightInk.muted]) {
+        assert.ok(contrast(colour, background) >= 4.5);
+      }
+    });
+  }
+
+  it('keeps interaction and status colours legible on raised surfaces', () => {
+    for (const colour of [lightAccent.violet, lightStatus.brass, lightStatus.success, lightStatus.danger]) {
+      assert.ok(contrast(colour, lightSurface.raised) >= 3);
+    }
+  });
+
+  it('uses a light palette without creating a second theme boundary', () => {
+    assert.strictEqual(paneteraThemes.light.palette.mode, 'light');
+    assert.strictEqual(paneteraThemes.light.palette.background.default, lightSurface.base);
+    assert.strictEqual(paneteraThemes.dark, paneteraTheme);
+  });
+
+  it('publishes the light palette through the same component CSS variables', () => {
+    const baseline = JSON.stringify(paneteraThemes.light.components?.MuiCssBaseline?.styleOverrides);
+    for (const value of [lightSurface.base, lightSurface.canvas, lightInk.primary, lightAccent.violet]) {
+      assert.ok(baseline.includes(value), `light theme must publish ${value}`);
+    }
   });
 });
 
@@ -276,43 +323,43 @@ describe('status colour is decided by outcome, not by file', () => {
   });
 
   it('a reachable live application is neutral', () => {
-    assert.strictEqual(liveAppStatusColour('reachable'), status.neutral);
-    assert.notStrictEqual(liveAppStatusColour('reachable'), status.success);
+    assert.strictEqual(liveAppStatusColour('reachable'), cssStatus.neutral);
+    assert.notStrictEqual(liveAppStatusColour('reachable'), cssStatus.success);
   });
 
   it('a live application needing attention is brass, not danger', () => {
-    assert.strictEqual(liveAppStatusColour('framing-likely-blocked'), status.brass);
-    assert.strictEqual(liveAppStatusColour('invalid-configuration'), status.brass);
+    assert.strictEqual(liveAppStatusColour('framing-likely-blocked'), cssStatus.brass);
+    assert.strictEqual(liveAppStatusColour('invalid-configuration'), cssStatus.brass);
   });
 
   it('an unreachable live application is a failure', () => {
-    assert.strictEqual(liveAppStatusColour('unavailable'), status.danger);
+    assert.strictEqual(liveAppStatusColour('unavailable'), cssStatus.danger);
   });
 
   it('a low-risk classification is neutral, not success', () => {
     // "Safe" describes what a command is, not that anything succeeded.
-    assert.strictEqual(riskColours('safe').colour, status.neutral);
+    assert.strictEqual(riskColours('safe').colour, cssStatus.neutral);
   });
 
   it('a risky classification escalates through brass to danger', () => {
-    assert.strictEqual(riskColours('review').colour, status.brass);
-    assert.strictEqual(riskColours('dangerous').colour, status.danger);
+    assert.strictEqual(riskColours('review').colour, cssStatus.brass);
+    assert.strictEqual(riskColours('dangerous').colour, cssStatus.danger);
   });
 
   it('a completed tool call does resolve to success', () => {
     // The rule is that green is reserved, not unusable. A tool that actually
     // finished is the case it exists for.
-    assert.strictEqual(toolColour('success'), status.success);
-    assert.strictEqual(toolColour('denied'), status.danger);
-    assert.strictEqual(toolColour('failed'), status.brass);
+    assert.strictEqual(toolColour('success'), cssStatus.success);
+    assert.strictEqual(toolColour('denied'), cssStatus.danger);
+    assert.strictEqual(toolColour('failed'), cssStatus.brass);
   });
 
   it('workflow colour follows outcome and attention semantics', () => {
-    assert.strictEqual(workflowStatusColour('completed'), status.success);
-    assert.strictEqual(workflowStatusColour('rejected'), status.danger);
-    assert.strictEqual(workflowStatusColour('awaiting_review'), status.brass);
-    assert.strictEqual(workflowStatusColour('running'), accent.violet);
-    assert.strictEqual(workflowStatusColour('draft'), accent.violet);
+    assert.strictEqual(workflowStatusColour('completed'), cssStatus.success);
+    assert.strictEqual(workflowStatusColour('rejected'), cssStatus.danger);
+    assert.strictEqual(workflowStatusColour('awaiting_review'), cssStatus.brass);
+    assert.strictEqual(workflowStatusColour('running'), cssAccent.violet);
+    assert.strictEqual(workflowStatusColour('draft'), cssAccent.violet);
   });
 
   it('workflow statuses are translated into plain language', () => {
@@ -328,7 +375,7 @@ describe('status colour is decided by outcome, not by file', () => {
       riskColours('safe').colour,
     ];
     for (const colour of routine) {
-      assert.notStrictEqual(colour, status.success, 'routine states must stay quiet');
+      assert.notStrictEqual(colour, cssStatus.success, 'routine states must stay quiet');
     }
   });
 });

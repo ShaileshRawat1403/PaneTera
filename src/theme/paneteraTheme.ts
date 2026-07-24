@@ -6,15 +6,38 @@
 // from literals; older components inherit the palette automatically and can be
 // migrated in their own passes.
 
-import { createTheme } from '@mui/material/styles';
-import { accent, elevation, ink, radius, SPACING_UNIT, status, surface, typography } from './tokens';
+import { createTheme, type ThemeOptions } from '@mui/material/styles';
+import {
+  accent as darkAccent,
+  elevation as darkElevation,
+  ink as darkInk,
+  lightAccent,
+  lightElevation,
+  lightInk,
+  lightStatus,
+  lightSurface,
+  radius,
+  SPACING_UNIT,
+  status as darkStatus,
+  surface as darkSurface,
+  typography,
+} from './tokens';
 import { duration, easing } from './motion';
 
-export const paneteraTheme = createTheme({
+export type PaneTeraThemeMode = 'dark' | 'light';
+
+export function createPaneteraTheme(mode: PaneTeraThemeMode) {
+  const surface = mode === 'light' ? lightSurface : darkSurface;
+  const ink = mode === 'light' ? lightInk : darkInk;
+  const accent = mode === 'light' ? lightAccent : darkAccent;
+  const status = mode === 'light' ? lightStatus : darkStatus;
+  const elevation = mode === 'light' ? lightElevation : darkElevation;
+
+  const options: ThemeOptions = {
   spacing: SPACING_UNIT,
 
   palette: {
-    mode: 'dark',
+    mode,
     background: {
       default: surface.base,
       paper: surface.raised,
@@ -80,14 +103,36 @@ export const paneteraTheme = createTheme({
         // without restating literals. index.css consumes these.
         ':root': {
           '--panetera-surface-base': surface.base,
+          '--panetera-surface-canvas': surface.canvas,
           '--panetera-surface-raised': surface.raised,
+          '--panetera-surface-raised-hover': surface.raisedHover,
           '--panetera-surface-overlay': surface.overlay,
+          '--panetera-surface-sunken': surface.sunken,
           '--panetera-surface-border': surface.border,
           '--panetera-surface-border-strong': surface.borderStrong,
+          '--panetera-surface-backdrop': surface.backdrop,
           '--panetera-ink-primary': ink.primary,
           '--panetera-ink-secondary': ink.secondary,
           '--panetera-ink-muted': ink.muted,
+          '--panetera-ink-disabled': ink.disabled,
+          '--panetera-ink-on-accent': ink.onAccent,
           '--panetera-accent-violet': accent.violet,
+          '--panetera-accent-violet-muted': accent.violetMuted,
+          '--panetera-accent-violet-hover': accent.violetHover,
+          '--panetera-accent-violet-selected': accent.violetSelected,
+          '--panetera-accent-violet-border': accent.violetBorder,
+          '--panetera-status-brass': status.brass,
+          '--panetera-status-brass-muted': status.brassMuted,
+          '--panetera-status-success': status.success,
+          '--panetera-status-success-muted': status.successMuted,
+          '--panetera-status-danger': status.danger,
+          '--panetera-status-danger-muted': status.dangerMuted,
+          '--panetera-status-neutral': status.neutral,
+          '--panetera-elevation-raised': elevation.raised,
+          '--panetera-elevation-card': elevation.card,
+          '--panetera-elevation-card-hover': elevation.cardHover,
+          '--panetera-elevation-overlay': elevation.overlay,
+          '--panetera-elevation-focus-ring': elevation.focusRing,
           '--panetera-font-sans': typography.sans,
           '--panetera-font-mono': typography.mono,
           '--panetera-duration-quick': `${duration.quick}ms`,
@@ -203,6 +248,17 @@ export const paneteraTheme = createTheme({
       styleOverrides: { root: { borderColor: surface.border } },
     },
   },
-});
+  };
+
+  return createTheme(options);
+}
+
+export const paneteraThemes = {
+  dark: createPaneteraTheme('dark'),
+  light: createPaneteraTheme('light'),
+} as const;
+
+/** Backward-compatible canonical default for non-interactive consumers/tests. */
+export const paneteraTheme = paneteraThemes.dark;
 
 export default paneteraTheme;

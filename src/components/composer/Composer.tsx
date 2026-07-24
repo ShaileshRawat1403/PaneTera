@@ -17,7 +17,7 @@ import React, { KeyboardEvent, useEffect, useMemo, useReducer, useRef, useState 
 import { Box, Button, IconButton, Paper, TextField, Tooltip, Typography } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import SendIcon from '@mui/icons-material/Send';
-import { accent, elevation, ink, radius, surface, typography } from '../../theme/tokens';
+import { accent, elevation, ink, radius, surface, typography } from '../../theme/cssTokens';
 import { enterStyles, transition } from '../../theme/motion';
 import { SlashMenu } from './SlashMenu';
 import { AttachmentMenu } from './AttachmentMenu';

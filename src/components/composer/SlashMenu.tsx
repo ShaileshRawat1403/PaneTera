@@ -8,7 +8,7 @@
 import React from 'react';
 import { Box, List, ListItemButton, Paper, Typography } from '@mui/material';
 import type { SlashCommand } from '../../composer/slashCommands';
-import { accent, elevation, ink, radius, surface, typography } from '../../theme/tokens';
+import { accent, elevation, ink, radius, surface, typography } from '../../theme/cssTokens';
 import { enterStyles, transition } from '../../theme/motion';
 
 interface Props {

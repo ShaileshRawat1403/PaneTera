@@ -8,7 +8,7 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
-import { accent, ink, radius, surface, typography } from '../../theme/tokens';
+import { accent, ink, radius, surface, typography } from '../../theme/cssTokens';
 import { transition } from '../../theme/motion';
 import type { RigResourceChoice } from '../../rig/types';
 

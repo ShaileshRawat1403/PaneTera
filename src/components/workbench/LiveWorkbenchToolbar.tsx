@@ -15,7 +15,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import CloseIcon from '@mui/icons-material/Close';
 import { LocalAppDefinitionClient } from './LiveWorkbenchSurface';
-import { accent, ink, radius, status as statusToken, surface, typography } from '../../theme/tokens';
+import { accent, ink, radius, status as statusToken, surface, typography } from '../../theme/cssTokens';
 
 interface LiveWorkbenchToolbarProps {
   app: LocalAppDefinitionClient | null;

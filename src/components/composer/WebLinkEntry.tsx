@@ -12,7 +12,7 @@
 import React, { useState } from 'react';
 import { Box, Button, Paper, TextField, Typography } from '@mui/material';
 import { describeWebLinkRejection, resolveWebLink } from '../../composer/webLink';
-import { elevation, ink, radius, status, surface } from '../../theme/tokens';
+import { elevation, ink, radius, status, surface } from '../../theme/cssTokens';
 import { enterStyles } from '../../theme/motion';
 
 interface Props {

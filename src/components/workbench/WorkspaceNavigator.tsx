@@ -8,7 +8,7 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Typography, Button, Switch, List, ListItem, ListItemText, ListItemSecondaryAction, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Chip, Stack, Divider, Paper, IconButton } from '@mui/material';
 import FolderIcon from '@mui/icons-material/Folder';
-import { accent, ink, surface } from '../../theme/tokens';
+import { accent, ink, surface } from '../../theme/cssTokens';
 import AddIcon from '@mui/icons-material/Add';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SecurityIcon from '@mui/icons-material/Security';

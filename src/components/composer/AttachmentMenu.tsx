@@ -15,7 +15,7 @@ import React from 'react';
 import { Box, Menu, MenuItem, Typography } from '@mui/material';
 import { attachmentOptions, noProjectsExplanation } from '../../composer/contextTypes';
 import type { AttachmentAvailability, ContextKind } from '../../composer/contextTypes';
-import { ink } from '../../theme/tokens';
+import { ink } from '../../theme/cssTokens';
 
 interface Props {
   anchorEl: HTMLElement | null;

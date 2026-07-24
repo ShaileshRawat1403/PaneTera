@@ -17,7 +17,7 @@ import { Box, Typography, Button, IconButton } from '@mui/material';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import CloseIcon from '@mui/icons-material/Close';
-import { ink, status as statusToken, surface } from '../../theme/tokens';
+import { ink, status as statusToken, surface } from '../../theme/cssTokens';
 
 interface WorkbenchFailureStateProps {
   status: string; // 'framing-likely-blocked', 'invalid-configuration', 'unavailable', 'checking'

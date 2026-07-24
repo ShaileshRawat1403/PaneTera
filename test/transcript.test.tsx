@@ -18,7 +18,7 @@ import React from 'react';
 import ReactDOMServer from 'react-dom/server';
 import TranscriptTurn from '../src/components/transcript/TranscriptTurn';
 import type { TranscriptMessage } from '../src/components/transcript/TranscriptTurn';
-import { accent, status, surface } from '../src/theme/tokens';
+import { accent, status, surface } from '../src/theme/cssTokens';
 import { singleFire } from '../src/components/singleFire';
 
 function render(message: TranscriptMessage): string {

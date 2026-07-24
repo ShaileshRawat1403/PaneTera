@@ -23,7 +23,7 @@
 
 import React, { useRef, useState } from 'react';
 import { Box, Typography, Button, Chip } from '@mui/material';
-import { accent, ink, radius, status, surface, typography } from '../theme/tokens';
+import { accent, ink, radius, status, surface, typography } from '../theme/cssTokens';
 import { transition } from '../theme/motion';
 import { singleFire } from './singleFire';
 

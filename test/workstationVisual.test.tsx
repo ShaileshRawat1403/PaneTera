@@ -115,7 +115,14 @@ describe('the top bar keeps accessible names on every governance control', () =>
         onOpenAudit: () => {},
         canvasHasContent: true,
       }));
-      for (const name of ['Switch project', 'Toggle Headroom drawer', 'Toggle Rig drawer', 'Open audit log', 'Toggle activity drawer']) {
+      for (const name of [
+        'Switch project',
+        'Toggle Headroom drawer',
+        'Toggle Rig drawer',
+        'Open audit log',
+        'Toggle activity drawer',
+        'Switch to light mode',
+      ]) {
         assert.ok(container.querySelector(`button[aria-label="${name}"]`), `the top bar keeps an accessible name for "${name}"`);
       }
     });

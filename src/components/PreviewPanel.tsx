@@ -4,7 +4,7 @@
 // Migrated to theme tokens in the Phase 3 pass. Two semantic corrections
 // beyond colour: a 'clean' project state is routine rather than a success, and
 // the decorative window-chrome dots no longer borrow the status palette.
-import { accent, elevation, ink, status as statusToken, surface, typography } from '../theme/tokens';
+import { accent, elevation, ink, status as statusToken, surface, typography } from '../theme/cssTokens';
 import { scrollBehavior } from '../theme/motion';
 import React, { useState, useEffect, useRef } from 'react';
 import { Box, Typography, Paper, Divider, IconButton, Button, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Grid, Card, CardContent, CardActionArea, Tooltip, LinearProgress, CircularProgress, Tabs, Tab, Chip, Stack, Collapse } from '@mui/material';

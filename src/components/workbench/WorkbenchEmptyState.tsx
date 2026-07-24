@@ -10,7 +10,7 @@ import React from 'react';
 import { Box, Typography, IconButton } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import { WorkbenchAppSelector } from './WorkbenchAppSelector';
-import { ink, radius, surface } from '../../theme/tokens';
+import { ink, radius, surface } from '../../theme/cssTokens';
 
 interface WorkbenchEmptyStateProps {
   onSelectApp: (appId: string) => void;

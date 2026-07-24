@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { Box } from '@mui/material';
-import { accent, surface } from '../../theme/tokens';
+import { accent, surface } from '../../theme/cssTokens';
 
 interface PaneDividerProps {
   label: string;

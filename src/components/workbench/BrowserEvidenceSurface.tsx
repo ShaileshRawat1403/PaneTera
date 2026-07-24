@@ -3,7 +3,7 @@ import { Box, Button, Chip, Typography } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import SecurityIcon from '@mui/icons-material/Security';
-import { ink, radius, status, surface, typography } from '../../theme/tokens';
+import { ink, radius, status, surface, typography } from '../../theme/cssTokens';
 import {
   type BrowserEvidenceRecord,
   browserEvidenceViewModel,

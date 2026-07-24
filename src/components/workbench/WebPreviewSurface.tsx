@@ -18,7 +18,7 @@ import ShieldOutlinedIcon from '@mui/icons-material/ShieldOutlined';
 import { BrowserEvidenceSurface } from './BrowserEvidenceSurface';
 import type { BrowserEvidenceRecord } from './browserEvidenceSurfaceModel';
 import { resolvePublicWebPreviewSandbox } from '../../utils/webPreviewIntent';
-import { accent, ink, radius, status, surface, typography } from '../../theme/tokens';
+import { accent, ink, radius, status, surface, typography } from '../../theme/cssTokens';
 import { transition } from '../../theme/motion';
 import {
   type OperatorAvailability,

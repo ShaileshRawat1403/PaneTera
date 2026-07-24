@@ -17,7 +17,7 @@ import {
   Typography,
 } from '@mui/material';
 import type { AttachableWorkspace } from '../../composer/contextTypes';
-import { accent, ink, radius, surface, typography } from '../../theme/tokens';
+import { accent, ink, radius, surface, typography } from '../../theme/cssTokens';
 import { transition } from '../../theme/motion';
 
 export type PickerKind = 'project';

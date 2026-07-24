@@ -5,7 +5,7 @@ import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
 import FolderIcon from '@mui/icons-material/Folder';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import { accent, ink, radius, surface, typography } from '../../theme/tokens';
+import { accent, ink, radius, surface, typography } from '../../theme/cssTokens';
 import { buildFileTree, filterFileTree, topLevelDirectories, type FileTreeNode } from './fileTreeModel';
 
 interface Workspace {

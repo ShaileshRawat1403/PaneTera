@@ -7,7 +7,7 @@
 // and re-themes with everything else.
 
 import React from 'react';
-import { accent, ink } from '../../theme/tokens';
+import { accent, ink } from '../../theme/cssTokens';
 
 export function PaneMark({ size = 18 }: { size?: number }): React.ReactElement {
   return (

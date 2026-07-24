@@ -19,7 +19,7 @@
 
 import React from 'react';
 import { Box, Chip, Paper, Stack, Typography } from '@mui/material';
-import { accent, ink, radius, status, surface, typography } from '../../theme/tokens';
+import { accent, ink, radius, status, surface, typography } from '../../theme/cssTokens';
 import { transition } from '../../theme/motion';
 
 /**

@@ -11,7 +11,7 @@
 import React from 'react';
 import { Box, Chip, Tooltip, Typography } from '@mui/material';
 import type { ContextItem } from '../../composer/contextTypes';
-import { accent, ink, radius, status, surface, typography } from '../../theme/tokens';
+import { accent, ink, radius, status, surface, typography } from '../../theme/cssTokens';
 import { chipEnterStyles, transition } from '../../theme/motion';
 
 interface Props {

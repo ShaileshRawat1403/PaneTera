@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Box, Typography } from '@mui/material';
-import { ink, surface, typography } from '../../theme/tokens';
+import { ink, surface, typography } from '../../theme/cssTokens';
 import { inspectStructuredResult } from '../../rig/inspect';
 
 interface StructuredResultProps {

@@ -28,6 +28,8 @@ export const surface = {
   border: '#3A3430',
   /** Border on a focused or active container. */
   borderStrong: '#4C443E',
+  /** Modal scrim over the workstation. */
+  backdrop: 'rgba(24, 22, 20, 0.72)',
 } as const;
 
 export const ink = {
@@ -124,6 +126,58 @@ export const elevation = {
   overlay: '0 12px 32px rgba(0, 0, 0, 0.44)',
   /** Focus ring, drawn as a shadow so it costs no layout. */
   focusRing: `0 0 0 3px ${accent.violetMuted}`,
+} as const;
+
+/**
+ * Light mode keeps the same warm, restrained identity: parchment becomes the
+ * ground, graphite becomes the ink, and violet remains the sole interaction
+ * accent. These are raw values for theme construction and contrast tests;
+ * components consume the mode-aware CSS variables from cssTokens.ts.
+ */
+export const lightSurface = {
+  base: '#F4F0E8',
+  canvas: '#F8F5EF',
+  raised: '#FFFCF7',
+  raisedHover: '#F2ECE3',
+  overlay: '#FFFDF9',
+  sunken: '#EDE7DE',
+  border: '#D5CCC0',
+  borderStrong: '#B8AA9B',
+  backdrop: 'rgba(33, 28, 24, 0.34)',
+} as const;
+
+export const lightInk = {
+  primary: '#211C18',
+  secondary: '#5E554D',
+  muted: '#6F655B',
+  disabled: '#9A9086',
+  onAccent: '#FFFDF9',
+} as const;
+
+export const lightAccent = {
+  violet: '#6F55A8',
+  violetMuted: 'rgba(111, 85, 168, 0.12)',
+  violetHover: 'rgba(111, 85, 168, 0.18)',
+  violetSelected: 'rgba(111, 85, 168, 0.16)',
+  violetBorder: 'rgba(111, 85, 168, 0.46)',
+} as const;
+
+export const lightStatus = {
+  brass: '#8A5A00',
+  brassMuted: 'rgba(138, 90, 0, 0.11)',
+  success: '#3F7A38',
+  successMuted: 'rgba(63, 122, 56, 0.11)',
+  danger: '#A9483B',
+  dangerMuted: 'rgba(169, 72, 59, 0.11)',
+  neutral: '#746B62',
+} as const;
+
+export const lightElevation = {
+  raised: '0 1px 2px rgba(65, 49, 34, 0.10)',
+  card: '0 1px 2px rgba(65, 49, 34, 0.09)',
+  cardHover: '0 8px 20px rgba(65, 49, 34, 0.16)',
+  overlay: '0 12px 32px rgba(65, 49, 34, 0.18)',
+  focusRing: `0 0 0 3px ${lightAccent.violetMuted}`,
 } as const;
 
 export const tokens = {

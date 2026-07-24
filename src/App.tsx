@@ -12,9 +12,8 @@ import type { AttachableWorkspace, ContextKind } from './composer/contextTypes';
 import type { RigResourceChoice } from './rig/types';
 import type { ComposerSubmission } from './components/composer/Composer';
 import { resolveIntent } from './composer/intentResolver';
-import { alpha } from '@mui/material/styles';
 import { scrollBehavior } from './theme/motion';
-import { accent, elevation, ink, radius, status, surface } from './theme/tokens';
+import { accent, elevation, ink, radius, status, surface } from './theme/cssTokens';
 import { materializedContextValue, planSubmission } from './composer/submissionPlan';
 import { capabilitiesFrom, executePlan } from './composer/capabilities';
 import type { PlanExecutors } from './composer/capabilities';
@@ -1835,7 +1834,7 @@ const App: React.FC = () => {
       aria-labelledby="unlock-title"
       aria-describedby="unlock-description"
       slotProps={{
-        backdrop: { sx: { backgroundColor: alpha(surface.base, 0.72) } },
+        backdrop: { sx: { backgroundColor: surface.backdrop } },
       }}
       PaperProps={{
         sx: {

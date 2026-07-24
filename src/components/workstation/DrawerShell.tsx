@@ -12,7 +12,7 @@
 
 import React from 'react';
 import { Box, Button, Stack, Typography } from '@mui/material';
-import { ink, surface } from '../../theme/tokens';
+import { ink, surface } from '../../theme/cssTokens';
 
 export interface DrawerShellProps {
   /** The id the drawer's `aria-labelledby` points at, so the region is named. */

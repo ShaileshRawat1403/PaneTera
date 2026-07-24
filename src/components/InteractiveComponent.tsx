@@ -16,7 +16,7 @@ import { NativeWorkbenchRenderer } from './nativeWorkbench/NativeWorkbenchRender
 import { BrowserObservationView } from './nativeWorkbench/BrowserObservationView';
 import { BrowserExtractionView } from './nativeWorkbench/BrowserExtractionView';
 import { WorkspacesCatalog } from './nativeWorkbench/WorkspacesCatalog';
-import { accent, ink, radius, status, surface, typography } from '../theme/tokens';
+import { accent, ink, radius, status, surface, typography } from '../theme/cssTokens';
 interface ComponentProps {
   uiComponent: UiComponent;
   onAction: (query: string) => void;

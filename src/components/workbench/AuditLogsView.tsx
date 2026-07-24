@@ -16,7 +16,7 @@ import {
   Button, Chip, Stack, Alert, Accordion, AccordionSummary, AccordionDetails,
   Select, MenuItem, FormControl,
 } from '@mui/material';
-import { accent, ink, status, surface, typography } from '../../theme/tokens';
+import { accent, ink, status, surface, typography } from '../../theme/cssTokens';
 import SecurityIcon from '@mui/icons-material/Security';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import {

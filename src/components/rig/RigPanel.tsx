@@ -20,7 +20,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { accent, ink, radius, status, surface, typography } from '../../theme/tokens';
+import { accent, ink, radius, status, surface, typography } from '../../theme/cssTokens';
 import type { RigCapability, RigConnection, RigPermission, ProvenanceRecord } from '../../rig/types';
 import { resolveProvenanceView } from './provenanceModel';
 import { StructuredResult } from './StructuredResult';
