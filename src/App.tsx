@@ -2159,7 +2159,12 @@ const App: React.FC = () => {
                 )}
                 renderHeadroom={(closeHeadroom) => (
                   <React.Suspense fallback={<Box role="status" sx={{ p: 2 }}>Loading Headroom…</Box>}>
+                    {/* Key on token+session so a principal or session change fully
+                        remounts the panel: its load boundary starts fresh and one
+                        principal's or session's cached context can never be shown or
+                        disclosed as stale under another. */}
                     <HeadroomPanel
+                      key={`${token}:${headroomSessionId}`}
                       token={token}
                       sessionId={headroomSessionId}
                       projectId={activeWorkspace?.name ?? activeWorkspace?.id ?? null}

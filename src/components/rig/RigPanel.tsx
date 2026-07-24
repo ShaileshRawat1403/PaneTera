@@ -500,7 +500,7 @@ function RigPanelSession({ token, onClose, onResourcesChanged }: Props): React.R
       </Typography>
 
       {connectionsView.status === 'loading' && (
-        <Typography variant="body2" sx={{ color: ink.secondary }}>Loading Rig connections…</Typography>
+        <Typography role="status" variant="body2" sx={{ color: ink.secondary }}>Loading Rig connections…</Typography>
       )}
 
       {connectionsView.status === 'error' && (

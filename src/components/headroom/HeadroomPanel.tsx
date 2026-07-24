@@ -1,8 +1,9 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Divider, Stack, TextField, Typography } from '@mui/material';
 import { DrawerShell } from '../workstation/DrawerShell';
 import { ink, radius, surface, typography } from '../../theme/tokens';
 import { StructuredResult } from '../rig/StructuredResult';
+import { createLoadGeneration } from './loadGeneration';
 
 interface Envelope {
   envelopeId: string;
@@ -76,6 +77,71 @@ function lines(value: string): string[] {
   return value.split('\n').map((item) => item.trim()).filter(Boolean);
 }
 
+// Element guards for the load boundary. A single malformed element makes the whole
+// load unreadable rather than reaching the renderer, which dereferences these fields
+// without guarding — e.g. capsule.title, scope.path, and item.measurement.unit for
+// each materialized item. Nested structures and enum values are validated to their
+// canonical shapes so a `materialized: [null]`, a non-string envelope id, or an
+// unknown scope kind cannot pass as authoritative and then crash the render.
+const SCOPE_KINDS: ReadonlySet<string> = new Set(['file', 'folder']);
+const SCOPE_FRESHNESS: ReadonlySet<string> = new Set(['current', 'needs-review', 'stale']);
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string');
+}
+/**
+ * A canonical `toISOString()` timestamp — exactly `YYYY-MM-DDTHH:mm:ss.sssZ` (UTC,
+ * 3-digit milliseconds), which is what the server writes. The exact-shape regex
+ * rejects offset and variable-fraction forms, and the round-trip equality rejects an
+ * impossible calendar date such as `2026-02-30T00:00:00.000Z` that Date would
+ * otherwise silently normalise to March 2. This keeps a bad `expiresAt`/`updatedAt`
+ * from rendering "Invalid Date" or a wrong date.
+ */
+function isTimestamp(value: unknown): boolean {
+  if (typeof value !== 'string') return false;
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)) return false;
+  const parsed = Date.parse(value);
+  return !Number.isNaN(parsed) && new Date(parsed).toISOString() === value;
+}
+/**
+ * The measurement must be canonical: the server type is `unit: 'bytes'` with a
+ * required numeric value. An optional/absent value renders as an invented "0 bytes",
+ * and a non-'bytes' unit is a schema mismatch, so both are rejected here.
+ */
+function isMaterializedItem(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const measurement = (value as Record<string, unknown>).measurement;
+  if (!measurement || typeof measurement !== 'object') return false;
+  const m = measurement as Record<string, unknown>;
+  return m.unit === 'bytes' && typeof m.value === 'number' && Number.isFinite(m.value);
+}
+function isCapsule(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const c = value as Record<string, unknown>;
+  return typeof c.capsuleId === 'string' && typeof c.title === 'string'
+    && (c.projectId === null || typeof c.projectId === 'string')
+    && (c.objective === null || typeof c.objective === 'string')
+    && isStringArray(c.decisions) && isStringArray(c.assumptions)
+    && isStringArray(c.unresolvedQuestions) && isStringArray(c.changedUnderstanding)
+    && Array.isArray(c.context) && isStringArray(c.envelopeIds)
+    && isTimestamp(c.updatedAt);
+}
+function isScope(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const s = value as Record<string, unknown>;
+  return typeof s.id === 'string' && typeof s.path === 'string'
+    && typeof s.kind === 'string' && SCOPE_KINDS.has(s.kind)
+    && typeof s.recursive === 'boolean'
+    && typeof s.freshness === 'string' && SCOPE_FRESHNESS.has(s.freshness)
+    && isTimestamp(s.expiresAt);
+}
+function isEnvelope(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const e = value as Record<string, unknown>;
+  return typeof e.envelopeId === 'string' && isTimestamp(e.createdAt)
+    && Array.isArray(e.materialized) && e.materialized.every(isMaterializedItem);
+}
+
 export function HeadroomPanel({
   token,
   sessionId,
@@ -97,20 +163,68 @@ export function HeadroomPanel({
   const [notice, setNotice] = useState<{ severity: 'error' | 'info'; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [deleteCapsuleId, setDeleteCapsuleId] = useState<string | null>(null);
+  // The load boundary, mirroring the Rig drawer. `loaded` distinguishes a first
+  // load still in flight from an authoritative empty; `loadError` (kept apart from
+  // the action `notice`) drives a hard error before any success and a stale
+  // disclosure after one, so a failed load is never rendered as an empty Headroom.
+  const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  // True while a load (initial, retry, or refresh) is in flight, so the Refresh and
+  // Retry controls gate against overlapping loads and disclose their pending state.
+  const [loadPending, setLoadPending] = useState(false);
+  // Ordering coordinator: a superseded (older) response must never overwrite a newer
+  // one or drop a stale banner over current data. Principal/session identity is handled
+  // upstream by a token+session key on this panel in App, which remounts it — so within
+  // one mount only same-token, same-session reloads (Refresh/Retry/actions) can overlap,
+  // which is exactly what this coordinates.
+  const generation = useRef(createLoadGeneration());
 
   const load = useCallback(async () => {
-    const [envelopePayload, capsulePayload, scopePayload] = await Promise.all([
-      headroomRequest<{ envelopes: Envelope[] }>(token, `/api/headroom/envelopes?sessionId=${encodeURIComponent(sessionId)}`),
-      headroomRequest<{ capsules: HeadroomCapsuleView[] }>(token, '/api/headroom/capsules'),
-      headroomRequest<{ scopes: TemporaryScope[] }>(token, `/api/local-selection/scopes?sessionId=${encodeURIComponent(sessionId)}`),
-    ]);
-    setEnvelopes(envelopePayload.envelopes);
-    setCapsules(capsulePayload.capsules);
-    setScopes(scopePayload.scopes);
+    setLoadPending(true);
+    // The coordinator owns the ordering guard: only the latest run's commit/fail runs.
+    await generation.current.run(
+      () => Promise.all([
+        headroomRequest<{ envelopes: unknown }>(token, `/api/headroom/envelopes?sessionId=${encodeURIComponent(sessionId)}`),
+        headroomRequest<{ capsules: unknown }>(token, '/api/headroom/capsules'),
+        headroomRequest<{ scopes: unknown }>(token, `/api/local-selection/scopes?sessionId=${encodeURIComponent(sessionId)}`),
+      ]),
+      {
+        commit: ([envelopePayload, capsulePayload, scopePayload]) => {
+          setLoadPending(false);
+          // Authority boundary: only a response whose body carries the expected arrays,
+          // each element canonical, is a load. A malformed top-level shape or a single
+          // malformed element is unreadable and reported as a failure, never coerced
+          // into an authoritative (possibly empty) Headroom, and never reaching the
+          // renderer.
+          const envelopes = (envelopePayload as { envelopes?: unknown }).envelopes;
+          const capsules = (capsulePayload as { capsules?: unknown }).capsules;
+          const scopes = (scopePayload as { scopes?: unknown }).scopes;
+          if (
+            !Array.isArray(envelopes) || !Array.isArray(capsules) || !Array.isArray(scopes)
+            || !envelopes.every(isEnvelope) || !capsules.every(isCapsule) || !scopes.every(isScope)
+          ) {
+            setLoadError('Headroom returned data in an unexpected format.');
+            return;
+          }
+          setEnvelopes(envelopes as Envelope[]);
+          setCapsules(capsules as HeadroomCapsuleView[]);
+          setScopes(scopes as TemporaryScope[]);
+          setLoaded(true);
+          setLoadError(null);
+        },
+        fail: (error) => {
+          setLoadPending(false);
+          // Keep any previously loaded data (it becomes disclosed-stale) rather than
+          // clearing it into a false empty. A failure before the first success reads as
+          // a hard error; after one, as stale.
+          setLoadError(error instanceof Error ? error.message : String(error));
+        },
+      },
+    );
   }, [sessionId, token]);
 
   useEffect(() => {
-    load().catch((error: Error) => setNotice({ severity: 'error', text: error.message }));
+    void load();
   }, [load]);
 
   const selected = capsules.find((capsule) => capsule.capsuleId === selectedId) ?? null;
@@ -218,6 +332,9 @@ export function HeadroomPanel({
       description="Bounded context, decisions, freshness, and resumption."
       onClose={onClose}
       closeLabel="Close Headroom"
+      onRefresh={() => void load()}
+      refreshing={loadPending}
+      refreshLabel="Refresh Headroom"
     >
       {notice && (
         <Alert
@@ -227,12 +344,13 @@ export function HeadroomPanel({
             <Button
               color="inherit"
               size="small"
+              disabled={loadPending}
               onClick={() => {
                 setNotice(null);
-                void load().catch((error: Error) => setNotice({ severity: 'error', text: error.message }));
+                void load();
               }}
             >
-              Retry
+              {loadPending ? 'Retrying…' : 'Retry'}
             </Button>
           ) : undefined}
         >
@@ -240,6 +358,32 @@ export function HeadroomPanel({
         </Alert>
       )}
 
+      {/* Load state, kept distinct so unavailable data is never an authoritative
+          empty and a hard failure is never rendered as empty. Same grammar as Rig:
+          a quiet status line, an error Alert + Retry, and a stale warning Alert. */}
+      {!loaded && !loadError && (
+        <Typography role="status" variant="body2" sx={{ color: ink.secondary, mt: 1.5 }}>Loading Headroom…</Typography>
+      )}
+      {loadError && !loaded && (
+        <Alert
+          severity="error"
+          sx={{ mt: 1.5 }}
+          action={<Button color="inherit" size="small" disabled={loadPending} onClick={() => void load()}>{loadPending ? 'Retrying…' : 'Retry'}</Button>}
+        >
+          {loadError}
+        </Alert>
+      )}
+      {loadError && loaded && (
+        <Alert
+          severity="warning"
+          sx={{ mt: 1.5 }}
+          action={<Button color="inherit" size="small" disabled={loadPending} onClick={() => void load()}>{loadPending ? 'Retrying…' : 'Retry'}</Button>}
+        >
+          Showing cached context. {loadError}
+        </Alert>
+      )}
+
+      {loaded && (<>
       <Box sx={{ mt: 2, p: 1.5, border: `1px solid ${surface.border}`, borderRadius: `${radius.md}px` }}>
         <Typography variant="subtitle2">Current session</Typography>
         <Typography variant="body2" sx={{ color: ink.secondary }}>{measurement}</Typography>
@@ -306,6 +450,7 @@ export function HeadroomPanel({
       </Stack>
 
       {envelopes[0] && <StructuredResult value={envelopes[0]} label="Latest audited envelope" />}
+      </>)}
 
       <Dialog
         open={Boolean(deleteCapsuleId)}

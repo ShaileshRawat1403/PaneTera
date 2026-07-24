@@ -13,7 +13,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Box, Dialog, DialogTitle, DialogContent, Typography, List, ListItem,
-  Button, Chip, Stack, CircularProgress, Accordion, AccordionSummary, AccordionDetails,
+  Button, Chip, Stack, Alert, Accordion, AccordionSummary, AccordionDetails,
   Select, MenuItem, FormControl,
 } from '@mui/material';
 import { accent, ink, status, surface, typography } from '../../theme/tokens';
@@ -283,32 +283,41 @@ export const AuditLogsView: React.FC<AuditLogsProps> = ({ token, open, onClose }
           <FilterSelect ariaLabel="Filter by policy decision" allLabel="All policy decisions" value={filter.policyDecision ?? 'all'} options={AUDIT_POLICY_OPTIONS} onChange={(v) => setFilter((f) => ({ ...f, policyDecision: v }))} />
         </Box>
 
-        {/* A failed load with cached rows is disclosed as stale, never shown as current. */}
+        {/* Stale: a failed refresh over cached rows is disclosed, never shown as
+            current. Same grammar as the Rig drawer (warning Alert + Retry). */}
         {error && raw.length > 0 && (
-          <Box role="alert" sx={{ mb: 1.5, px: 1.5, py: 1, background: status.dangerMuted, border: `1px solid ${status.danger}`, borderRadius: 1 }}>
-            <Typography variant="caption" sx={{ color: status.danger }}>
-              Showing cached records. {error}
-            </Typography>
-          </Box>
+          <Alert
+            severity="warning"
+            sx={{ mb: 1.5 }}
+            action={(
+              <Button color="inherit" size="small" disabled={loading} onClick={fetchLogs}>
+                {loading ? 'Retrying…' : 'Retry'}
+              </Button>
+            )}
+          >
+            Showing cached records. {error}
+          </Alert>
         )}
 
-        {loading && raw.length === 0 ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', p: 5 }}>
-            <CircularProgress size={20} sx={{ color: accent.violet }} />
-          </Box>
+        {/* The five states are kept distinct: a hard failure is never rendered as an
+            empty trail, and a still-loading trail is never rendered as empty. */}
+        {!loaded && !error ? (
+          <Typography role="status" variant="body2" sx={{ color: ink.secondary }}>Loading the audit trail…</Typography>
         ) : error && raw.length === 0 ? (
-          <Box role="alert" sx={{ p: 4, textAlign: 'center' }}>
-            <Typography variant="caption" sx={{ color: status.danger, display: 'block', mb: 1 }}>{error}</Typography>
-            <Button size="small" onClick={fetchLogs} disabled={loading} sx={{ color: ink.secondary, textTransform: 'none', fontSize: '0.7rem' }}>
-              {loading ? 'Retrying…' : 'Try again'}
-            </Button>
-          </Box>
+          <Alert
+            severity="error"
+            action={(
+              <Button color="inherit" size="small" disabled={loading} onClick={fetchLogs}>
+                {loading ? 'Retrying…' : 'Retry'}
+              </Button>
+            )}
+          >
+            {error}
+          </Alert>
         ) : visible.length === 0 ? (
-          <Box sx={{ p: 4, textAlign: 'center' }}>
-            <Typography variant="caption" sx={{ color: ink.secondary }}>
-              {!loaded ? 'Loading the audit trail…' : views.length === 0 ? 'No audit records yet.' : 'No records match these filters.'}
-            </Typography>
-          </Box>
+          <Typography variant="body2" sx={{ color: ink.secondary }}>
+            {views.length === 0 ? 'No audit records yet.' : 'No records match these filters.'}
+          </Typography>
         ) : (
           <List dense disablePadding>
             {visible.map((view) => (

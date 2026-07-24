@@ -13,7 +13,6 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import FolderIcon from '@mui/icons-material/Folder';
 import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
 import SearchIcon from '@mui/icons-material/Search';
-import TerminalIcon from '@mui/icons-material/Terminal';
 import CodeIcon from '@mui/icons-material/Code';
 import DnsIcon from '@mui/icons-material/Dns';
 import InfoIcon from '@mui/icons-material/Info';
@@ -982,62 +981,23 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
         </Stack>
       </Box>
 
-      {loading && (
-        <LinearProgress
-          sx={{
-            height: 2,
-            background: 'transparent',
-            '& .MuiLinearProgress-bar': { background: accent.violet }
-          }}
-        />
-      )}
-
-      {/* Preview Feed Body */}
+      {/* Preview Feed Body. Activity is a local stream: it can prove a streaming
+          (loading) state, an authoritative empty, and ready content. It has no
+          remote fetch, so it never claims a hard error or a stale state. The
+          streaming and empty meanings are kept distinct: a quiet status line
+          announces streaming, and the empty line shows only when nothing streams. */}
       <Box className="scroll-container" sx={{ flexGrow: 1, minHeight: 0, overflowY: 'auto', p: 2, pb: 6, display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {loading && (
+          <Typography role="status" variant="body2" sx={{ color: ink.secondary }}>
+            Waiting for the latest activity…
+          </Typography>
+        )}
         {previewFeed.length === 0 ? (
-          <Box
-            sx={{
-              flexGrow: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              border: `1px dashed ${surface.border}`,
-              borderRadius: '8px',
-              p: 3,
-              textAlign: 'center',
-              minHeight: '100%',
-              position: 'relative'
-            }}
-          >
-            <Box
-              sx={{
-                width: 56,
-                height: 56,
-                borderRadius: '50%',
-                background: accent.violetMuted,
-                border: `1px solid ${accent.violetMuted}`,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                mb: 1.5,
-              }}
-            >
-              {loading ? (
-                <CircularProgress size={20} sx={{ color: accent.violet }} />
-              ) : (
-                <TerminalIcon sx={{ fontSize: 24, color: accent.violet }} />
-              )}
-            </Box>
-            <Typography variant="caption" sx={{ color: ink.primary, fontWeight: 700, display: 'block', mb: 0.5 }}>
-              {loading ? 'WAITING FOR INSPECTION TRACE' : 'NO ACTIVITY YET'}
+          !loading && (
+            <Typography variant="body2" sx={{ color: ink.secondary }}>
+              No activity yet. Interactive files, inspection statistics, and search components will stream here as you explore.
             </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ maxWidth: 220, fontSize: '0.75rem', lineHeight: 1.4, display: 'block' }}>
-              {loading
-                ? "Waiting for backend response logs..."
-                : 'Interactive files, inspection statistics, and search components will stream here as you explore.'}
-            </Typography>
-          </Box>
+          )
         ) : (
           previewFeed.map((item) => {
               const isExpanded = expandedCards[item.id] !== undefined
