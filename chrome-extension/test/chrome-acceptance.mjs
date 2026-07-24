@@ -146,9 +146,9 @@ try {
   assert.ok(!loadResult.exceptionDetails, 'production capture bundle must evaluate in real Chrome');
   const extractionResult = await pageClient.send('Runtime.evaluate', {
     expression: `({
-      phase1: PaneTeraExtractors['browser.page.observe'](),
-      table: PaneTeraExtractors['browser.table.extract'](),
-      article: PaneTeraExtractors['browser.article.extract']()
+      phase1: window.PaneTeraExtractors['browser.page.observe'](),
+      table: window.PaneTeraExtractors['browser.table.extract'](),
+      article: window.PaneTeraExtractors['browser.article.extract']()
     })`,
     returnByValue: true,
     awaitPromise: true

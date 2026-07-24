@@ -5,7 +5,10 @@ import { extractMetadata, extractStructuredData } from './extractors/metadata.js
 import { extractLinks, extractCodeBlocks } from './extractors/links.js';
 import { redactText, sanitizeUrl } from '../shared/redactor.js';
 
-window.PaneTeraExtractors = {
+// The bundle is injected into Chrome's isolated extension world. Install the
+// callable registry explicitly; the build must not also assign this name or it
+// will overwrite the registry with the entry module's empty exports object.
+globalThis.PaneTeraExtractors = {
   "browser.article.extract": extractArticle,
   "browser.outline.extract": extractOutline,
   "browser.table.extract": extractTables,

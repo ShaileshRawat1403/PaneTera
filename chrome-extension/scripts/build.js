@@ -20,7 +20,6 @@ async function build() {
     bundle: true,
     outfile: bundlePath,
     format: 'iife',
-    globalName: 'PaneTeraExtractors',
     target: ['chrome116'],
     minify: false
   });
