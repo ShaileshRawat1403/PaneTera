@@ -2,7 +2,8 @@
 import React, { useState, KeyboardEvent } from 'react';
 import { Box, TextField, IconButton, Paper } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
-
+import { accent, elevation, ink, radius, surface } from '../theme/cssTokens';
+import { transition, duration, easing } from '../theme/motion';
 interface Props {
   onSend: (text: string) => void;
   variant?: 'default' | 'studio';
@@ -31,16 +32,24 @@ const ChatInput: React.FC<Props> = ({ onSend, variant = 'default' }) => {
       elevation={0}
       sx={variant === 'studio' ? {
         p: 0.75,
-        borderRadius: '14px',
-        background: '#171d27',
-        border: '1px solid rgba(226, 232, 240, 0.12)',
-        boxShadow: '0 10px 30px rgba(0, 0, 0, 0.18)',
+        borderRadius: `${radius.md}px`,
+        background: surface.raised,
+        border: `1px solid ${surface.border}`,
+        boxShadow: elevation.card,
+        transition: transition(['background-color', 'box-shadow', 'border-color'], duration.quick),
         '&:focus-within': {
-          borderColor: 'rgba(167, 139, 250, 0.72)',
-          boxShadow: '0 0 0 3px rgba(167, 139, 250, 0.12)'
+          borderColor: accent.violetBorder,
+          boxShadow: elevation.focusRing
         }
-      } : { p: 1 }}
+      } : { 
+        p: 1,
+        borderRadius: `${radius.md}px`,
+        background: surface.base,
+        transition: transition(['background-color', 'box-shadow', 'border-color'], duration.quick)
+      }}
       component="form"
+      role="form"
+      aria-label="Message composer"
       onSubmit={e => { e.preventDefault(); handleSend(); }}
     >
       <Box sx={{ display: 'flex', alignItems: 'center' }}>
@@ -61,14 +70,19 @@ const ChatInput: React.FC<Props> = ({ onSend, variant = 'default' }) => {
             flexGrow: 1,
             '& .MuiFilledInput-root': {
               background: 'transparent',
-              borderRadius: '10px',
+              borderRadius: `${radius.sm}px`,
               fontSize: '0.9rem',
               lineHeight: 1.5,
-              '&:hover': { background: 'rgba(255,255,255,0.025)' },
+              '&:hover': { background: surface.raisedHover },
               '&.Mui-focused': { background: 'transparent' }
             },
-            '& textarea::placeholder': { color: '#7f8998', opacity: 1 }
-          } : { background: 'rgba(255,255,255,0.08)', borderRadius: 1, flexGrow: 1 }}
+            '& textarea::placeholder': { color: ink.muted, opacity: 1 }
+          } : { 
+            background: surface.raised, 
+            borderRadius: `${radius.sm}px`, 
+            flexGrow: 1,
+            '& textarea::placeholder': { color: ink.muted, opacity: 1 }
+          }}
         />
         <IconButton
           color="primary"
@@ -78,12 +92,18 @@ const ChatInput: React.FC<Props> = ({ onSend, variant = 'default' }) => {
             ml: 0.75,
             width: 38,
             height: 38,
-            color: '#0f131a',
-            background: '#a78bfa',
-            '&:hover': { background: '#b9a4ff' },
-            '&.Mui-disabled': { background: 'rgba(167, 139, 250, 0.1)', color: '#626b78' },
-            '&:focus-visible': { outline: '2px solid #d8ccff', outlineOffset: 2 }
-          } : { ml: 1 }}
+            color: ink.onAccent,
+            background: accent.violet,
+            transition: transition(['background-color', 'transform'], duration.quick),
+            '&:hover': { background: accent.violetHover },
+            '&.Mui-disabled': { background: accent.violetMuted, color: ink.disabled },
+            '&:focus-visible': { outline: `2px solid ${accent.violet}`, outlineOffset: 2 }
+          } : { 
+            ml: 1,
+            color: accent.violet,
+            transition: transition(['background-color', 'transform'], duration.quick),
+            '&.Mui-disabled': { color: ink.disabled }
+          }}
           aria-label="Send message"
         >
           <SendIcon />
