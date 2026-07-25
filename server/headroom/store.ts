@@ -42,6 +42,13 @@ export interface HeadroomCapsule {
   envelopeIds: string[];
   createdAt: string;
   updatedAt: string;
+  annotations: Array<{
+    target: string;
+    text: string;
+    createdAt: string;
+    sourceFile?: string;
+    sourceLine?: number;
+  }>;
 }
 
 interface EnvelopeInput {
@@ -222,6 +229,7 @@ export class HeadroomStore {
       envelopeIds: stringList(input.envelopeIds ?? existing?.envelopeIds),
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
+      annotations: existing?.annotations ?? [],
     };
     await this.mutateCapsules((capsules) => {
       const index = capsules.findIndex((item) => item.capsuleId === capsule.capsuleId);

@@ -149,6 +149,17 @@ export function BrowserLiveSurface({ initialFrame, onClose }: BrowserLiveSurface
         <Button size="small" startIcon={<OpenInNewIcon />} onClick={() => void run('focus')}>
           Open Chrome tab
         </Button>
+        <Button
+          size="small"
+          variant="outlined"
+          onClick={() => {
+            // Capture current frame as evidence
+            // This would normally call an API to store the evidence
+            console.log('Capturing evidence:', frame);
+          }}
+        >
+          Capture as evidence
+        </Button>
         <Button size="small" color="error" startIcon={<StopCircleOutlinedIcon />} onClick={onClose}>
           End live view
         </Button>

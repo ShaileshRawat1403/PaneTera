@@ -128,6 +128,27 @@ export async function browserListCaptures(
   );
 }
 
+export async function browserListExtractions(
+  principal: McpClientPrincipal,
+  transactionId: string,
+  args: { limit?: number },
+): Promise<McpToolResult> {
+  return auditedProduce(
+    { principal, transactionId, event: 'mcp.tool.call', capability: 'browser_list_extractions', targetLabel: 'Listed extractions' },
+    () => {
+      const extractions = browserEvidenceReadService.getRecentExtractions(principal, args.limit ?? 10);
+      const results = extractions.map((e) => ({
+        extractionId: e.extractionId,
+        parentCaptureId: e.parentCaptureId,
+        capability: e.capability,
+        capturedAt: e.source.capturedAt,
+        truncated: e.truncated,
+      }));
+      return { content: [{ type: 'text', text: JSON.stringify({ status: 'completed', data: results }, null, 2) }] };
+    },
+  );
+}
+
 export async function browserGetCapture(
   principal: McpClientPrincipal,
   transactionId: string,
@@ -251,6 +272,15 @@ export function setupMcpServer(transactionId: string, principal: McpClientPrinci
       offset: z.number().optional().describe('Number of items to skip'),
     },
     async (args) => browserListCaptures(principal, transactionId, args),
+  );
+
+  server.tool(
+    'browser_list_extractions',
+    'Retrieve a list of recent browser extractions belonging to the authenticated user.',
+    {
+      limit: z.number().optional().describe('Number of items to return (default: 10)'),
+    },
+    async (args) => browserListExtractions(principal, transactionId, args),
   );
 
   server.tool(

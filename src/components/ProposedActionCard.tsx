@@ -27,6 +27,12 @@ import { accent, ink, radius, status, surface, typography } from '../theme/cssTo
 import { transition } from '../theme/motion';
 import { singleFire } from './singleFire';
 
+interface EvidenceLink {
+  id: string;
+  label: string;
+  type: 'screenshot' | 'extraction' | 'observation';
+}
+
 interface ProposedActionCardProps {
   workspaceName: string;
   command: string;
@@ -42,6 +48,15 @@ interface ProposedActionCardProps {
   isDryRun?: boolean;
   allowed?: boolean;
   description?: string;
+
+  // New: Inline diff viewer and evidence links
+  showInlineDiff?: boolean;
+  diff?: {
+    additions: string[];
+    deletions: string[];
+  };
+  evidenceLinks?: EvidenceLink[];
+  onEvidenceClick?: (id: string) => void;
 }
 
 /** Plain language for an internal execution mode identifier. */
@@ -96,7 +111,11 @@ export const ProposedActionCard: React.FC<ProposedActionCardProps> = ({
   executionMode = 'local-shell',
   isDryRun = true,
   allowed = true,
-  description
+  description,
+  showInlineDiff = false,
+  diff,
+  evidenceLinks,
+  onEvidenceClick,
 }) => {
   // Approving fires once, immediately. The previous version started a
   // two-second countdown with an Undo, which meant the consequential moment was
@@ -267,6 +286,102 @@ export const ProposedActionCard: React.FC<ProposedActionCardProps> = ({
         >
           This simulates the command and shows what it would do. Nothing is changed.
         </Typography>
+      )}
+
+      {/* Inline Diff Viewer */}
+      {showInlineDiff && diff && (diff.additions.length > 0 || diff.deletions.length > 0) && (
+        <Box
+          sx={{
+            mt: 1.5,
+            p: 1.5,
+            backgroundColor: surface.sunken,
+            border: `1px solid ${surface.border}`,
+            borderRadius: `${radius.sm}px`,
+          }}
+        >
+          <Typography
+            variant="caption"
+            sx={{ color: ink.muted, fontWeight: 600, display: 'block', mb: 1, fontSize: '10px', letterSpacing: '0.05em' }}
+          >
+            CHANGES
+          </Typography>
+          <Box
+            sx={{
+              fontFamily: typography.mono,
+              fontSize: '11px',
+              lineHeight: 1.6,
+              maxHeight: '150px',
+              overflow: 'auto',
+            }}
+          >
+            {diff.additions.map((line, i) => (
+              <Box
+                key={`add-${i}`}
+                sx={{
+                  px: 1,
+                  py: 0.25,
+                  backgroundColor: `${status.success}15`,
+                  color: status.success,
+                  whiteSpace: 'pre-wrap',
+                }}
+              >
+                + {line}
+              </Box>
+            ))}
+            {diff.deletions.map((line, i) => (
+              <Box
+                key={`del-${i}`}
+                sx={{
+                  px: 1,
+                  py: 0.25,
+                  backgroundColor: `${status.danger}15`,
+                  color: status.danger,
+                  whiteSpace: 'pre-wrap',
+                }}
+              >
+                - {line}
+              </Box>
+            ))}
+          </Box>
+        </Box>
+      )}
+
+      {/* Evidence Links */}
+      {evidenceLinks && evidenceLinks.length > 0 && (
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, mt: 1.5 }}>
+          {evidenceLinks.map((link) => {
+            const icon =
+              link.type === 'screenshot' ? '📸' : link.type === 'extraction' ? '🔍' : '👁️';
+            return (
+              <Box
+                key={link.id}
+                onClick={() => onEvidenceClick?.(link.id)}
+                sx={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 0.5,
+                  px: 1.5,
+                  py: 0.5,
+                  backgroundColor: surface.raised,
+                  border: `1px solid ${surface.border}`,
+                  borderRadius: `${radius.pill}px`,
+                  fontSize: '11px',
+                  color: ink.secondary,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                  '&:hover': {
+                    backgroundColor: accent.violetMuted,
+                    borderColor: accent.violetBorder,
+                    color: ink.primary,
+                  },
+                }}
+              >
+                <span>{icon}</span>
+                {link.label}
+              </Box>
+            );
+          })}
+        </Box>
       )}
 
       <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>

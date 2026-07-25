@@ -35,6 +35,8 @@ import {
   shouldSignalCanvas,
   useIsStacked,
 } from './workstationLayout';
+import { CanvasSelectionProvider } from './CanvasSelectionProvider';
+import MarkupToolbar from './MarkupToolbar';
 
 export interface GovernanceSummary {
   gatewayConnected: boolean;
@@ -606,26 +608,39 @@ export function WorkstationShell({
             />
           </Box>
 
-          <Box
-            component="main"
-            aria-label="PaneTera main canvas"
-            data-testid="workstation-canvas"
-            sx={{
-              flexDirection: 'column',
-              minWidth: 0,
-              minHeight: 0,
-              position: 'relative',
-              flexGrow: 1,
-              // Deliberately flat. The canvas is the authoritative surface, so
-              // whatever it holds should be the only thing competing for
-              // attention. The former grid and violet bloom carried no
-              // information.
-              backgroundColor: surface.base,
-              display: stacked ? (activePlane === 'canvas' ? 'flex' : 'none') : 'flex',
-            }}
-          >
-            {canvas}
-          </Box>
+          <CanvasSelectionProvider>
+            <Box
+              component="main"
+              aria-label="PaneTera main canvas"
+              data-testid="workstation-canvas"
+              sx={{
+                flexDirection: 'column',
+                minWidth: 0,
+                minHeight: 0,
+                position: 'relative',
+                flexGrow: 1,
+                // Deliberately flat. The canvas is the authoritative surface, so
+                // whatever it holds should be the only thing competing for
+                // attention. The former grid and violet bloom carried no
+                // information.
+                backgroundColor: surface.base,
+                display: stacked ? (activePlane === 'canvas' ? 'flex' : 'none') : 'flex',
+              }}
+            >
+              {canvas}
+              <MarkupToolbar
+                onAnnotate={(text, annotation) => {
+                  console.log('Annotate:', text, annotation);
+                }}
+                onExplain={(text) => {
+                  console.log('Explain:', text);
+                }}
+                onSearch={(text) => {
+                  console.log('Search:', text);
+                }}
+              />
+            </Box>
+          </CanvasSelectionProvider>
         </Box>
       </Box>
 

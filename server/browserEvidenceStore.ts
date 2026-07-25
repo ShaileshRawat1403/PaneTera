@@ -104,6 +104,13 @@ export class BrowserEvidenceStore {
     const sorted = [...this.observations].sort((a, b) => b.capturedAt.localeCompare(a.capturedAt));
     return sorted.slice(offset, offset + limit);
   }
+
+  public getRecentExtractions(limit: number = 10): ExtractionResult[] {
+    // Return most recent extractions, newest first
+    return this.extractions
+      .slice(-limit)
+      .reverse();
+  }
 }
 
 // Singleton instance

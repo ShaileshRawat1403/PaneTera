@@ -91,6 +91,14 @@ export class BrowserEvidenceReadService {
       extractionCount: ext.length
     };
   }
+
+  public getRecentExtractions(principal: McpClientPrincipal, limit: number = 10): ExtractionResult[] {
+    const allExtractions = this.getExtractions(principal);
+    // Return most recent, newest first
+    return allExtractions
+      .slice(-limit)
+      .reverse();
+  }
 }
 
 export const browserEvidenceReadService = new BrowserEvidenceReadService();

@@ -44,7 +44,28 @@ product is ready to release.
 - Approval is explicit and single-fire at the UI boundary; backend policy and
   idempotency remain authoritative.
 - The warm graphite design system, contrast rules, reduced motion, landmarks,
-  keyboard navigation, and focus return are enforced by tests.
+## UX Enhancement Initiatives (Completed)
+
+### Initiative C: Richer MCP UI & Schema Cards
+- `RichSchemaFormView.tsx`: Expanded field types (boolean, number, select, textarea, code, url, date, file, array)
+- `StatusBoardView.tsx`: Interactive verification checkboxes
+- `ProposedActionCard.tsx`: Inline diff viewer and evidence links
+- `NativeWorkbenchRenderer.tsx`: View prioritization and smart routing
+
+### Initiative D: Browser Evidence Split-Pane Canvas
+- `BrowserEvidenceCanvas.tsx`: Split-pane layout (300px list + detail)
+- `ExtractionCard.tsx`: Type-specific rendering for extractions
+- `BrowserLiveSurface.tsx`: "Capture as evidence" button
+- Server: `getRecentExtractions()` method and `browser_list_extractions` tool
+
+### Initiative B: Interactive Canvas Markup Pen
+- `CanvasSelectionProvider.tsx`: Selection state management
+- `MarkupToolbar.tsx`: Explain/Search/Annotate actions
+- `FilePreviewPanel.tsx`: Line-range selection
+- `headroom/store.ts`: Annotations array in HeadroomCapsule
+
+### Initiative A: Canvas Start & Surface Polish
+- `EmptyState.tsx`, `LoadingState.tsx`, `ErrorState.tsx`, `SuccessState.tsx`: State component library
 
 ## Remaining release-candidate work
 
