@@ -135,48 +135,48 @@ export const elevation = {
  * components consume the mode-aware CSS variables from cssTokens.ts.
  */
 export const lightSurface = {
-  base: '#F4F0E8',
-  canvas: '#F8F5EF',
-  raised: '#FFFCF7',
-  raisedHover: '#F2ECE3',
-  overlay: '#FFFDF9',
-  sunken: '#EDE7DE',
-  border: '#D5CCC0',
-  borderStrong: '#B8AA9B',
+  base: '#F4F4F3',
+  canvas: '#FAFAF9',
+  raised: '#FFFFFF',
+  raisedHover: '#F4F4F3',
+  overlay: '#FFFFFF',
+  sunken: '#E4E4E3',
+  border: '#D4D4D3',
+  borderStrong: '#A1A1A0',
   backdrop: 'rgba(33, 28, 24, 0.34)',
 } as const;
 
 export const lightInk = {
-  primary: '#211C18',
-  secondary: '#5E554D',
-  muted: '#6F655B',
-  disabled: '#9A9086',
-  onAccent: '#FFFDF9',
+  primary: '#181614',
+  secondary: '#45403B',
+  muted: '#5C564F',
+  disabled: '#948D85',
+  onAccent: '#FFFFFF',
 } as const;
 
 export const lightAccent = {
-  violet: '#6F55A8',
-  violetMuted: 'rgba(111, 85, 168, 0.12)',
-  violetHover: 'rgba(111, 85, 168, 0.18)',
-  violetSelected: 'rgba(111, 85, 168, 0.16)',
-  violetBorder: 'rgba(111, 85, 168, 0.46)',
+  violet: '#6D46C2',
+  violetMuted: 'rgba(109, 70, 194, 0.08)',
+  violetHover: 'rgba(109, 70, 194, 0.14)',
+  violetSelected: 'rgba(109, 70, 194, 0.12)',
+  violetBorder: 'rgba(109, 70, 194, 0.40)',
 } as const;
 
 export const lightStatus = {
-  brass: '#8A5A00',
-  brassMuted: 'rgba(138, 90, 0, 0.11)',
-  success: '#3F7A38',
-  successMuted: 'rgba(63, 122, 56, 0.11)',
-  danger: '#A9483B',
-  dangerMuted: 'rgba(169, 72, 59, 0.11)',
-  neutral: '#746B62',
+  brass: '#9E6A00',
+  brassMuted: 'rgba(158, 106, 0, 0.10)',
+  success: '#1B7A27',
+  successMuted: 'rgba(27, 122, 39, 0.10)',
+  danger: '#A82B1E',
+  dangerMuted: 'rgba(168, 43, 30, 0.10)',
+  neutral: '#5C564F',
 } as const;
 
 export const lightElevation = {
-  raised: '0 1px 2px rgba(65, 49, 34, 0.10)',
-  card: '0 1px 2px rgba(65, 49, 34, 0.09)',
-  cardHover: '0 8px 20px rgba(65, 49, 34, 0.16)',
-  overlay: '0 12px 32px rgba(65, 49, 34, 0.18)',
+  raised: '0 1px 3px rgba(24, 22, 20, 0.06)',
+  card: '0 1px 3px rgba(24, 22, 20, 0.05)',
+  cardHover: '0 8px 24px rgba(24, 22, 20, 0.10)',
+  overlay: '0 12px 32px rgba(24, 22, 20, 0.14)',
   focusRing: `0 0 0 3px ${lightAccent.violetMuted}`,
 } as const;
 

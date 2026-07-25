@@ -1,9 +1,10 @@
 // src/components/nativeWorkbench/WorkspacesCatalog.tsx
 import React from 'react';
-import { Box, Typography, Paper, Grid, Chip, List, ListItem, ListItemText, Divider } from '@mui/material';
+import { Box, Typography, Paper, Grid, Chip } from '@mui/material';
 import FolderIcon from '@mui/icons-material/Folder';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import OfflineBoltIcon from '@mui/icons-material/OfflineBolt';
+import { accent, ink, status, surface } from '../../theme/cssTokens';
 
 interface Workspace {
   id: string;
@@ -28,16 +29,15 @@ export const WorkspacesCatalog: React.FC<CatalogProps> = ({ data }) => {
       variant="outlined"
       sx={{
         p: 3,
-        background: 'rgba(20, 20, 25, 0.7)',
-        borderColor: 'rgba(255, 255, 255, 0.08)',
+        backgroundColor: surface.raised,
+        borderColor: surface.border,
         borderRadius: '12px',
-        boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.37)'
       }}
     >
-      <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#f4f4f5', mb: 0.5 }}>
+      <Typography variant="subtitle1" sx={{ fontWeight: 800, color: ink.primary, mb: 0.5 }}>
         Workspaces Catalog Status
       </Typography>
-      <Typography variant="caption" sx={{ color: '#71717a', display: 'block', mb: 3.5 }}>
+      <Typography variant="caption" sx={{ color: ink.muted, display: 'block', mb: 3.5 }}>
         Local catalog of all manually registered or auto-discovered workspaces.
       </Typography>
 
@@ -48,59 +48,57 @@ export const WorkspacesCatalog: React.FC<CatalogProps> = ({ data }) => {
               variant="outlined"
               sx={{
                 p: 2.5,
-                background: ws.enabled ? 'rgba(127, 85, 240, 0.03)' : 'rgba(255,255,255,0.005)',
-                borderColor: ws.enabled ? 'rgba(127, 85, 240, 0.2)' : 'rgba(255,255,255,0.04)',
+                backgroundColor: ws.enabled ? accent.violetMuted : surface.sunken,
+                borderColor: ws.enabled ? accent.violetBorder : surface.border,
                 borderRadius: '8px',
                 transition: 'all 0.2s',
                 '&:hover': {
-                  borderColor: ws.enabled ? 'rgba(127, 85, 240, 0.35)' : 'rgba(255,255,255,0.08)'
+                  borderColor: accent.violet,
                 }
               }}
             >
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <FolderIcon sx={{ color: ws.enabled ? '#7f5af0' : '#71717a', fontSize: 18 }} />
-                  <Typography variant="body2" sx={{ fontWeight: 700, color: '#f4f4f5' }}>
+                  <FolderIcon sx={{ color: accent.violet, fontSize: 18 }} />
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: ink.primary }}>
                     {ws.name}
                   </Typography>
                 </Box>
                 <Chip
-                  label={ws.enabled ? 'Enabled' : 'Disabled'}
+                  icon={ws.status === 'online' ? <CheckCircleIcon sx={{ fontSize: '12px !important' }} /> : <OfflineBoltIcon sx={{ fontSize: '12px !important' }} />}
+                  label={ws.status.toUpperCase()}
                   size="small"
                   sx={{
                     height: 18,
                     fontSize: '0.6rem',
-                    fontWeight: 700,
-                    background: ws.enabled ? 'rgba(34, 197, 94, 0.08)' : 'rgba(255, 255, 255, 0.04)',
-                    color: ws.enabled ? '#22c55e' : '#a1a1aa'
+                    fontWeight: 800,
+                    backgroundColor: ws.status === 'online' ? status.successMuted : surface.sunken,
+                    color: ws.status === 'online' ? status.success : ink.muted,
                   }}
                 />
               </Box>
 
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="caption" sx={{ color: '#71717a', display: 'block', mb: 0.5 }}>PATH</Typography>
-                <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.7rem', color: '#cbd5e1', wordBreak: 'break-all' }}>
-                  {ws.path}
-                </Typography>
-              </Box>
+              <Typography variant="caption" sx={{ color: ink.secondary, fontFamily: 'monospace', display: 'block', mb: 1.5, fontSize: '0.72rem', wordBreak: 'break-all' }}>
+                {ws.path}
+              </Typography>
 
-              <Divider sx={{ borderColor: 'rgba(255,255,255,0.04)', my: 1.5 }} />
-
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography variant="caption" sx={{ color: '#71717a' }}>TYPE: {ws.type.toUpperCase()}</Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  {ws.enabled ? (
-                    <>
-                      <CheckCircleIcon sx={{ color: '#22c55e', fontSize: 13 }} />
-                      <Typography variant="caption" sx={{ color: '#22c55e', fontWeight: 600 }}>ONLINE</Typography>
-                    </>
-                  ) : (
-                    <>
-                      <OfflineBoltIcon sx={{ color: '#71717a', fontSize: 13 }} />
-                      <Typography variant="caption" sx={{ color: '#71717a' }}>OFFLINE</Typography>
-                    </>
-                  )}
-                </Box>
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <Chip
+                  label={ws.type}
+                  size="small"
+                  sx={{ height: 16, fontSize: '0.55rem', backgroundColor: surface.raised, color: ink.secondary, fontWeight: 700 }}
+                />
+                <Chip
+                  label={ws.enabled ? 'ACTIVE' : 'DISABLED'}
+                  size="small"
+                  sx={{
+                    height: 16,
+                    fontSize: '0.55rem',
+                    fontWeight: 700,
+                    backgroundColor: ws.enabled ? accent.violetMuted : surface.raised,
+                    color: ws.enabled ? accent.violet : ink.muted
+                  }}
+                />
               </Box>
             </Paper>
           </Grid>
