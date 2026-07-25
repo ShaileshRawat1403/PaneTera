@@ -53,3 +53,38 @@ export function inspectStructuredResult(value: unknown, limits: InspectionLimits
 
   return visit(value, 0);
 }
+
+export type RigErrorKind = 'authorization' | 'not-found' | 'server-error' | 'timeout' | 'validation';
+
+export interface TypedRigError {
+  kind: RigErrorKind;
+  message: string;
+  code?: string;
+  details?: unknown;
+}
+
+export function normalizeRigError(raw: unknown): TypedRigError {
+  if (!raw) {
+    return { kind: 'server-error', message: 'An unknown error occurred.' };
+  }
+  if (typeof raw === 'string') {
+    return { kind: 'server-error', message: raw };
+  }
+  if (typeof raw === 'object') {
+    const obj = raw as Record<string, unknown>;
+    if (obj.error && typeof obj.error === 'object') {
+      const err = obj.error as Record<string, unknown>;
+      const kind = (typeof err.kind === 'string' ? err.kind : 'server-error') as RigErrorKind;
+      const message = typeof err.message === 'string' ? err.message : String(raw);
+      return { kind, message, code: err.code as string | undefined, details: err.details };
+    }
+    if (typeof obj.error === 'string') {
+      return { kind: 'server-error', message: obj.error };
+    }
+    if (typeof obj.message === 'string') {
+      const kind = (typeof obj.kind === 'string' ? obj.kind : 'server-error') as RigErrorKind;
+      return { kind, message: obj.message, code: obj.code as string | undefined, details: obj.details };
+    }
+  }
+  return { kind: 'server-error', message: String(raw) };
+}

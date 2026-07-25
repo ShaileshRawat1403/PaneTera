@@ -677,14 +677,22 @@ export async function handleInvocation(
   }
 }
 
+export function expandUriTemplate(template: string, parameters?: Record<string, string>): string {
+  if (!parameters) return template;
+  return template.replace(/\{([^}]+)\}/g, (_, key) => parameters[key] ?? `{${key}}`);
+}
+
 /** Read a governed resource. One terminal record per attempted action, audit before health. */
 export async function handleResourceRead(
   deps: RigDataDeps,
-  input: { connectionId?: unknown; capabilityId?: unknown },
+  input: { connectionId?: unknown; capabilityId?: unknown; parameters?: unknown },
   principal?: OperatorPrincipal,
 ): Promise<HandlerResult> {
   const connectionId = String(input.connectionId ?? '');
   const capabilityId = String(input.capabilityId ?? '');
+  const parameters = input.parameters && typeof input.parameters === 'object' && !Array.isArray(input.parameters)
+    ? (input.parameters as Record<string, string>)
+    : undefined;
 
   let connection: McpConnection | null;
   let capability: CapabilityCard | null;
@@ -692,7 +700,6 @@ export async function handleResourceRead(
     ({ connection, capability } = lookupCapability(deps, connectionId, capabilityId));
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
-    // A read of PaneTera's own state failed. System-observed, not the connector.
     logTypedAudit({
       event: 'rig.resource.failed',
       ...rigAuditFields('rig.resource.failed'),
@@ -703,7 +710,6 @@ export async function handleResourceRead(
   }
 
   if (!connection || connection.state !== 'connected' || !capability || capability.kind !== 'resource' || !capability.enabled || capability.permission === 'denied') {
-    // A policy denial: the resource is absent, disabled, or explicitly denied.
     logTypedAudit({
       event: 'rig.resource.denied',
       ...rigAuditFields('rig.resource.denied', undefined, principal),
@@ -712,20 +718,24 @@ export async function handleResourceRead(
     });
     return jbody(403, { error: 'Enabled connected resource not found.' });
   }
+
   const declaration = capability.rawDeclaration as Record<string, unknown>;
-  if (typeof declaration.uri !== 'string') {
-    // Not a policy denial: the connector's own declaration lacks a fixed URI, so
-    // there is nothing to read. A local declaration failure, system-observed.
+  const rawUri = typeof declaration.uri === 'string' ? declaration.uri : typeof declaration.uriTemplate === 'string' ? declaration.uriTemplate : '';
+
+  if (!rawUri) {
     logTypedAudit({
       event: 'rig.resource.failed',
       ...rigAuditFields('rig.resource.failed'),
       correlation: { connectionId },
-      details: { capabilityId, reason: 'resource has no fixed uri' },
+      details: { capabilityId, reason: 'resource has no fixed uri or uriTemplate' },
     });
-    return jbody(422, { error: 'Resource has no fixed URI.' });
+    return jbody(422, { error: 'Resource has no fixed URI or uriTemplate.' });
   }
+
+  const targetUri = expandUriTemplate(rawUri, parameters);
+
   try {
-    const result = await deps.runtime.readResource(connectionId, declaration.uri);
+    const result = await deps.runtime.readResource(connectionId, targetUri);
     const record: ProvenanceRecord = {
       recordId: randomUUID(),
       recordType: 'mcp-resource-read',

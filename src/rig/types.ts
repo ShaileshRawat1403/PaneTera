@@ -92,5 +92,7 @@ export interface RigResourceChoice {
   capabilityId: string;
   label: string;
   uri: string;
+  uriTemplate?: string;
+  parameters?: Array<{ name: string; description?: string; required?: boolean }>;
   connectionName: string;
 }

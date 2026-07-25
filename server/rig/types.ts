@@ -44,6 +44,13 @@ export interface HttpTransportSpec {
 
 export type McpTransportSpec = StdioTransportSpec | HttpTransportSpec;
 
+export interface ResourceTemplateSpec {
+  uriTemplate: string;
+  name: string;
+  description?: string;
+  parameters?: Array<{ name: string; description?: string; required?: boolean }>;
+}
+
 export interface CapabilityCard {
   capabilityId: string;
   kind: 'tool' | 'resource' | 'prompt';
@@ -132,6 +139,15 @@ export interface ProvenanceRecord {
   };
   integrity: 'verified' | 'unverified' | 'broken';
   retentionClass: string;
+}
+
+export interface LlmToolDefinition {
+  name: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
+  connectionId: string;
+  capabilityId: string;
+  permission: Permission;
 }
 
 export const EMPTY_CAPABILITY_SNAPSHOT: CapabilitySnapshot = {
