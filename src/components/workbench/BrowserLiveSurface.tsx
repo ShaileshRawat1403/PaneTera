@@ -176,6 +176,10 @@ export function BrowserLiveSurface({ initialFrame, onClose }: BrowserLiveSurface
             if (!clickMode) setInspectMode(false);
           }}
           aria-pressed={clickMode}
+          sx={{
+            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+            '&:hover': { transform: 'scale(1.02)' },
+          }}
         >
           {clickMode ? 'Click Mode Active' : 'Click Mode'}
         </Button>
@@ -188,6 +192,10 @@ export function BrowserLiveSurface({ initialFrame, onClose }: BrowserLiveSurface
             if (!inspectMode) setClickMode(false);
           }}
           aria-pressed={inspectMode}
+          sx={{
+            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+            '&:hover': { transform: 'scale(1.02)' },
+          }}
         >
           {inspectMode ? 'Inspecting' : 'Inspect elements'}
         </Button>
@@ -198,6 +206,7 @@ export function BrowserLiveSurface({ initialFrame, onClose }: BrowserLiveSurface
               aria-label="Refresh real Chrome frame"
               disabled={pending}
               onClick={() => void run('snapshot')}
+              sx={{ transition: 'all 0.2s ease', '&:hover': { transform: 'rotate(45deg)' } }}
             >
               <RefreshIcon fontSize="small" />
             </IconButton>
@@ -209,6 +218,10 @@ export function BrowserLiveSurface({ initialFrame, onClose }: BrowserLiveSurface
           startIcon={<ArrowDownwardIcon fontSize="small" />}
           disabled={pending}
           onClick={() => void handleScroll('down')}
+          sx={{
+            transition: 'all 0.2s ease',
+            '&:hover': { transform: 'translateY(1px)' },
+          }}
         >
           Scroll Down
         </Button>
@@ -218,6 +231,10 @@ export function BrowserLiveSurface({ initialFrame, onClose }: BrowserLiveSurface
           startIcon={<ArrowUpwardIcon fontSize="small" />}
           disabled={pending}
           onClick={() => void handleScroll('up')}
+          sx={{
+            transition: 'all 0.2s ease',
+            '&:hover': { transform: 'translateY(-1px)' },
+          }}
         >
           Scroll Up
         </Button>

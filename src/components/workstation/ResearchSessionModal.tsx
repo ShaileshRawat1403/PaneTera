@@ -156,16 +156,22 @@ export function ResearchSessionModal({ open, token, onClose }: ResearchSessionMo
         <Typography variant="caption" sx={{ color: ink.muted, fontWeight: 600, display: 'block', mb: 1, letterSpacing: '0.05em' }}>
           ATTACHED EVIDENCE NODES ({evidenceItems.length})
         </Typography>
-        <Stack spacing={1} sx={{ mb: 2.5 }}>
+        <Stack spacing={1.25} sx={{ mb: 2.5 }}>
           {evidenceItems.map((item) => (
             <Paper
               key={item.evidenceId}
               elevation={0}
               sx={{
-                p: 1.25,
+                p: 1.5,
                 backgroundColor: surface.sunken,
                 border: `1px solid ${surface.border}`,
-                borderRadius: `${radius.sm}px`,
+                borderRadius: `${radius.md}px`,
+                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                '&:hover': {
+                  borderColor: accent.violetBorder,
+                  transform: 'translateY(-2px)',
+                  boxShadow: `0 4px 12px ${accent.violetMuted}`,
+                },
               }}
             >
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
@@ -182,7 +188,7 @@ export function ResearchSessionModal({ open, token, onClose }: ResearchSessionMo
                 <Chip
                   label={item.sourceType}
                   size="small"
-                  sx={{ height: 18, fontSize: '0.75rem', backgroundColor: surface.raised, color: ink.secondary }}
+                  sx={{ height: 20, fontSize: '0.75rem', backgroundColor: surface.raised, color: ink.secondary, fontWeight: 600 }}
                 />
               </Box>
               <Typography variant="caption" sx={{ color: ink.secondary, fontFamily: typography.mono, display: 'block', mb: 0.5, fontSize: '0.75rem' }}>
@@ -199,16 +205,20 @@ export function ResearchSessionModal({ open, token, onClose }: ResearchSessionMo
         <Typography variant="caption" sx={{ color: ink.muted, fontWeight: 600, display: 'block', mb: 1, letterSpacing: '0.05em' }}>
           CLAIM COMPARISON & CONFLICT DETECTION
         </Typography>
-        <Stack spacing={1} sx={{ mb: 2.5 }}>
+        <Stack spacing={1.25} sx={{ mb: 2.5 }}>
           {claims.map((claim) => (
             <Paper
               key={claim.claimId}
               elevation={0}
               sx={{
-                p: 1.5,
+                p: 1.75,
                 backgroundColor: claim.status === 'conflicting' ? status.brassMuted : surface.sunken,
                 border: `1px solid ${claim.status === 'conflicting' ? status.brass : surface.border}`,
-                borderRadius: `${radius.sm}px`,
+                borderRadius: `${radius.md}px`,
+                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                '&:hover': {
+                  transform: 'translateY(-1px)',
+                },
               }}
             >
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
