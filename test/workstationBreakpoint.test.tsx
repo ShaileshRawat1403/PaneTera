@@ -208,7 +208,7 @@ describe('crossing the workstation breakpoint keeps live state', () => {
     });
 
     assert.ok(switchGroup(), 'the plane switch appears in the stacked layout');
-    assert.strictEqual(toggles().length, 2, 'two toggle buttons, both with aria-pressed');
+    assert.strictEqual(toggles().length, 3, 'two plane-toggle buttons plus the theme toggle, all with aria-pressed');
     // Availability reaches assistive technology as text, not only as the dot.
     assert.match(
       switchGroup()!.textContent ?? '',
