@@ -3,8 +3,9 @@ process.env.NODE_ENV = 'test';
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import { createTypedRigError, type TypedRigError } from '../server/rig/types';
+import { mapStatusToErrorKind } from '../server/rig/routes';
 
-describe('TypedRigError schema unit tests', () => {
+describe('TypedRigError schema and HTTP status mapping unit tests', () => {
   it('creates structured typed errors for authorization, validation, and not-found', () => {
     const authErr = createTypedRigError('authorization', 'Unauthorized proposal claim.');
     assert.strictEqual(authErr.kind, 'authorization');
@@ -17,5 +18,14 @@ describe('TypedRigError schema unit tests', () => {
     const valErr: TypedRigError = createTypedRigError('validation', 'Invalid schema payload.', null, 'ERR_INVALID_SCHEMA');
     assert.strictEqual(valErr.kind, 'validation');
     assert.strictEqual(valErr.code, 'ERR_INVALID_SCHEMA');
+  });
+
+  it('maps HTTP status codes to correct RigErrorKind', () => {
+    assert.strictEqual(mapStatusToErrorKind(400), 'validation');
+    assert.strictEqual(mapStatusToErrorKind(403), 'authorization');
+    assert.strictEqual(mapStatusToErrorKind(404), 'not-found');
+    assert.strictEqual(mapStatusToErrorKind(409), 'validation');
+    assert.strictEqual(mapStatusToErrorKind(500), 'server-error');
+    assert.strictEqual(mapStatusToErrorKind(502), 'server-error');
   });
 });

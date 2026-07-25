@@ -10,7 +10,7 @@ import { RigRegistry } from './registry';
 import { RigRuntime } from './runtime';
 import { verifyHttpSpec, verifyStdioSpec } from './transportSecurity';
 import { deleteBearerCredential, storeBearerCredential } from './keychain';
-import type { CapabilityCard, McpConnection, Permission, ProvenanceRecord } from './types';
+import { createTypedRigError, type CapabilityCard, type McpConnection, type Permission, type ProvenanceRecord, type RigErrorKind } from './types';
 
 export const rigRouter = express.Router();
 const registry = new RigRegistry();
@@ -168,18 +168,18 @@ rigRouter.post('/connections', async (req, res) => {
     const displayName = String(req.body?.displayName ?? '').trim();
     const transport = req.body?.transport;
     if (!displayName || !transport || (transport.kind !== 'stdio' && transport.kind !== 'http')) {
-      return res.status(400).json({ error: 'A name and stdio or HTTP transport are required.' });
+      return replyError(res, 400, 'A name and stdio or HTTP transport are required.');
     }
     if (transport.kind === 'stdio') {
       if (typeof transport.executablePath !== 'string' || typeof transport.cwd !== 'string' || !Array.isArray(transport.argv)) {
-        return res.status(400).json({ error: 'Stdio requires an executable, argv array, and working directory.' });
+        return replyError(res, 400, 'Stdio requires an executable, argv array, and working directory.');
       }
       transport.environment = Array.isArray(transport.environment) ? transport.environment : [];
       transport.isolationMode = transport.isolationMode === 'container' ? 'container' : 'none';
     } else {
       transport.localDevelopment = transport.localDevelopment === true;
       transport.authRef = null;
-      if (typeof transport.url !== 'string') return res.status(400).json({ error: 'HTTP requires a URL.' });
+      if (typeof transport.url !== 'string') return replyError(res, 400, 'HTTP requires a URL.');
     }
 
     let record = await registry.create({
@@ -203,8 +203,6 @@ rigRouter.post('/connections', async (req, res) => {
         throw error;
       }
     }
-    // The operator proposed a connection through the UI. The connector has not
-    // acted; a connectionId here does not make it the actor.
     logTypedAudit({
       event: 'rig.connection.proposed',
       ...rigAuditFields('rig.connection.proposed', undefined, operatorPrincipalForRequest(req)),
@@ -213,33 +211,33 @@ rigRouter.post('/connections', async (req, res) => {
     });
     return res.status(201).json({ connection: publicConnection(record) });
   } catch (error: unknown) {
-    return res.status(400).json({ error: error instanceof Error ? error.message : String(error) });
+    return replyError(res, 400, error instanceof Error ? error.message : String(error));
   }
 });
 
 rigRouter.get('/connections/:connectionId/review', async (req, res) => {
   const connection = registry.get(req.params.connectionId);
-  if (!connection) return res.status(404).json({ error: 'Rig connection not found.' });
+  if (!connection) return replyError(res, 404, 'Rig connection not found.');
   try {
     return res.json({ review: await connectionReview(connection) });
   } catch (error: unknown) {
-    return res.status(400).json({ error: error instanceof Error ? error.message : String(error) });
+    return replyError(res, 400, error instanceof Error ? error.message : String(error));
   }
 });
 
 rigRouter.post('/connections/:connectionId/approve', async (req, res) => {
   const connectionId = req.params.connectionId;
   const current = registry.get(connectionId);
-  if (!current) return res.status(404).json({ error: 'Rig connection not found.' });
+  if (!current) return replyError(res, 404, 'Rig connection not found.');
   if (current.state !== 'approval-required' && current.state !== 'stopped' && current.state !== 'unreachable') {
-    return res.status(409).json({ error: 'Connection is not awaiting approval.' });
+    return replyError(res, 409, 'Connection is not awaiting approval.');
   }
 
   const approvalId = randomUUID();
   try {
     const review = await connectionReview(current);
     if (typeof req.body?.reviewDigest !== 'string' || req.body.reviewDigest !== review.reviewDigest) {
-      return res.status(409).json({ error: 'Connection details changed or were not reviewed. Review the exact launch specification again.' });
+      return replyError(res, 409, 'Connection details changed or were not reviewed. Review the exact launch specification again.');
     }
     let approved = current;
     if (current.transport.kind === 'stdio') {
@@ -322,7 +320,7 @@ rigRouter.post('/connections/:connectionId/approve', async (req, res) => {
 rigRouter.post('/connections/:connectionId/stop', async (req, res) => {
   try {
     const connectionId = req.params.connectionId;
-    if (!registry.get(connectionId)) return res.status(404).json({ error: 'Rig connection not found.' });
+    if (!registry.get(connectionId)) return replyError(res, 404, 'Rig connection not found.');
     await runtime.disconnect(connectionId);
     const record = await registry.update(connectionId, (value) => ({ ...value, state: 'stopped' }));
     logTypedAudit({
@@ -333,7 +331,7 @@ rigRouter.post('/connections/:connectionId/stop', async (req, res) => {
     });
     return res.json({ connection: publicConnection(record) });
   } catch (error: unknown) {
-    return res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+    return replyError(res, 500, error instanceof Error ? error.message : String(error));
   }
 });
 
@@ -341,7 +339,7 @@ rigRouter.delete('/connections/:connectionId', async (req, res) => {
   try {
     const connectionId = req.params.connectionId;
     const current = registry.get(connectionId);
-    if (!current) return res.status(404).json({ error: 'Rig connection not found.' });
+    if (!current) return replyError(res, 404, 'Rig connection not found.');
     await runtime.disconnect(connectionId);
     if (current.transport.kind === 'http' && current.transport.authRef) {
       await deleteBearerCredential(current.transport.authRef);
@@ -362,14 +360,14 @@ rigRouter.delete('/connections/:connectionId', async (req, res) => {
     });
     return res.json({ removed: true });
   } catch (error: unknown) {
-    return res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+    return replyError(res, 500, error instanceof Error ? error.message : String(error));
   }
 });
 
 rigRouter.post('/connections/:connectionId/refresh', async (req, res) => {
   const record = registry.get(req.params.connectionId);
   if (!record || record.state !== 'connected' || !runtime.isConnected(record.connectionId)) {
-    return res.status(409).json({ error: 'Connection is not active.' });
+    return replyError(res, 409, 'Connection is not active.');
   }
   try {
     const snapshot = await runtime.discover(record.connectionId, record.capabilities);
@@ -381,8 +379,6 @@ rigRouter.post('/connections/:connectionId/refresh', async (req, res) => {
       health: { state: 'current', lastSuccessfulContact: new Date().toISOString() },
     }));
     if (structuralChanged || presentationChanged) {
-      // PaneTera initiated discovery, compared snapshots, and recorded the
-      // observation. The connector is the evidence source, not the actor.
       logTypedAudit({
         event: 'rig.capabilities.changed',
         ...rigAuditFields('rig.capabilities.changed'),
@@ -393,7 +389,7 @@ rigRouter.post('/connections/:connectionId/refresh', async (req, res) => {
     return res.json({ connection: publicConnection(updated), attention: { structuralChanged, presentationChanged } });
   } catch (error: unknown) {
     await registry.update(record.connectionId, (value) => ({ ...value, health: { ...value.health, state: 'degraded' } }));
-    return res.status(502).json({ error: error instanceof Error ? error.message : String(error) });
+    return replyError(res, 502, error instanceof Error ? error.message : String(error));
   }
 });
 
@@ -401,16 +397,16 @@ rigRouter.put('/connections/:connectionId/capabilities/:capabilityId', async (re
   try {
     const { connectionId, capabilityId } = req.params;
     const current = registry.get(connectionId);
-    if (!current) return res.status(404).json({ error: 'Rig connection not found.' });
+    if (!current) return replyError(res, 404, 'Rig connection not found.');
     const existing = findCapability(current, capabilityId);
-    if (!existing) return res.status(404).json({ error: 'Capability not found.' });
+    if (!existing) return replyError(res, 404, 'Capability not found.');
     const enabled = req.body?.enabled === true;
     const requested = req.body?.permission as Permission;
     if (!['denied', 'proposable', 'auto-invocable'].includes(requested)) {
-      return res.status(400).json({ error: 'Invalid capability permission.' });
+      return replyError(res, 400, 'Invalid capability permission.');
     }
     if (requested === 'auto-invocable' && current.sourceClass !== 'panetera-managed') {
-      return res.status(403).json({ error: 'External capabilities cannot be made automatic.' });
+      return replyError(res, 403, 'External capabilities cannot be made automatic.');
     }
     const updateCards = (cards: CapabilityCard[]) => cards.map((card) => card.capabilityId === capabilityId
       ? { ...card, enabled, permission: enabled ? requested : 'denied' as Permission }
@@ -432,7 +428,7 @@ rigRouter.put('/connections/:connectionId/capabilities/:capabilityId', async (re
     });
     return res.json({ connection: publicConnection(updated) });
   } catch (error: unknown) {
-    return res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+    return replyError(res, 500, error instanceof Error ? error.message : String(error));
   }
 });
 
@@ -441,10 +437,10 @@ rigRouter.post('/proposals', (req, res) => {
   const connection = registry.get(String(connectionId));
   const capability = connection ? findCapability(connection, String(capabilityId)) : null;
   if (!connection || connection.state !== 'connected' || !capability || capability.kind !== 'tool') {
-    return res.status(404).json({ error: 'Connected tool capability not found.' });
+    return replyError(res, 404, 'Connected tool capability not found.');
   }
   if (!capability.enabled || capability.permission !== 'proposable') {
-    return res.status(403).json({ error: 'Capability is not enabled for proposals.' });
+    return replyError(res, 403, 'Capability is not enabled for proposals.');
   }
   const proposal = approvals.propose({
     connectionId: connection.connectionId,
@@ -473,7 +469,7 @@ rigRouter.post('/proposals/:proposalId/approve', (req, res) => {
     });
     return res.json({ approval });
   } catch (error: unknown) {
-    return res.status(409).json({ error: error instanceof Error ? error.message : String(error) });
+    return replyError(res, 409, error instanceof Error ? error.message : String(error));
   }
 });
 
@@ -505,8 +501,36 @@ export interface HandlerResult {
   payload: string;
 }
 
+export function mapStatusToErrorKind(status: number): RigErrorKind {
+  switch (status) {
+    case 400: return 'validation';
+    case 403: return 'authorization';
+    case 404: return 'not-found';
+    case 409: return 'validation';
+    case 500: return 'server-error';
+    case 502: return 'server-error';
+    default: return 'server-error';
+  }
+}
+
+export function replyError(res: express.Response, status: number, message: string, details?: unknown) {
+  const kind = mapStatusToErrorKind(status);
+  return res.status(status).json({
+    version: 2,
+    error: createTypedRigError(kind, message, details),
+  });
+}
+
 /** Serialize a small, trusted response object. Used only for denial and error bodies. */
 function jbody(status: number, obj: unknown): HandlerResult {
+  if (obj && typeof obj === 'object' && 'error' in obj && typeof (obj as { error: unknown }).error === 'string') {
+    const message = (obj as { error: string }).error;
+    const kind = mapStatusToErrorKind(status);
+    return {
+      status,
+      payload: JSON.stringify({ version: 2, error: createTypedRigError(kind, message) }),
+    };
+  }
   return { status, payload: JSON.stringify(obj) };
 }
 
