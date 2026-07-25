@@ -12,6 +12,8 @@ import { verifyHttpSpec, verifyStdioSpec } from './transportSecurity';
 import { deleteBearerCredential, storeBearerCredential } from './keychain';
 import { createTypedRigError, type CapabilityCard, type McpConnection, type Permission, type ProvenanceRecord, type RigErrorKind } from './types';
 
+import { buildUnifiedPortalManifest } from './unifiedRegistry';
+
 export const rigRouter = express.Router();
 const registry = new RigRegistry();
 const runtime = new RigRuntime(async (connectionId, error) => {
@@ -19,6 +21,11 @@ const runtime = new RigRuntime(async (connectionId, error) => {
 });
 const approvals = new CapabilityApprovalStore();
 const provenance = new ProvenanceStore();
+
+rigRouter.get('/portal-manifest', (_req, res) => {
+  const manifest = buildUnifiedPortalManifest(registry);
+  res.json(manifest);
+});
 
 function publicConnection(record: McpConnection): McpConnection {
   if (record.transport.kind !== 'stdio') return record;
