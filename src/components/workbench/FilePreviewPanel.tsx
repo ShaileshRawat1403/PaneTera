@@ -24,15 +24,31 @@ export const FilePreviewPanel: React.FC<PreviewProps> = ({
   onExplainCode
 }) => {
   const [copied, setCopied] = useState(false);
+  const [copiedPath, setCopiedPath] = useState(false);
   const [wrapLines, setWrapLines] = useState(false);
+  const [searchFilter, setSearchFilter] = useState('');
+  const [showSearch, setShowSearch] = useState(false);
   const [selectedLines, setSelectedLines] = useState<{ start: number; end: number } | null>(null);
   const [selectionStart, setSelectionStart] = useState<number | null>(null);
+
+  const getFileExtension = (path: string | null): string => {
+    if (!path) return '';
+    const parts = path.split('.');
+    return parts.length > 1 ? parts.pop()?.toLowerCase() || '' : '';
+  };
 
   const handleCopy = () => {
     if (!content) return;
     navigator.clipboard.writeText(content);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleCopyPath = () => {
+    if (!filePath) return;
+    navigator.clipboard.writeText(filePath);
+    setCopiedPath(true);
+    setTimeout(() => setCopiedPath(false), 2000);
   };
 
   const handleLineNumberClick = useCallback((lineNumber: number) => {
