@@ -1,26 +1,37 @@
 // src/components/ChatInput.tsx
 // Refined conversation composer input field with warm graphite glassmorphism,
-// subtle violet focus glow, and smooth micro-animations.
+// explicit native file/folder attachment grants, and smooth micro-animations.
 
 import React, { useState, KeyboardEvent } from 'react';
-import { Box, TextField, IconButton, Paper } from '@mui/material';
+import { Box, TextField, IconButton, Paper, Stack, Chip, Tooltip } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
+import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
+import FolderIcon from '@mui/icons-material/Folder';
+import CloseIcon from '@mui/icons-material/Close';
 import { accent, elevation, ink, radius, surface } from '../theme/cssTokens';
 import { transition, duration, easing } from '../theme/motion';
+import { NativePickerModal, NativeGrantResult } from './workstation/NativePickerModal';
 
 interface Props {
-  onSend: (text: string) => void;
+  onSend: (text: string, grants?: NativeGrantResult[]) => void;
   variant?: 'default' | 'studio';
+  token?: string;
 }
 
-const ChatInput: React.FC<Props> = ({ onSend, variant = 'default' }) => {
+const ChatInput: React.FC<Props> = ({ onSend, variant = 'default', token }) => {
   const [value, setValue] = useState('');
+  const [activeGrants, setActiveGrants] = useState<NativeGrantResult[]>([]);
+  const [pickerState, setPickerState] = useState<{ open: boolean; type: 'file' | 'folder' }>({
+    open: false,
+    type: 'file',
+  });
 
   const handleSend = () => {
     const trimmed = value.trim();
-    if (trimmed) {
-      onSend(trimmed);
+    if (trimmed || activeGrants.length > 0) {
+      onSend(trimmed, activeGrants);
       setValue('');
+      setActiveGrants([]);
     }
   };
 
@@ -29,6 +40,14 @@ const ChatInput: React.FC<Props> = ({ onSend, variant = 'default' }) => {
       e.preventDefault();
       handleSend();
     }
+  };
+
+  const handleGrantCreated = (grant: NativeGrantResult) => {
+    setActiveGrants(prev => [...prev.filter(g => g.token !== grant.token), grant]);
+  };
+
+  const handleRemoveGrant = (tokenToRemove: string) => {
+    setActiveGrants(prev => prev.filter(g => g.token !== tokenToRemove));
   };
 
   return (
@@ -62,6 +81,33 @@ const ChatInput: React.FC<Props> = ({ onSend, variant = 'default' }) => {
       aria-label="Message composer"
       onSubmit={e => { e.preventDefault(); handleSend(); }}
     >
+      {/* Active native grant chips */}
+      {activeGrants.length > 0 && (
+        <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap sx={{ px: 1, pt: 0.5, pb: 1 }}>
+          {activeGrants.map(grant => (
+            <Chip
+              key={grant.token}
+              icon={grant.type === 'file' ? <InsertDriveFileIcon sx={{ fontSize: 14 }} /> : <FolderIcon sx={{ fontSize: 14 }} />}
+              label={`${grant.name} (15m grant)`}
+              onDelete={() => handleRemoveGrant(grant.token)}
+              deleteIcon={<CloseIcon sx={{ fontSize: 12 }} />}
+              size="small"
+              sx={{
+                height: 22,
+                fontSize: '0.75rem',
+                backgroundColor: accent.violetMuted,
+                border: `1px solid ${accent.violetBorder}`,
+                color: ink.primary,
+                '& .MuiChip-deleteIcon': {
+                  color: ink.secondary,
+                  '&:hover': { color: ink.primary },
+                },
+              }}
+            />
+          ))}
+        </Stack>
+      )}
+
       <Box sx={{ display: 'flex', alignItems: 'center' }}>
         <TextField
           fullWidth
@@ -94,12 +140,36 @@ const ChatInput: React.FC<Props> = ({ onSend, variant = 'default' }) => {
             '& textarea::placeholder': { color: ink.muted, opacity: 1 }
           }}
         />
+
+        {/* Native attachment buttons */}
+        <Tooltip title="Attach File Grant">
+          <IconButton
+            size="small"
+            aria-label="Attach explicit file grant"
+            onClick={() => setPickerState({ open: true, type: 'file' })}
+            sx={{ color: ink.secondary, p: 0.75, ml: 0.5, '&:hover': { color: accent.violet } }}
+          >
+            <InsertDriveFileIcon sx={{ fontSize: 18 }} />
+          </IconButton>
+        </Tooltip>
+
+        <Tooltip title="Attach Folder Grant">
+          <IconButton
+            size="small"
+            aria-label="Attach explicit folder grant"
+            onClick={() => setPickerState({ open: true, type: 'folder' })}
+            sx={{ color: ink.secondary, p: 0.75, mr: 0.25, '&:hover': { color: accent.violet } }}
+          >
+            <FolderIcon sx={{ fontSize: 18 }} />
+          </IconButton>
+        </Tooltip>
+
         <IconButton
           color="primary"
           onClick={handleSend}
-          disabled={!value.trim()}
+          disabled={!value.trim() && activeGrants.length === 0}
           sx={variant === 'studio' ? {
-            ml: 0.75,
+            ml: 0.5,
             width: 38,
             height: 38,
             color: ink.onAccent,
@@ -128,6 +198,15 @@ const ChatInput: React.FC<Props> = ({ onSend, variant = 'default' }) => {
           <SendIcon />
         </IconButton>
       </Box>
+
+      {/* Native file/folder chooser modal */}
+      <NativePickerModal
+        open={pickerState.open}
+        type={pickerState.type}
+        token={token}
+        onClose={() => setPickerState(prev => ({ ...prev, open: false }))}
+        onGrantCreated={handleGrantCreated}
+      />
     </Paper>
   );
 };

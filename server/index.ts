@@ -24,6 +24,7 @@ import { probeWebPreview } from './workbench/webPreviewProbe';
 import { workbenchRouter } from './workbench/workbenchRoutes';
 import { rigRouter } from './rig/routes';
 import { headroomRouter } from './headroom/routes';
+import { nativeRouter } from './native/routes';
 import { LocalScopeStore, type LocalSelectionKind, type LocalSelectionGrant } from './headroom/localScopeStore';
 import { PANETERA_ASSISTANT_INSTRUCTION } from './assistantInstruction';
 import { geminiGenerateContentUrl } from './modelConfig';
@@ -85,6 +86,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 // browser/workbench routers above.
 app.use('/api/rig', rigRouter);
 app.use('/api/headroom', headroomRouter);
+app.use('/api/native-grants', nativeRouter);
 
 // ── Rook MCP Memory Bridge (optional) ────────────────────────────────────────
 // Spawns `rook mcp memory` as a child process and communicates over stdio
