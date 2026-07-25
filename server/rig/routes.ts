@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto';
 import { logTypedAudit } from '../auditRecord';
 import { operatorPrincipalForRequest, type OperatorPrincipal } from '../operatorPrincipal';
 import { rigAuditFields, rigInvocationFailureFields, type InvocationPhase } from './auditClassification';
-import { digest } from './canonical';
+import { checkArgumentLimits, digest, validateToolArguments } from './canonical';
 import { CapabilityApprovalStore } from './approval';
 import { ProvenanceStore } from './provenance';
 import { RigRegistry } from './registry';
@@ -594,6 +594,31 @@ export async function handleInvocation(
   const argumentsValue = input.arguments && typeof input.arguments === 'object' && !Array.isArray(input.arguments)
     ? (input.arguments as Record<string, unknown>)
     : {};
+
+  const limitsCheck = checkArgumentLimits(argumentsValue);
+  if (!limitsCheck.ok) {
+    const errorMsg = limitsCheck.error || 'Argument payload limits exceeded.';
+    logTypedAudit({
+      event: 'rig.invocation.failed',
+      ...rigInvocationFailureFields('target-invalid', principal),
+      correlation: { connectionId },
+      details: { phase: 'argument-limits', error: errorMsg },
+    });
+    return jbody(400, { error: errorMsg });
+  }
+
+  const validation = validateToolArguments(capability.inputSchema, argumentsValue);
+  if (!validation.valid) {
+    const errorMsg = validation.error || 'Invalid tool arguments.';
+    logTypedAudit({
+      event: 'rig.invocation.failed',
+      ...rigInvocationFailureFields('target-invalid', principal),
+      correlation: { connectionId },
+      details: { phase: 'argument-validation', error: errorMsg },
+    });
+    return jbody(400, { error: errorMsg });
+  }
+
   let phase: InvocationPhase = 'approval-claim';
   let approval: { proposalId: string; approvalId: string } | undefined;
   try {

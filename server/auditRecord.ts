@@ -83,7 +83,10 @@ export interface TypedAuditRecord {
   correlation: AuditCorrelation;
   /** Bounded, scrubbed domain detail. Kept at top level for read compatibility. */
   details: Record<string, unknown>;
+  prevHash?: string;
 }
+
+let lastAuditHash = '0';
 
 const MAX_STRING = 2_048;
 const MAX_DETAILS_BYTES = 8_192;
@@ -396,7 +399,9 @@ export function logTypedAudit(input: TypedAuditInput): TypedAuditRecord {
       policyDecision: input.policyDecision,
       correlation: scrubCorrelation(input.correlation ?? {}),
       details: boundDetails(input.details ?? {}),
+      prevHash: lastAuditHash,
     };
+    lastAuditHash = crypto.createHash('sha256').update(JSON.stringify({ recordId: record.recordId, prevHash: lastAuditHash })).digest('hex');
   } catch {
     record = {
       recordId: `audit-${crypto.randomUUID()}`,
@@ -408,7 +413,9 @@ export function logTypedAudit(input: TypedAuditInput): TypedAuditRecord {
       policyDecision: 'not-applicable',
       correlation: {},
       details: { note: 'Audit record could not be built and was replaced.' },
+      prevHash: lastAuditHash,
     };
+    lastAuditHash = crypto.createHash('sha256').update(JSON.stringify({ recordId: record.recordId, prevHash: lastAuditHash })).digest('hex');
   }
   appendAuditLine(record);
   return record;

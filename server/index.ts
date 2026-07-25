@@ -34,6 +34,14 @@ export const app = express();
 const PORT = Number(process.env.PORT) || 4000;
 const TOKEN = process.env.PORTAL_TOKEN || '';
 
+app.use((_req: Request, res: Response, next: NextFunction) => {
+  res.setHeader('Content-Security-Policy', "default-src 'self'");
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  next();
+});
+
 // Fail fast if token placeholder is still present
 if (TOKEN === 'changeme-12345' || !TOKEN) {
   console.error('\n[ERROR] PORTAL_TOKEN is still the default placeholder. Please set a strong token in .env before starting.\n');

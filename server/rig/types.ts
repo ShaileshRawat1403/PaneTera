@@ -139,6 +139,7 @@ export interface ProvenanceRecord {
   };
   integrity: 'verified' | 'unverified' | 'broken';
   retentionClass: string;
+  prevHash?: string;
 }
 
 export interface LlmToolDefinition {

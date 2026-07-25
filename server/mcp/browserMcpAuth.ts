@@ -6,6 +6,7 @@ export interface McpClientPrincipal {
   clientId: string;
   subjectId: string;
   scopes: string[];
+  expiresAt?: number;
 }
 
 // In memory revocation list
@@ -15,9 +16,12 @@ const revokedTokens = new Set<string>();
 // In production, this would be populated from secure environment variables or a database.
 const credentialRegistry = new Map<string, McpClientPrincipal>();
 
-export function registerMcpCredential(credentialToken: string, principal: McpClientPrincipal) {
+export const DEFAULT_MCP_TOKEN_TTL_MS = Number(process.env.MCP_TOKEN_TTL_MS || 3_600_000);
+
+export function registerMcpCredential(credentialToken: string, principal: McpClientPrincipal, ttlMs = DEFAULT_MCP_TOKEN_TTL_MS) {
   const tokenHash = crypto.createHash('sha256').update(credentialToken).digest('hex');
-  credentialRegistry.set(tokenHash, principal);
+  const expiresAt = Date.now() + ttlMs;
+  credentialRegistry.set(tokenHash, { ...principal, expiresAt });
 }
 
 export function revokeLocalCredential(credentialToken: string) {
@@ -65,6 +69,18 @@ export function validateMcpClient(req: Request): { status: number, error?: strin
         detail: 'Invalid credential',
       })
     return { status: 401, error: 'Unauthorized: Invalid credential' };
+  }
+
+  if (principal.expiresAt && Date.now() > principal.expiresAt) {
+    emitMcpFacadeAudit({
+      principal: null,
+      event: 'mcp.auth.rejected',
+      capability: 'mcp.connect',
+      policyDecision: 'denied',
+      outcome: 'denied',
+      detail: 'Credential expired',
+    });
+    return { status: 401, error: 'Unauthorized: Credential expired' };
   }
 
   // 2. Validate Host (403)

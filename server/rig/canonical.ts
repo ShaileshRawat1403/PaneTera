@@ -95,3 +95,76 @@ export function snapshotDigest(snapshot: Pick<CapabilitySnapshot, 'tools' | 'res
     presentationDigest: digest(cards.map(({ capabilityId, presentationDigest }) => ({ capabilityId, presentationDigest }))),
   };
 }
+
+export function validateToolArguments(
+  schema: Record<string, unknown> | null,
+  args: Record<string, unknown>
+): { valid: boolean; error?: string } {
+  if (!schema || typeof schema !== 'object') return { valid: true };
+
+  const required = Array.isArray(schema.required) ? (schema.required as string[]) : [];
+  for (const field of required) {
+    if (args[field] === undefined || args[field] === null) {
+      return { valid: false, error: `Missing required field: ${field}` };
+    }
+  }
+
+  const properties = schema.properties && typeof schema.properties === 'object' && !Array.isArray(schema.properties)
+    ? (schema.properties as Record<string, Record<string, unknown>>)
+    : null;
+
+  if (properties) {
+    for (const [key, value] of Object.entries(args)) {
+      const propSchema = properties[key];
+      if (!propSchema) continue;
+
+      const expectedType = typeof propSchema.type === 'string' ? propSchema.type : null;
+      if (!expectedType) continue;
+
+      if (expectedType === 'string' && typeof value !== 'string') {
+        return { valid: false, error: `Field '${key}' must be a string` };
+      }
+      if (expectedType === 'number' && typeof value !== 'number') {
+        return { valid: false, error: `Field '${key}' must be a number` };
+      }
+      if (expectedType === 'boolean' && typeof value !== 'boolean') {
+        return { valid: false, error: `Field '${key}' must be a boolean` };
+      }
+      if (expectedType === 'array' && !Array.isArray(value)) {
+        return { valid: false, error: `Field '${key}' must be an array` };
+      }
+      if (expectedType === 'object' && (typeof value !== 'object' || value === null || Array.isArray(value))) {
+        return { valid: false, error: `Field '${key}' must be an object` };
+      }
+    }
+  }
+
+  return { valid: true };
+}
+
+export function checkArgumentLimits(args: Record<string, unknown>): { ok: boolean; error?: string } {
+  const json = JSON.stringify(args);
+  if (json.length > 65_536) {
+    return { ok: false, error: 'Argument payload exceeds maximum size of 64 KB.' };
+  }
+
+  let totalKeys = 0;
+  const visit = (val: unknown, depth: number): boolean => {
+    if (depth > 8) return false;
+    if (val && typeof val === 'object') {
+      const keys = Object.keys(val as object);
+      totalKeys += keys.length;
+      if (totalKeys > 100) return false;
+      for (const k of keys) {
+        if (!visit((val as Record<string, unknown>)[k], depth + 1)) return false;
+      }
+    }
+    return true;
+  };
+
+  if (!visit(args, 0)) {
+    return { ok: false, error: 'Argument depth exceeds 8 levels or total keys exceed 100.' };
+  }
+
+  return { ok: true };
+}
