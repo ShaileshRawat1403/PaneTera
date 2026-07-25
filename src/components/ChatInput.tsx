@@ -1,9 +1,13 @@
 // src/components/ChatInput.tsx
+// Refined conversation composer input field with warm graphite glassmorphism,
+// subtle violet focus glow, and smooth micro-animations.
+
 import React, { useState, KeyboardEvent } from 'react';
 import { Box, TextField, IconButton, Paper } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
 import { accent, elevation, ink, radius, surface } from '../theme/cssTokens';
 import { transition, duration, easing } from '../theme/motion';
+
 interface Props {
   onSend: (text: string) => void;
   variant?: 'default' | 'studio';
@@ -36,16 +40,22 @@ const ChatInput: React.FC<Props> = ({ onSend, variant = 'default' }) => {
         background: surface.raised,
         border: `1px solid ${surface.border}`,
         boxShadow: elevation.card,
-        transition: transition(['background-color', 'box-shadow', 'border-color'], duration.quick),
+        backdropFilter: 'blur(12px)',
+        transition: transition(['background-color', 'box-shadow', 'border-color', 'transform'], duration.settled, easing.enter),
         '&:focus-within': {
           borderColor: accent.violetBorder,
-          boxShadow: elevation.focusRing
+          boxShadow: `0 0 20px ${accent.violetMuted}, ${elevation.focusRing}`,
         }
       } : { 
         p: 1,
         borderRadius: `${radius.md}px`,
         background: surface.base,
-        transition: transition(['background-color', 'box-shadow', 'border-color'], duration.quick)
+        border: `1px solid ${surface.border}`,
+        transition: transition(['background-color', 'box-shadow', 'border-color'], duration.quick),
+        '&:focus-within': {
+          borderColor: accent.violetBorder,
+          boxShadow: elevation.focusRing,
+        }
       }}
       component="form"
       role="form"
@@ -94,14 +104,23 @@ const ChatInput: React.FC<Props> = ({ onSend, variant = 'default' }) => {
             height: 38,
             color: ink.onAccent,
             background: accent.violet,
-            transition: transition(['background-color', 'transform'], duration.quick),
-            '&:hover': { background: accent.violetHover },
+            transition: transition(['background-color', 'transform', 'box-shadow'], duration.quick),
+            '&:hover': {
+              background: accent.violetHover,
+              transform: 'scale(1.05)',
+              boxShadow: `0 0 12px ${accent.violetMuted}`,
+            },
+            '&:active': {
+              transform: 'scale(0.95)',
+            },
             '&.Mui-disabled': { background: accent.violetMuted, color: ink.disabled },
             '&:focus-visible': { outline: `2px solid ${accent.violet}`, outlineOffset: 2 }
           } : { 
             ml: 1,
             color: accent.violet,
             transition: transition(['background-color', 'transform'], duration.quick),
+            '&:hover': { transform: 'scale(1.05)' },
+            '&:active': { transform: 'scale(0.95)' },
             '&.Mui-disabled': { color: ink.disabled }
           }}
           aria-label="Send message"
