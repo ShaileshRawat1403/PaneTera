@@ -57,6 +57,15 @@ interface ProposedActionCardProps {
   };
   evidenceLinks?: EvidenceLink[];
   onEvidenceClick?: (id: string) => void;
+
+  /** Multi-step tool execution proposals. */
+  steps?: {
+    id: string;
+    label: string;
+    command: string;
+    riskLevel?: 'safe' | 'review' | 'dangerous';
+    diff?: { additions: string[]; deletions: string[] };
+  }[];
 }
 
 /** Plain language for an internal execution mode identifier. */
@@ -116,6 +125,7 @@ export const ProposedActionCard: React.FC<ProposedActionCardProps> = ({
   diff,
   evidenceLinks,
   onEvidenceClick,
+  steps,
 }) => {
   // Approving fires once, immediately. The previous version started a
   // two-second countdown with an Undo, which meant the consequential moment was
@@ -279,10 +289,59 @@ export const ProposedActionCard: React.FC<ProposedActionCardProps> = ({
         </Typography>
       )}
 
+      {/* Multi-step pipeline sequence rendering */}
+      {steps && steps.length > 0 && (
+        <Box sx={{ mt: 1.5, mb: 2, display: 'flex', flexDirection: 'column', gap: 1 }}>
+          <Typography variant="caption" sx={{ color: ink.muted, fontWeight: 600, fontSize: '0.75rem', letterSpacing: '0.05em' }}>
+            EXECUTION STEPS ({steps.length})
+          </Typography>
+          {steps.map((step, idx) => (
+            <Box
+              key={step.id || idx}
+              sx={{
+                p: 1.25,
+                borderRadius: `${radius.sm}px`,
+                backgroundColor: surface.sunken,
+                border: `1px solid ${surface.border}`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 1,
+              }}
+            >
+              <Box sx={{ minWidth: 0 }}>
+                <Typography variant="caption" sx={{ color: accent.violet, fontWeight: 650, fontSize: '0.75rem', mr: 1 }}>
+                  Step {idx + 1}:
+                </Typography>
+                <Typography variant="caption" sx={{ color: ink.primary, fontFamily: typography.mono, fontSize: '0.75rem' }}>
+                  {step.command}
+                </Typography>
+                {step.label && (
+                  <Typography variant="caption" sx={{ color: ink.secondary, display: 'block', fontSize: '0.75rem' }}>
+                    {step.label}
+                  </Typography>
+                )}
+              </Box>
+              <Chip
+                label={describeRisk(step.riskLevel || 'safe')}
+                size="small"
+                sx={{
+                  height: 18,
+                  fontSize: '0.75rem',
+                  backgroundColor: riskColours(step.riskLevel || 'safe').muted,
+                  color: riskColours(step.riskLevel || 'safe').colour,
+                  border: `1px solid ${riskColours(step.riskLevel || 'safe').colour}`,
+                }}
+              />
+            </Box>
+          ))}
+        </Box>
+      )}
+
       {isDryRun && (
         <Typography
           variant="caption"
-          sx={{ color: ink.secondary, display: 'block', mt: 1, mb: 1.5 }}
+          sx={{ color: ink.secondary, display: 'block', mt: 1, mb: 1.5, fontSize: '0.75rem' }}
         >
           This simulates the command and shows what it would do. Nothing is changed.
         </Typography>
