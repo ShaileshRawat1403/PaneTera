@@ -54,7 +54,7 @@ function StartAction({
         borderRadius: `${radius.md}px`,
         border: `1px solid ${primary ? accent.violetBorder : surface.border}`,
         backgroundColor: primary ? accent.violetMuted : surface.raised,
-        boxShadow: primary ? '0 2px 12px rgba(185, 165, 232, 0.08)' : elevation.card,
+        boxShadow: primary ? elevation.card : elevation.card,
         backdropFilter: 'blur(8px)',
         transition: transition(['background-color', 'border-color', 'box-shadow', 'transform'], duration.settled, easing.enter),
         // Seam accent hairline
@@ -64,7 +64,7 @@ function StartAction({
         '&:hover': {
           backgroundColor: primary ? accent.violetHover : surface.raisedHover,
           borderColor: primary ? accent.violetBorder : surface.borderStrong,
-          boxShadow: primary ? '0 8px 28px rgba(185, 165, 232, 0.22)' : elevation.cardHover,
+          boxShadow: elevation.cardHover,
           transform: 'translateY(-2px) scale(1.005)',
         },
         '&:active': {
@@ -102,7 +102,6 @@ export function CanvasStart({ onChooseProject, onConnectCapability, onDescribeGo
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: surface.canvas,
-        background: 'radial-gradient(ellipse at 50% 30%, rgba(33, 28, 24, 0.4) 0%, rgba(27, 25, 23, 0.95) 100%)',
         pt: { xs: 4, md: 6 },
         pb: { xs: 6, md: 14 },
         px: { xs: 3, md: 6 },
