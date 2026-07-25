@@ -62,7 +62,13 @@ import {
 // Web-preview and workspace-route matching now happen inside the single
 // resolver. App consumes resolved envelopes and does not classify.
 import type { WebPreviewRequest } from './utils/webPreviewIntent';
-import { requestBrowserOperatorStatus, requestWebObservation } from './utils/browserOperatorBridge';
+import {
+  type BrowserLiveFrame,
+  requestBrowserLiveCommand,
+  requestBrowserLiveView,
+  requestBrowserOperatorStatus,
+  requestWebObservation,
+} from './utils/browserOperatorBridge';
 import { buildBrowserEvidenceBlock, firstAttachedWebContext, shouldInspectActiveWebPreview } from './utils/browserEvidenceContext';
 
 const RigPanel = React.lazy(async () => {
@@ -95,6 +101,7 @@ type Message = TranscriptMessage;
 type WebPreviewInspectionState =
   | { kind: 'idle' }
   | { kind: 'requesting' }
+  | { kind: 'live'; frame: BrowserLiveFrame }
   | { kind: 'evidence'; record: BrowserEvidenceRecord }
   | { kind: 'error'; detail: string };
 
@@ -760,10 +767,13 @@ const App: React.FC = () => {
 
   const clearWebPreviewInspection = () => {
     webPreviewInspectionAttempt.current += 1;
+    if (webPreviewInspection.kind === 'live') {
+      void requestBrowserLiveCommand(webPreviewInspection.frame.sessionId, 'close').catch(() => {});
+    }
     setWebPreviewInspection({ kind: 'idle' });
   };
 
-  /** Run the explicit, extension-owned approval journey and put its evidence in the canvas. */
+  /** Open an explicit, extension-owned real Chrome view in the canvas. */
   const inspectWebPreview = async () => {
     if (!webPreview || !browserOperatorConnected) return;
     const requested = webPreview;
@@ -773,33 +783,21 @@ const App: React.FC = () => {
     setActiveReply('Waiting for Browser Operator approval…');
 
     try {
-      const { captureId } = await requestWebObservation(requested.url);
-      const response = await fetch(`/api/browser/observations/${encodeURIComponent(captureId)}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const body: unknown = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        const detail = body && typeof body === 'object' && 'error' in body
-          ? String((body as { error: unknown }).error)
-          : `Browser evidence lookup failed (${response.status})`;
-        throw new Error(detail);
+      const frame = await requestBrowserLiveView(requested.url);
+      if (webPreviewInspectionAttempt.current !== attempt) {
+        void requestBrowserLiveCommand(frame.sessionId, 'close').catch(() => {});
+        return;
       }
-      if (!body || typeof body !== 'object') {
-        throw new Error('Browser Operator returned an invalid evidence record.');
-      }
-      if (webPreviewInspectionAttempt.current !== attempt) return;
 
-      const record = body as BrowserEvidenceRecord;
-      setWebPreviewInspection({ kind: 'evidence', record });
-      const observedUrl = record.source?.url || record.url || requested.url;
+      setWebPreviewInspection({ kind: 'live', frame });
       addMessage({
         role: 'assistant',
         content:
-          `Browser Operator captured approval-gated evidence from ${observedUrl}. ` +
-          'It is untrusted and is now shown in the canvas.',
+          `Browser Operator opened an approval-gated real Chrome view of ${frame.url}. ` +
+          'The page remains untrusted and its live pixels are now mirrored in the canvas.',
         intent: 'web_preview',
       });
-      setActiveReply(`Showing Browser Operator evidence from ${requested.name}.`);
+      setActiveReply(`Showing the managed Chrome view of ${requested.name}.`);
     } catch (error: unknown) {
       if (webPreviewInspectionAttempt.current !== attempt) return;
       const detail = error instanceof Error ? error.message : String(error);

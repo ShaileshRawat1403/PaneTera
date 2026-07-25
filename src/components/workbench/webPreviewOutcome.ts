@@ -159,7 +159,7 @@ export function classifyFramingHeaders(headers: {
 function remediesFor(operator: OperatorAvailability, includeRetry: boolean): PreviewRemedy[] {
   const operatorRemedy: PreviewRemedy =
     operator === 'connected'
-      ? { label: 'Inspect with Browser Operator', kind: 'inspect-with-operator', primary: true }
+      ? { label: 'Open real Chrome view', kind: 'inspect-with-operator', primary: true }
       : { label: 'Connect Browser Operator in Rig', kind: 'connect-operator', primary: true };
 
   const remedies: PreviewRemedy[] = [
@@ -264,7 +264,7 @@ export function describeOutcome(
     case 'permitted':
       return (
         `I prepared ${context.url} in the canvas as an untrusted web source. ` +
-        'I have not read its contents. Choose Browser Operator for readable evidence, ' +
+        'I have not read its contents. Choose Browser Operator for a real managed Chrome view, ' +
         'try an embedded preview, or open it in your browser.'
       );
 

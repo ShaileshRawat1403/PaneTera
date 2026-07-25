@@ -125,6 +125,36 @@ window.addEventListener('message', (event) => {
     return;
   }
 
+  if (message.type === 'OPEN_WEB_LIVE') {
+    requestExtension({
+      type: 'request-live-web-session',
+      url: message.url,
+      requestId: message.nonce,
+    }, (response) => {
+      reply('WEB_LIVE_RESULT', {
+        ...response,
+        nonce: message.nonce,
+      });
+    });
+    return;
+  }
+
+  if (message.type === 'WEB_LIVE_COMMAND') {
+    requestExtension({
+      type: 'request-live-web-command',
+      sessionId: message.sessionId,
+      action: message.action,
+      point: message.point,
+      requestId: message.nonce,
+    }, (response) => {
+      reply('WEB_LIVE_COMMAND_RESULT', {
+        ...response,
+        nonce: message.nonce,
+      });
+    });
+    return;
+  }
+
   if (message.type === 'STATUS_CHECK') {
     requestExtension({ type: 'check-status', requestId: message.nonce }, (response) => {
       reply('OPERATOR_STATUS', {

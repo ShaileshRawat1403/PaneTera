@@ -13,6 +13,7 @@ const zipOutputPath = path.join(distDir, 'panetera-browser-operator.zip');
 const ALLOWED_RUNTIME_FILES = [
   'manifest.json',
   'background.js',
+  'liveSession.js',
   'messageRouting.js',
   'paneteraBridge.js',
   'storage.js',

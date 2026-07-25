@@ -13,6 +13,11 @@ import {
 import { request } from './transport.js';
 import { normalizePublicHttpUrl, validateOrigin } from './shared/validation.js';
 import { handleExtensionMessage, performCaptureWithAdapters } from './messageRouting.js';
+import {
+  closeLiveSessionsForTab,
+  commandLiveSession,
+  startLiveSession,
+} from './liveSession.js';
 
 const pendingWebObservations = new Map();
 
@@ -135,6 +140,21 @@ async function captureApprovedWebUrl(url) {
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type === 'start-live-web-session') {
+    if (!isObservePage(sender)) {
+      sendResponse({ success: false, error: 'Live web viewing must start from the Browser Operator approval page.' });
+      return false;
+    }
+    startLiveSession({
+      url: message.url,
+      consumerTabId: message.consumerTabId,
+      permissionWasPreexisting: message.permissionWasPreexisting === true,
+    }, { chromeApi: chrome, waitForTabReady }).then(sendResponse).catch(error => {
+      sendResponse({ success: false, error: error?.message || 'The live browser view could not be started.' });
+    });
+    return true;
+  }
+
   if (message?.type === 'capture-web-url') {
     if (!isObservePage(sender)) {
       sendResponse({ success: false, error: 'Web inspection must start from the Browser Operator approval page.' });
@@ -165,6 +185,64 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name !== 'panetera-local-bridge') return;
   port.onMessage.addListener((message) => {
+    if (message?.type === 'request-live-web-command') {
+      commandLiveSession({
+        sessionId: message.sessionId,
+        consumerTabId: port.sender?.tab?.id,
+        action: message.action,
+        point: message.point,
+      }, { chromeApi: chrome }).then((result) => {
+        port.postMessage({ ...result, requestId: message.requestId });
+      }).catch((error) => {
+        port.postMessage({
+          success: false,
+          error: error?.message || 'The Browser Operator live command failed.',
+          requestId: message.requestId,
+        });
+      });
+      return;
+    }
+
+    if (message?.type === 'request-live-web-session') {
+      const normalized = normalizePublicHttpUrl(message.url);
+      if (!normalized) {
+        port.postMessage({ success: false, error: 'Only public HTTP or HTTPS pages can be viewed.', requestId: message.requestId });
+        return;
+      }
+      request('/api/browser/session').then((sessionResponse) => {
+        if (!sessionResponse.ok) {
+          port.postMessage({ success: false, error: 'Connect the Browser Operator in Rig first.', requestId: message.requestId });
+          return;
+        }
+        let approvalTabId;
+        const onApprovalClosed = (tabId) => {
+          if (tabId !== approvalTabId) return;
+          settle({ success: false, error: 'Live web viewing was cancelled.' });
+        };
+        const settle = (result) => {
+          chrome.tabs.onRemoved.removeListener(onApprovalClosed);
+          pendingWebObservations.delete(message.requestId);
+          try { port.postMessage({ ...result, requestId: message.requestId }); } catch {}
+        };
+        pendingWebObservations.set(message.requestId, settle);
+        chrome.tabs.create({
+          url: chrome.runtime.getURL(
+            `observe.html?mode=live&consumerTabId=${encodeURIComponent(port.sender?.tab?.id ?? '')}` +
+            `&requestId=${encodeURIComponent(message.requestId)}&url=${encodeURIComponent(normalized)}`
+          ),
+          active: true,
+        }).then((tab) => {
+          approvalTabId = tab.id;
+          chrome.tabs.onRemoved.addListener(onApprovalClosed);
+        }).catch((error) => settle({ success: false, error: error?.message || 'Could not open live-view approval.' }));
+      }).catch(() => {
+        try {
+          port.postMessage({ success: false, error: 'The local PaneTera server is unreachable.', requestId: message.requestId });
+        } catch {}
+      });
+      return;
+    }
+
     if (message?.type === 'request-web-observation') {
       const normalized = normalizePublicHttpUrl(message.url);
       if (!normalized) {
@@ -218,6 +296,10 @@ chrome.runtime.onConnect.addListener((port) => {
       pendingWebObservations.delete(requestId);
     }
   });
+});
+
+chrome.tabs.onRemoved.addListener((tabId) => {
+  closeLiveSessionsForTab(tabId, { chromeApi: chrome }).catch(() => {});
 });
 
 // Event Listeners: Context Menu and Keyboard Shortcut

@@ -16,7 +16,9 @@ import BlockIcon from '@mui/icons-material/Block';
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import ShieldOutlinedIcon from '@mui/icons-material/ShieldOutlined';
 import { BrowserEvidenceSurface } from './BrowserEvidenceSurface';
+import { BrowserLiveSurface } from './BrowserLiveSurface';
 import type { BrowserEvidenceRecord } from './browserEvidenceSurfaceModel';
+import type { BrowserLiveFrame } from '../../utils/browserOperatorBridge';
 import { resolvePublicWebPreviewSandbox } from '../../utils/webPreviewIntent';
 import { accent, ink, radius, status, surface, typography } from '../../theme/cssTokens';
 import { transition } from '../../theme/motion';
@@ -51,6 +53,7 @@ interface WebPreviewSurfaceProps {
   inspection?:
     | { kind: 'idle' }
     | { kind: 'requesting' }
+    | { kind: 'live'; frame: BrowserLiveFrame }
     | { kind: 'evidence'; record: BrowserEvidenceRecord }
     | { kind: 'error'; detail: string };
   onClearEvidence?: () => void;
@@ -131,6 +134,7 @@ export function WebPreviewSurface({
 
   const presentation = presentOutcome(outcome, { siteName: name, operator });
   const previewStatus = presentPreviewStatus({ siteName: name, operator });
+  const hasOperatorSurface = inspection.kind === 'live' || inspection.kind === 'evidence';
 
   const runRemedy = (kind: string) => {
     if (inspection.kind === 'requesting') return;
@@ -268,7 +272,14 @@ export function WebPreviewSurface({
           />
         )}
 
-        {inspection.kind !== 'evidence' && presentation.showFrame && !embedRevealed && (
+        {inspection.kind === 'live' && (
+          <BrowserLiveSurface
+            initialFrame={inspection.frame}
+            onClose={() => onClearEvidence?.()}
+          />
+        )}
+
+        {!hasOperatorSurface && presentation.showFrame && !embedRevealed && (
           <Box
             role="region"
             aria-label="Website viewing options"
@@ -313,7 +324,7 @@ export function WebPreviewSurface({
                   </Typography>
                   <Typography variant="body2" sx={{ color: ink.secondary, lineHeight: 1.65, mt: 0.75 }}>
                     Embedded previews are quick, but some sites return a blank frame. Browser Operator is
-                    the reliable route: it asks for approval and brings readable evidence back into this canvas.
+                    the reliable route: it asks for approval, opens the real page in Chrome, and mirrors it here.
                   </Typography>
                 </Box>
               </Box>
@@ -340,7 +351,7 @@ export function WebPreviewSurface({
           </Box>
         )}
 
-        {inspection.kind !== 'evidence' && presentation.showFrame && embedRevealed && sandbox && (
+        {!hasOperatorSurface && presentation.showFrame && embedRevealed && sandbox && (
           <Box
             sx={{
               flexGrow: 1,
@@ -359,7 +370,7 @@ export function WebPreviewSurface({
           </Box>
         )}
 
-        {inspection.kind !== 'evidence' && presentation.showFrame && embedRevealed && (
+        {!hasOperatorSurface && presentation.showFrame && embedRevealed && (
           <Box
             role="status"
             sx={{
@@ -389,7 +400,7 @@ export function WebPreviewSurface({
           </Box>
         )}
 
-        {inspection.kind !== 'evidence' && !presentation.showFrame && (
+        {!hasOperatorSurface && !presentation.showFrame && (
           <Box
             role={outcome.kind === 'checking' ? 'status' : 'alert'}
             aria-live="polite"

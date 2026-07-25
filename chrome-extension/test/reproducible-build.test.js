@@ -23,5 +23,6 @@ const listing = execFileSync('unzip', ['-l', build2.path], { encoding: 'utf8' })
 const entries = listing.split('\n').filter(line => /\d{2}-\d{2}-1980/.test(line));
 assert.ok(entries.length > 0, 'archive must contain timestamped runtime entries');
 assert.ok(entries.every(line => line.includes('01-01-1980')), 'every archive entry must use the fixed build date');
+assert.match(listing, /\bliveSession\.js\b/, 'the packaged extension must contain the managed live-view runtime');
 
 console.log(`✅ reproducible-build tests passed. (Hash: ${build1.hash})`);

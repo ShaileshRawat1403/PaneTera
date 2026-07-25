@@ -77,6 +77,56 @@ assert.deepStrictEqual(outgoing.pop(), {
   nonce: 'observe-1',
 });
 
+sendToBridge({ type: 'OPEN_WEB_LIVE', url: 'https://example.com/', nonce: 'live-open-1' });
+assert.deepStrictEqual(portMessages.pop(), {
+  type: 'request-live-web-session',
+  url: 'https://example.com/',
+  requestId: 'live-open-1',
+});
+responseListeners[0]({
+  requestId: 'live-open-1',
+  success: true,
+  sessionId: 'live-1',
+  screenshotDataUrl: 'data:image/jpeg;base64,AAAA',
+});
+assert.deepStrictEqual(outgoing.pop(), {
+  source: 'panetera-browser-operator',
+  type: 'WEB_LIVE_RESULT',
+  requestId: 'live-open-1',
+  success: true,
+  sessionId: 'live-1',
+  screenshotDataUrl: 'data:image/jpeg;base64,AAAA',
+  nonce: 'live-open-1',
+});
+
+sendToBridge({
+  type: 'WEB_LIVE_COMMAND',
+  sessionId: 'live-1',
+  action: 'inspect',
+  point: { xRatio: 0.25, yRatio: 0.5 },
+  nonce: 'live-command-1',
+});
+assert.deepStrictEqual(portMessages.pop(), {
+  type: 'request-live-web-command',
+  sessionId: 'live-1',
+  action: 'inspect',
+  point: { xRatio: 0.25, yRatio: 0.5 },
+  requestId: 'live-command-1',
+});
+responseListeners[0]({
+  requestId: 'live-command-1',
+  success: true,
+  component: { tagName: 'button' },
+});
+assert.deepStrictEqual(outgoing.pop(), {
+  source: 'panetera-browser-operator',
+  type: 'WEB_LIVE_COMMAND_RESULT',
+  requestId: 'live-command-1',
+  success: true,
+  component: { tagName: 'button' },
+  nonce: 'live-command-1',
+});
+
 disconnectListeners[0]();
 assert.strictEqual(outgoing.pop().type, 'RELOAD_REQUIRED');
 sendToBridge({ type: 'PING', nonce: 'ping-after-reload' });
