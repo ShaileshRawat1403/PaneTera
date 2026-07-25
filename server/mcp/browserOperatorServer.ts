@@ -1,18 +1,9 @@
+import { createHash } from 'crypto';
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { browserEvidenceReadService, UnauthorizedAccessError } from '../browserEvidenceReadService';
 import { McpClientPrincipal } from './browserMcpAuth';
 import { emitMcpFacadeAudit } from './mcpAudit';
-
-// Every terminal outcome of a façade handler is audited exactly once, and
-// success means a completed handler response, not merely a successful lookup.
-//
-// An earlier version recorded success right after the lookup returned, then
-// serialised the value afterwards. A value that looked up fine but failed to
-// serialise (a circular structure) then produced a success record beside a
-// client failure. Serialisation now happens before the success record, inside
-// the audited boundary, so a build failure is the one error record and no
-// success record is written.
 
 type McpToolResult = { content: { type: 'text'; text: string }[]; isError?: boolean };
 type McpResourceResult = { contents: { uri: string; text: string }[] };
@@ -43,19 +34,6 @@ function auditRead(ctx: AuditContext, outcome: 'success' | 'denied' | 'error', p
   });
 }
 
-/**
- * Run a read and construct its response under one audited boundary.
- *
- * `build` performs the response construction, including the serialisation that
- * can fail. Exactly one record is emitted:
- *   - denied, if the lookup threw an ownership rejection;
- *   - error, if the lookup threw anything else (re-thrown), returned nothing, or
- *     the response failed to build;
- *   - success, only once a complete response has been constructed.
- *
- * `onDenied` and `onMissing` shape the non-success reply, which differs by
- * caller: a tool returns an error result, a resource throws.
- */
 async function auditedRead<T, R>(opts: {
   ctx: AuditContext;
   lookup: () => T | undefined;
@@ -84,8 +62,6 @@ async function auditedRead<T, R>(opts: {
   try {
     result = opts.build(value);
   } catch (e: unknown) {
-    // A successful lookup whose response could not be built is a failure, not a
-    // success. This is the ordering the reviewer's circular-structure case hit.
     auditRead(opts.ctx, 'error', 'allowed', e instanceof Error ? e.message : String(e));
     throw e;
   }
@@ -94,11 +70,6 @@ async function auditedRead<T, R>(opts: {
   return result;
 }
 
-/**
- * The same boundary for handlers with no per-target lookup (list, status): build
- * and serialise first, record success only if that completed, one error record
- * otherwise.
- */
 async function auditedProduce<R>(ctx: AuditContext, produce: () => R): Promise<R> {
   let result: R;
   try {
@@ -111,7 +82,7 @@ async function auditedProduce<R>(ctx: AuditContext, produce: () => R): Promise<R
   return result;
 }
 
-// ── Tool handlers, exported so they can be invoked directly in tests ─────────
+// ── Tool handlers ─────────────────────────────────────────────────────────────
 
 export async function browserListCaptures(
   principal: McpClientPrincipal,
@@ -200,8 +171,6 @@ export function setupMcpServer(transactionId: string, principal: McpClientPrinci
     version: '0.1.0',
   });
 
-  // ── Resources ──────────────────────────────────────────────────────────────
-
   server.resource('browser://status/current', 'browser://status/current', async (uri) =>
     auditedProduce(
       { principal, transactionId, event: 'mcp.resource.read', capability: 'mcp.resource.read', resource: uri.href, targetLabel: 'Read status resource' },
@@ -262,8 +231,6 @@ export function setupMcpServer(transactionId: string, principal: McpClientPrinci
       ),
   );
 
-  // ── Tools ────────────────────────────────────────────────────────────────
-
   server.tool(
     'browser_list_captures',
     'Retrieve a list of stored browser captures belonging to the authenticated user.',
@@ -304,8 +271,6 @@ export function setupMcpServer(transactionId: string, principal: McpClientPrinci
     async (args) => browserGetEvidence(principal, transactionId, args),
   );
 
-  // ── Prompts ──────────────────────────────────────────────────────────────
-
   server.prompt(
     'browser_explain_capture',
     'Summarize the provided capture and explain its key context.',
@@ -329,3 +294,67 @@ export function setupMcpServer(transactionId: string, principal: McpClientPrinci
 
   return server;
 }
+
+// ── Session Persistence Store ──────────────────────────────────────────────────
+
+export interface BrowserOperatorSession {
+  sessionId: string;
+  server: McpServer;
+  principal: McpClientPrincipal;
+  createdAt: string;
+  lastAccessedAt: number;
+}
+
+export class BrowserOperatorSessionStore {
+  private sessions = new Map<string, BrowserOperatorSession>();
+  private readonly ttlMs: number;
+  private sweepTimer?: NodeJS.Timeout;
+
+  constructor(ttlMs = 5 * 60_000) {
+    this.ttlMs = ttlMs;
+    this.sweepTimer = setInterval(() => this.sweepExpiredSessions(), 60_000);
+    this.sweepTimer.unref();
+  }
+
+  getOrCreateSession(principal: McpClientPrincipal, transactionId: string, connectionId?: string): BrowserOperatorSession {
+    const key = connectionId || createHash('sha256').update(`${principal.clientId}:${principal.subjectId}`).digest('hex');
+    const existing = this.sessions.get(key);
+
+    if (existing && Date.now() - existing.lastAccessedAt < this.ttlMs) {
+      existing.lastAccessedAt = Date.now();
+      return existing;
+    }
+
+    const server = setupMcpServer(transactionId, principal);
+    const session: BrowserOperatorSession = {
+      sessionId: key,
+      server,
+      principal,
+      createdAt: new Date().toISOString(),
+      lastAccessedAt: Date.now(),
+    };
+
+    this.sessions.set(key, session);
+    return session;
+  }
+
+  getSessionCount(): number {
+    return this.sessions.size;
+  }
+
+  close(): void {
+    if (this.sweepTimer) clearInterval(this.sweepTimer);
+    this.sessions.clear();
+  }
+
+  private sweepExpiredSessions(): void {
+    const now = Date.now();
+    for (const [key, session] of this.sessions.entries()) {
+      if (now - session.lastAccessedAt >= this.ttlMs) {
+        this.sessions.delete(key);
+      }
+    }
+  }
+}
+
+export const defaultSessionStore = new BrowserOperatorSessionStore();

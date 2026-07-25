@@ -10,6 +10,19 @@ export type ConnectionState =
   | 'stopped';
 export type ConnectionHealth = 'current' | 'degraded' | 'not-measured';
 
+export type RigErrorKind = 'authorization' | 'not-found' | 'server-error' | 'timeout' | 'validation';
+
+export interface TypedRigError {
+  kind: RigErrorKind;
+  message: string;
+  code?: string;
+  details?: unknown;
+}
+
+export function createTypedRigError(kind: RigErrorKind, message: string, details?: unknown, code?: string): TypedRigError {
+  return { kind, message, details, code };
+}
+
 export interface StdioTransportSpec {
   kind: 'stdio';
   executablePath: string;
