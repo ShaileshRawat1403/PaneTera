@@ -9,7 +9,7 @@
 
 import React from 'react';
 import { Box, Chip, Paper, Stack, Typography } from '@mui/material';
-import { accent, ink, radius, status, surface, typography } from '../../theme/cssTokens';
+import { accent, elevation, ink, radius, status, surface, typography } from '../../theme/cssTokens';
 import { enterStyles, transition } from '../../theme/motion';
 
 export interface TranscriptMessage {
@@ -105,7 +105,7 @@ export const TranscriptTurn: React.FC<Props> = ({ message, onSelectFile, onSugge
           borderRadius: isUser
             ? `${radius.md}px ${radius.md}px 2px ${radius.md}px`
             : `${radius.md}px ${radius.md}px ${radius.md}px 2px`,
-          boxShadow: '0 1px 2px rgba(0, 0, 0, 0.24)',
+          boxShadow: elevation.card,
         }}
       >
         <Typography
@@ -119,7 +119,7 @@ export const TranscriptTurn: React.FC<Props> = ({ message, onSelectFile, onSugge
           <Box sx={{ mt: 1.5 }}>
             <details>
               <summary style={disclosureSummary}>
-                📄 What I inspected ({message.filesInspected.length} files)
+                What I inspected ({message.filesInspected.length} files)
               </summary>
               <Box sx={{ pl: 1.5, mt: 0.5, borderLeft: `1px solid ${surface.border}` }}>
                 {message.filesInspected.map((file, index) => (
@@ -136,7 +136,7 @@ export const TranscriptTurn: React.FC<Props> = ({ message, onSelectFile, onSugge
           <Box sx={{ mt: 1.5 }}>
             <details>
               <summary style={disclosureSummary}>
-                🔧 Tools used ({message.toolsUsed.length})
+                Tools used ({message.toolsUsed.length})
               </summary>
               <Box sx={{ pl: 1.5, mt: 0.5, borderLeft: `1px solid ${surface.border}` }}>
                 {message.toolsUsed.map((tool, index) => (
@@ -166,7 +166,7 @@ export const TranscriptTurn: React.FC<Props> = ({ message, onSelectFile, onSugge
               {message.citations.map((citation, index) => (
                 <Chip
                   key={index}
-                  label={`📄 ${citation.label}`}
+                  label={citation.label}
                   onClick={() => onSelectFile(citation.path)}
                   size="small"
                   aria-label={`Open ${citation.path}`}
@@ -223,7 +223,7 @@ export const TranscriptTurn: React.FC<Props> = ({ message, onSelectFile, onSugge
           {message.suggestedActions.map((action, index) => (
             <Chip
               key={index}
-              label={`→ ${action.label}`}
+              label={action.label}
               onClick={() => onSuggestedAction(action.message)}
               size="small"
               sx={{
