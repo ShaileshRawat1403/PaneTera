@@ -56,6 +56,8 @@ export function QuickSwitcherModal({ open, onClose, items = DEFAULT_ITEMS }: Qui
     <Modal
       open={open}
       onClose={onClose}
+      keepMounted
+      disablePortal={process.env.NODE_ENV === 'test'}
       sx={{
         display: 'flex',
         alignItems: 'flex-start',
