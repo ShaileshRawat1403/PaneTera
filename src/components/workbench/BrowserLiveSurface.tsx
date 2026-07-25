@@ -17,6 +17,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import StopCircleOutlinedIcon from '@mui/icons-material/StopCircleOutlined';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
+import TouchAppIcon from '@mui/icons-material/TouchApp';
 import {
   type BrowserInspectedComponent,
   type BrowserLiveFrame,
@@ -53,6 +54,7 @@ export function BrowserLiveSurface({ initialFrame, onClose }: BrowserLiveSurface
   const [frame, setFrame] = useState(initialFrame);
   const [component, setComponent] = useState<BrowserInspectedComponent | null>(null);
   const [inspectMode, setInspectMode] = useState(false);
+  const [clickMode, setClickMode] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
   const inFlight = useRef(false);
@@ -75,31 +77,69 @@ export function BrowserLiveSurface({ initialFrame, onClose }: BrowserLiveSurface
     }
   };
 
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      if (!document.hidden) void run('snapshot');
-    }, 2_500);
-    return () => window.clearInterval(timer);
-    // The session id is immutable for this mounted live surface.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [frame.sessionId]);
-
-  const inspect = async (event: React.MouseEvent<HTMLImageElement>) => {
-    if (!inspectMode || inFlight.current) return;
-    const rect = event.currentTarget.getBoundingClientRect();
-    const xRatio = (event.clientX - rect.left) / Math.max(rect.width, 1);
-    const yRatio = (event.clientY - rect.top) / Math.max(rect.height, 1);
+  const handleScroll = async (direction: 'up' | 'down') => {
+    if (inFlight.current) return;
     inFlight.current = true;
     setPending(true);
     try {
-      const result = await requestBrowserLiveCommand(frame.sessionId, 'inspect', { xRatio, yRatio });
-      setComponent(result as BrowserInspectedComponent);
+      const result = await requestBrowserLiveCommand(frame.sessionId, 'scroll', { direction });
+      if (result && 'screenshotDataUrl' in result) {
+        setFrame(result as BrowserLiveFrame);
+      }
       setError('');
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
     } finally {
       inFlight.current = false;
       setPending(false);
+    }
+  };
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (!document.hidden) void run('snapshot');
+    }, 2_500);
+    return () => window.clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [frame.sessionId]);
+
+  const handleImageClick = async (event: React.MouseEvent<HTMLImageElement>) => {
+    if (inFlight.current) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const xRatio = (event.clientX - rect.left) / Math.max(rect.width, 1);
+    const yRatio = (event.clientY - rect.top) / Math.max(rect.height, 1);
+
+    if (inspectMode) {
+      inFlight.current = true;
+      setPending(true);
+      try {
+        const result = await requestBrowserLiveCommand(frame.sessionId, 'inspect', { xRatio, yRatio });
+        setComponent(result as BrowserInspectedComponent);
+        setError('');
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : String(caught));
+      } finally {
+        inFlight.current = false;
+        setPending(false);
+      }
+      return;
+    }
+
+    if (clickMode) {
+      inFlight.current = true;
+      setPending(true);
+      try {
+        const result = await requestBrowserLiveCommand(frame.sessionId, 'click', { xRatio, yRatio });
+        if (result && 'screenshotDataUrl' in result) {
+          setFrame(result as BrowserLiveFrame);
+        }
+        setError('');
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : String(caught));
+      } finally {
+        inFlight.current = false;
+        setPending(false);
+      }
     }
   };
 
@@ -129,9 +169,24 @@ export function BrowserLiveSurface({ initialFrame, onClose }: BrowserLiveSurface
         </Typography>
         <Button
           size="small"
+          variant={clickMode ? 'contained' : 'outlined'}
+          startIcon={<TouchAppIcon fontSize="small" />}
+          onClick={() => {
+            setClickMode(prev => !prev);
+            if (!clickMode) setInspectMode(false);
+          }}
+          aria-pressed={clickMode}
+        >
+          {clickMode ? 'Click Mode Active' : 'Click Mode'}
+        </Button>
+        <Button
+          size="small"
           variant={inspectMode ? 'contained' : 'outlined'}
           startIcon={<SearchIcon />}
-          onClick={() => setInspectMode(current => !current)}
+          onClick={() => {
+            setInspectMode(prev => !prev);
+            if (!inspectMode) setClickMode(false);
+          }}
           aria-pressed={inspectMode}
         >
           {inspectMode ? 'Inspecting' : 'Inspect elements'}
@@ -153,7 +208,7 @@ export function BrowserLiveSurface({ initialFrame, onClose }: BrowserLiveSurface
           variant="outlined"
           startIcon={<ArrowDownwardIcon fontSize="small" />}
           disabled={pending}
-          onClick={() => void run('snapshot')}
+          onClick={() => void handleScroll('down')}
         >
           Scroll Down
         </Button>
@@ -162,7 +217,7 @@ export function BrowserLiveSurface({ initialFrame, onClose }: BrowserLiveSurface
           variant="outlined"
           startIcon={<ArrowUpwardIcon fontSize="small" />}
           disabled={pending}
-          onClick={() => void run('snapshot')}
+          onClick={() => void handleScroll('up')}
         >
           Scroll Up
         </Button>
@@ -173,8 +228,6 @@ export function BrowserLiveSurface({ initialFrame, onClose }: BrowserLiveSurface
           size="small"
           variant="outlined"
           onClick={() => {
-            // Capture current frame as evidence
-            // This would normally call an API to store the evidence
             console.log('Capturing evidence:', frame);
           }}
         >
@@ -202,15 +255,15 @@ export function BrowserLiveSurface({ initialFrame, onClose }: BrowserLiveSurface
               component="img"
               src={frame.screenshotDataUrl}
               alt={`Live Chrome view of ${frame.title}`}
-              onClick={inspect}
+              onClick={handleImageClick}
               sx={{
                 width: '100%',
                 height: 'auto',
                 display: 'block',
-                cursor: inspectMode ? 'crosshair' : 'default',
-                border: `1px solid ${inspectMode ? accent.violet : surface.border}`,
+                cursor: inspectMode ? 'crosshair' : clickMode ? 'pointer' : 'default',
+                border: `1px solid ${inspectMode ? accent.violet : clickMode ? accent.violetBorder : surface.border}`,
                 borderRadius: `${radius.sm}px`,
-                boxShadow: inspectMode ? `0 0 0 2px ${accent.violetSelected}` : 'none',
+                boxShadow: inspectMode ? `0 0 0 2px ${accent.violetSelected}` : clickMode ? `0 0 12px ${accent.violetMuted}` : 'none',
               }}
             />
             {pending && (

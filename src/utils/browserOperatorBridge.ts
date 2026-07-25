@@ -35,7 +35,7 @@ export interface BrowserInspectedComponent {
   styles: Record<string, string>;
 }
 
-type BrowserLiveAction = 'snapshot' | 'inspect' | 'focus' | 'close';
+export type BrowserLiveAction = 'snapshot' | 'inspect' | 'focus' | 'close' | 'click' | 'fill' | 'scroll';
 
 const MAX_LIVE_FRAME_DATA_URL_LENGTH = 8_000_000;
 
@@ -205,22 +205,35 @@ export function requestBrowserLiveView(url: string, timeoutMs = 120_000): Promis
   });
 }
 
-/** Refresh, inspect, focus, or close one managed Chrome live-view session. */
+/** Refresh, inspect, focus, scroll, click, fill, or close one managed Chrome live-view session. */
 export function requestBrowserLiveCommand(
   sessionId: string,
   action: BrowserLiveAction,
-  point?: { xRatio: number; yRatio: number },
+  params?: {
+    xRatio?: number;
+    yRatio?: number;
+    cssSelector?: string;
+    textValue?: string;
+    direction?: 'up' | 'down';
+  },
   timeoutMs = 15_000,
 ): Promise<BrowserLiveFrame | BrowserInspectedComponent | null> {
   return bridgeRequest({
     requestType: 'WEB_LIVE_COMMAND',
     responseType: 'WEB_LIVE_COMMAND_RESULT',
-    payload: { sessionId, action, ...(point ? { point } : {}) },
+    payload: {
+      sessionId,
+      action,
+      ...(params?.xRatio !== undefined && params?.yRatio !== undefined ? { point: { xRatio: params.xRatio, yRatio: params.yRatio } } : {}),
+      ...(params?.cssSelector ? { cssSelector: params.cssSelector } : {}),
+      ...(params?.textValue ? { textValue: params.textValue } : {}),
+      ...(params?.direction ? { direction: params.direction } : {}),
+    },
     timeoutMs,
     parse: (message) => {
-      if (action === 'snapshot') {
-        if (!isBrowserLiveFrame(message)) throw new Error('Browser Operator returned an invalid live-view frame.');
-        return message;
+      if (action === 'snapshot' || action === 'click' || action === 'fill' || action === 'scroll') {
+        if (isBrowserLiveFrame(message)) return message;
+        if (isBrowserLiveFrame(message?.frame)) return message.frame;
       }
       if (action === 'inspect') {
         if (!isBrowserInspectedComponent(message.component)) {
