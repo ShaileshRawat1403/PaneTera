@@ -1026,6 +1026,17 @@ async function askGemini(query: string, history: any[] = []): Promise<{ reply: s
                 },
                 required: ['workspaceName', 'command']
               }
+            },
+            {
+              name: 'fetchWebPage',
+              description: 'Inspects a public website URL, probes its framing headers, and opens a public web preview on the canvas. If asked for web search or current information, pass https://html.duckduckgo.com/html/?q=<encoded_query>.',
+              parameters: {
+                type: 'OBJECT',
+                properties: {
+                  url: { type: 'STRING', description: 'The absolute http/https public web URL to inspect.' }
+                },
+                required: ['url']
+              }
             }
           ]
         }
@@ -1089,6 +1100,17 @@ async function askGemini(query: string, history: any[] = []): Promise<{ reply: s
           uiComponent = {
             type: 'ProposedAction',
             data: buildProposedActionData(args.workspaceName, args.command, args.reason || '')
+          };
+        } else if (name === 'fetchWebPage') {
+          const outcome = await probeWebPreview(args.url);
+          toolResult = { url: args.url, outcome };
+          uiComponent = {
+            type: 'WebPreview',
+            data: {
+              url: args.url,
+              name: new URL(args.url).hostname.replace(/^www\./, ''),
+              outcome
+            }
           };
         } else {
           throw new Error(`Unknown function: ${name}`);
