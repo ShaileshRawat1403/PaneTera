@@ -22,3 +22,4 @@ test_overlay*.js
 test_real.js
 test_with_ext.js
 workspace-test-*/
+scratch/

@@ -1,6 +1,6 @@
-# Security Specification: MyAI Portal V1
+# Security Specification: PaneTera
 
-MyAI Portal operates on a **zero-trust execution model** regarding the connected workspaces. The workspace process is treated as unprivileged and isolated.
+PaneTera operates on a **zero-trust execution model** regarding the connected workspaces. The workspace process is treated as unprivileged and isolated.
 
 ## The Security Wrap Pipeline
 All workspace tool calls must travel through this linear pipeline before execution:
