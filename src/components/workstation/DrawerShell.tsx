@@ -11,8 +11,9 @@
 // they are aligned separately rather than forced through this shell.
 
 import React from 'react';
-import { Box, Button, Stack, Typography } from '@mui/material';
-import { ink, surface } from '../../theme/cssTokens';
+import { Box, Button, CircularProgress, Stack, Typography } from '@mui/material';
+import { accent, elevation, ink, radius, surface } from '../../theme/cssTokens';
+import { transition } from '../../theme/motion';
 
 export interface DrawerShellProps {
   /** The id the drawer's `aria-labelledby` points at, so the region is named. */
@@ -29,6 +30,32 @@ export interface DrawerShellProps {
   refreshLabel?: string;
   children: React.ReactNode;
 }
+
+const actionButtonStyles = {
+  color: ink.secondary,
+  px: 1.5,
+  py: 0.5,
+  minHeight: 32,
+  borderRadius: `${radius.sm}px`,
+  border: `1px solid ${surface.border}`,
+  backgroundColor: surface.sunken,
+  transition: transition(['background-color', 'color', 'border-color']),
+  '&:hover': {
+    color: ink.primary,
+    backgroundColor: surface.overlay,
+    borderColor: surface.borderStrong,
+  },
+  '&:focus-visible': {
+    outline: 'none',
+    boxShadow: elevation.focusRing,
+    borderColor: accent.violetBorder,
+  },
+  '&.Mui-disabled': {
+    color: ink.disabled,
+    borderColor: surface.border,
+    backgroundColor: surface.sunken,
+  },
+} as const;
 
 export function DrawerShell({
   titleId,
@@ -49,6 +76,7 @@ export function DrawerShell({
     >
       <Box
         component="header"
+        aria-busy={refreshing}
         sx={{
           flexShrink: 0,
           display: 'flex',
@@ -58,25 +86,40 @@ export function DrawerShell({
           px: 2,
           py: 1.75,
           borderBottom: `1px solid ${surface.border}`,
+          backgroundColor: surface.raised,
+          backdropFilter: 'blur(8px)',
         }}
       >
         <Box sx={{ minWidth: 0 }}>
-          <Typography id={titleId} variant="h6">{title}</Typography>
+          <Typography id={titleId} variant="h6" sx={{ color: ink.primary, fontWeight: 650 }}>
+            {title}
+          </Typography>
           {description && (
-            <Typography variant="caption" sx={{ color: ink.secondary, display: 'block' }}>{description}</Typography>
+            <Typography variant="caption" sx={{ color: ink.secondary, display: 'block', mt: 0.25 }}>
+              {description}
+            </Typography>
           )}
         </Box>
-        <Stack direction="row" gap={0.5} sx={{ flexShrink: 0 }}>
+        <Stack direction="row" gap={1} sx={{ flexShrink: 0 }}>
           {onRefresh && (
             <Button
+              size="small"
               aria-label={refreshLabel ?? `Refresh ${title}`}
               disabled={refreshing}
               onClick={onRefresh}
+              startIcon={
+                refreshing ? (
+                  <CircularProgress size={12} color="inherit" sx={{ color: ink.secondary }} />
+                ) : undefined
+              }
+              sx={actionButtonStyles}
             >
               {refreshing ? 'Refreshing…' : 'Refresh'}
             </Button>
           )}
-          <Button onClick={onClose} aria-label={closeLabel}>Close</Button>
+          <Button size="small" onClick={onClose} aria-label={closeLabel} sx={actionButtonStyles}>
+            Close
+          </Button>
         </Stack>
       </Box>
       {/* Only the body scrolls, so the header and its actions stay reachable. */}
