@@ -121,6 +121,9 @@ export function WebPreviewSurface({
     run(url).then((result) => {
       if (cancelled) return;
       setOutcome(result);
+      if (result.kind === 'permitted') {
+        setEmbedRevealed(true);
+      }
       onOutcome?.(result);
     });
 

@@ -15,6 +15,8 @@ import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SearchIcon from '@mui/icons-material/Search';
 import StopCircleOutlinedIcon from '@mui/icons-material/StopCircleOutlined';
+import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
+import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import {
   type BrowserInspectedComponent,
   type BrowserLiveFrame,
@@ -146,6 +148,24 @@ export function BrowserLiveSurface({ initialFrame, onClose }: BrowserLiveSurface
             </IconButton>
           </span>
         </Tooltip>
+        <Button
+          size="small"
+          variant="outlined"
+          startIcon={<ArrowDownwardIcon fontSize="small" />}
+          disabled={pending}
+          onClick={() => void run('snapshot')}
+        >
+          Scroll Down
+        </Button>
+        <Button
+          size="small"
+          variant="outlined"
+          startIcon={<ArrowUpwardIcon fontSize="small" />}
+          disabled={pending}
+          onClick={() => void run('snapshot')}
+        >
+          Scroll Up
+        </Button>
         <Button size="small" startIcon={<OpenInNewIcon />} onClick={() => void run('focus')}>
           Open Chrome tab
         </Button>
