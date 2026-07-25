@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Box, Card, CardActionArea, CardContent, Grid, LinearProgress, Typography } from '@mui/material';
-import { accent, ink, status as statusToken, surface, typography } from '../../theme/tokens';
+import { accent, ink, status, surface, typography } from '../../theme/cssTokens';
 
 export interface WorkspaceStatus {
   name: string;
@@ -64,7 +64,7 @@ export const EcosystemStatusBoard: React.FC<Props> = ({ token, onAction }) => {
   }, [token]);
 
   const statusColor = (s: WorkspaceStatus['status']) =>
-    s === 'clean' ? statusToken.neutral : s === 'changes' ? statusToken.brass : ink.muted;
+    s === 'clean' ? status.neutral : s === 'changes' ? status.brass : ink.muted;
   const statusLabel = (s: WorkspaceStatus['status']) =>
     s === 'clean' ? 'Up to date' : s === 'changes' ? 'Uncommitted changes' : 'No signal';
 
