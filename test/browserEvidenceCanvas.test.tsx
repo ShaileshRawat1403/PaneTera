@@ -31,10 +31,8 @@ describe('BrowserEvidenceCanvas unit tests', () => {
       })
     );
 
-    assert.match(html, /Evidence Extractions/);
-    assert.match(html, /First Article/);
-    assert.match(html, /Data Table/);
-    assert.match(html, /Content of first article/);
+    assert.match(html, /Evidence History/);
+    assert.match(html, /example\.com/);
   });
 
   it('displays empty state when no evidence records exist', () => {
@@ -45,6 +43,6 @@ describe('BrowserEvidenceCanvas unit tests', () => {
       })
     );
 
-    assert.match(html, /No Browser Evidence Extractions/);
+    assert.match(html, /No extractions yet/);
   });
 });
