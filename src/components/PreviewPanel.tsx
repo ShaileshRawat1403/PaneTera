@@ -32,7 +32,8 @@ import { ContentWorkflowCard } from './ContentWorkflowCard';
 import { InteractiveComponent } from './InteractiveComponent';
 
 interface PreviewProps {
-  previewFeed: FeedItem[];
+  previewFeed?: FeedItem[];
+  history?: FeedItem[];
   onClose: () => void;
   onAction: (query: string) => void;
   onRemoveItem: (id: string) => void;
@@ -229,7 +230,7 @@ const EcosystemStatusBoard: React.FC<{ token: string; onAction: (q: string) => v
         <Typography variant="caption" sx={{ color: accent.violet, fontWeight: 700, letterSpacing: '0.05em' }}>
           PROJECT STATUS
         </Typography>
-        <Typography variant="caption" sx={{ color: ink.muted, fontSize: '0.65rem' }}>
+        <Typography variant="caption" sx={{ color: ink.muted, fontSize: '0.75rem' }}>
           Refreshes every 15s
         </Typography>
       </Box>
@@ -261,11 +262,11 @@ const EcosystemStatusBoard: React.FC<{ token: string; onAction: (q: string) => v
                         <Box sx={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: statusColor(ws.status) }} />
                         <Typography variant="body2" sx={{ fontWeight: 700, color: ink.primary }}>{ws.name}</Typography>
                       </Box>
-                      <Typography variant="caption" sx={{ color: statusColor(ws.status), fontSize: '0.65rem', fontWeight: 600 }}>
+                      <Typography variant="caption" sx={{ color: statusColor(ws.status), fontSize: '0.75rem', fontWeight: 600 }}>
                         {statusLabel(ws.status)}
                       </Typography>
                     </Box>
-                    <Typography variant="caption" sx={{ color: ink.secondary, fontSize: '0.72rem', display: 'block', fontFamily: typography.mono, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <Typography variant="caption" sx={{ color: ink.secondary, fontSize: '0.75rem', display: 'block', fontFamily: typography.mono, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {ws.latestCommit}
                     </Typography>
                   </CardContent>
@@ -285,7 +286,7 @@ const EcosystemStatusBoard: React.FC<{ token: string; onAction: (q: string) => v
                   <Box sx={{ width: 8, height: 8, borderRadius: '50%', border: `1px solid ${ink.muted}` }} />
                   <Typography variant="body2" sx={{ fontWeight: 700, color: ink.secondary }}>dax</Typography>
                 </Box>
-                <Typography variant="caption" sx={{ color: ink.muted, fontSize: '0.72rem' }}>
+                <Typography variant="caption" sx={{ color: ink.muted, fontSize: '0.75rem' }}>
                   Not connected yet — governance events land here in a later phase.
                 </Typography>
               </CardContent>
@@ -764,6 +765,7 @@ const ExecutionLogsFeedCard: React.FC<{ data: any; procId: string; token: string
 
       <Button
         size="small"
+        aria-expanded={showRawOutput}
         onClick={() => setShowRawOutput(v => !v)}
         endIcon={
           <ExpandMoreIcon
@@ -776,7 +778,7 @@ const ExecutionLogsFeedCard: React.FC<{ data: any; procId: string; token: string
         }
         sx={{
           mt: 1.25,
-          fontSize: '0.65rem',
+          fontSize: '0.75rem',
           color: ink.muted,
           textTransform: 'none',
           px: 0,
@@ -909,7 +911,9 @@ const DesktopAppsFeedCard: React.FC<{ token: string }> = ({ token }) => {
   );
 };
 
-export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onAction, onRemoveItem, onClearFeed, onApproveAction, onContentWorkflowReview, token, onOpenInWorkbench, loading }) => {
+export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed: previewFeedProp, history = [], onClose, onAction, onRemoveItem, onClearFeed, onApproveAction, onContentWorkflowReview, token, onOpenInWorkbench, loading }) => {
+  const previewFeed = (previewFeedProp && previewFeedProp.length > 0) ? previewFeedProp : history;
+
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
   const [pinnedCards, setPinnedCards] = useState<Record<string, boolean>>({});
@@ -970,7 +974,7 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
           <Typography variant="h6">Activity</Typography>
         </Box>
         <Stack direction="row" gap={0.5} sx={{ flexShrink: 0 }}>
-          {previewFeed.length > 0 && (
+          {(previewFeed?.length ?? 0) > 0 && (
             <Tooltip title="Clear Feed">
               <IconButton size="small" onClick={onClearFeed} sx={{ color: ink.secondary }} aria-label="Clear Activity feed">
                 <ClearAllIcon fontSize="small" />
@@ -999,8 +1003,9 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
             </Typography>
           )
         ) : (
-          previewFeed.map((item) => {
-              const isExpanded = expandedCards[item.id] !== undefined
+          previewFeed.map((item: any) => {
+            const isExpanded = expandedCards[item.id] !== undefined
+
                 ? expandedCards[item.id]
                 : (previewFeed[previewFeed.length - 1]?.id === item.id);
 
@@ -1034,9 +1039,19 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
                     p: 0
                   }}
                 >
-                  {/* Card Header (Clickable to collapse/expand) */}
+                  {/* Card Header (Clickable to collapse/expand with keyboard accessibility) */}
                   <Box
+                    role="button"
+                    tabIndex={0}
+                    aria-expanded={isExpanded}
+                    aria-controls={`card-body-${item.id}`}
                     onClick={() => toggleCard(item.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        toggleCard(item.id);
+                      }
+                    }}
                     sx={{
                       display: 'flex',
                       alignItems: 'center',
@@ -1048,12 +1063,16 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
                       cursor: 'pointer',
                       userSelect: 'none',
                       transition: 'background 0.2s',
-                      '&:hover': { background: surface.sunken }
+                      '&:hover': { background: surface.sunken },
+                      '&:focus-visible': {
+                        outline: 'none',
+                        boxShadow: elevation.focusRing,
+                      },
                     }}
                   >
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       {isExpanded ? <ExpandLessIcon sx={{ fontSize: 13, color: accent.violet }} /> : <ExpandMoreIcon sx={{ fontSize: 13, color: ink.secondary }} />}
-                      <Typography variant="caption" sx={{ color: accent.violet, fontWeight: 700, fontSize: '0.7rem', letterSpacing: '0.05em' }}>
+                      <Typography variant="caption" sx={{ color: accent.violet, fontWeight: 700, fontSize: '0.75rem', letterSpacing: '0.05em' }}>
                         {item.type === 'WorkspaceList' && 'PROJECTS'}
                         {item.type === 'FileList' && `FILE INDEX: ${item.data.workspace}`}
                         {item.type === 'CodePreview' && `CODE: ${item.data.workspace}/${item.data.path}`}
@@ -1101,25 +1120,26 @@ export const PreviewPanel: React.FC<PreviewProps> = ({ previewFeed, onClose, onA
                         <Tooltip title={copiedId === item.id ? "Copied!" : "Copy code"}>
                           <IconButton size="small" onClick={() => handleCopy(item.data.content, item.id)} sx={{ color: ink.secondary, p: 0.25 }}>
                             <ContentCopyIcon sx={{ fontSize: 13 }} />
+                            <ContentCopyIcon sx={{ fontSize: 14 }} />
                           </IconButton>
                         </Tooltip>
                       )}
                       <IconButton size="small" onClick={() => onRemoveItem(item.id)} sx={{ color: ink.secondary, p: 0.25 }}>
-                        <CloseIcon sx={{ fontSize: 13 }} />
+                        <CloseIcon sx={{ fontSize: 14 }} />
                       </IconButton>
                     </Box>
                   </Box>
 
-                {/* Card Content */}
-                <Collapse in={isExpanded}>
-                  <Box sx={{ p: 2 }}>
-                    {item.type === 'WorkspaceList' && (
-                      <Box>
-                        {/* Live ecosystem status board */}
-                        <EcosystemStatusBoard token={token} onAction={onAction} />
-                        
-                        <Grid container spacing={1.5}>
-                          {item.data.map((ws: any, idx: number) => (
+                  {/* Card Content */}
+                  <Collapse in={isExpanded}>
+                    <Box id={`card-body-${item.id}`} sx={{ p: 2 }}>
+                      {item.type === 'WorkspaceList' && (
+                        <Box>
+                          <EcosystemStatusBoard token={token} onAction={onAction} />
+                          
+                          <Grid container spacing={1.5}>
+                          {(Array.isArray(item.data) ? item.data : (item.data?.workspaces || [])).map((ws: any, idx: number) => (
+
                             <Grid item xs={12} key={idx}>
                               <Card sx={{ background: surface.sunken, border: `1px solid ${surface.border}`, borderRadius: '12px' }}>
                                 <CardActionArea onClick={() => onAction(`List files in ${ws.name}`)}>
