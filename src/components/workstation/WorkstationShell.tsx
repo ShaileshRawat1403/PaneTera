@@ -24,10 +24,11 @@ import ForumIcon from '@mui/icons-material/Forum';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
 import LightModeIcon from '@mui/icons-material/LightMode';
+import SearchIcon from '@mui/icons-material/Search';
 import { PaneMark } from './PaneMark';
 import { accent, elevation, ink, radius, status, surface } from '../../theme/cssTokens';
 import { themeToggleLabel, useThemeMode } from '../../theme/themeMode';
-import { transition } from '../../theme/motion';
+import { transition, duration } from '../../theme/motion';
 import { PaneDivider } from './PaneDivider';
 import { maxConversationWidth, usePersistentPaneWidth } from './paneSizing';
 import {
@@ -37,6 +38,7 @@ import {
 } from './workstationLayout';
 import { CanvasSelectionProvider } from './CanvasSelectionProvider';
 import MarkupToolbar from './MarkupToolbar';
+import { QuickSwitcherModal } from '../workbench/QuickSwitcherModal';
 
 export interface GovernanceSummary {
   gatewayConnected: boolean;
@@ -107,6 +109,21 @@ const topBarButton = {
   ...focusRing,
 } as const;
 
+/** Active drawer indicator — a subtle bottom accent line. */
+const activeIndicator = {
+  '&::after': {
+    content: '""',
+    position: 'absolute',
+    bottom: -1,
+    left: '20%',
+    right: '20%',
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: accent.violet,
+    transition: transition(['opacity', 'transform'], duration.quick),
+  },
+} as const;
+
 export function WorkstationShell({
   conversation,
   canvas,
@@ -125,6 +142,7 @@ export function WorkstationShell({
 }: WorkstationShellProps) {
   const { mode: themeMode, toggleMode } = useThemeMode();
   const [activityOpen, setActivityOpen] = useState(false);
+  const [quickSwitcherOpen, setQuickSwitcherOpen] = useState(false);
   const [rigOpen, setRigOpen] = useState(false);
   const [headroomOpen, setHeadroomOpen] = useState(false);
   const [workspaceAnchorEl, setWorkspaceAnchorEl] = useState<null | HTMLElement>(null);
@@ -203,6 +221,19 @@ export function WorkstationShell({
     setHeadroomOpen(false);
     setActivityOpen(current => !current);
   };
+
+  // Cmd+K / Ctrl+K opens the quick switcher from anywhere in the workstation.
+  React.useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setQuickSwitcherOpen(open => !open);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
   const toggleRig = () => {
     setActivityOpen(false);
     setHeadroomOpen(false);
@@ -321,8 +352,9 @@ export function WorkstationShell({
           justifyContent: 'space-between',
           px: { xs: 1.5, md: 2.5 },
           backgroundColor: surface.raised,
-          // Restrained depth: a hairline shadow lifts the bar a single step off
-          // the workspace beneath it, without adding height or drawing the eye.
+          // Glassmorphic depth: backdrop blur lifts the bar visually while the
+          // semi-transparent surface lets the workspace breathe through.
+          backdropFilter: 'blur(12px)',
           boxShadow: elevation.raised,
           zIndex: 1,
         }}
@@ -416,8 +448,39 @@ export function WorkstationShell({
           )}
         </Box>
 
-        {/* Right: contextual surfaces */}
+        {/* Right: contextual surfaces and quick switcher */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          <Tooltip title="Quick switcher (⌘K)">
+            <Button
+              size="small"
+              startIcon={<SearchIcon sx={{ fontSize: 16 }} />}
+              aria-label="Open quick switcher"
+              onClick={() => setQuickSwitcherOpen(true)}
+              sx={{
+                ...topBarButton,
+                display: { xs: 'none', sm: 'flex' },
+                gap: 0.5,
+              }}
+            >
+              <Box
+                component="kbd"
+                sx={{
+                  px: 0.5,
+                  py: 0.125,
+                  borderRadius: `${radius.sm / 2}px`,
+                  border: `1px solid ${surface.border}`,
+                  backgroundColor: surface.sunken,
+                  color: ink.muted,
+                  fontFamily: 'inherit',
+                  fontSize: '0.65rem',
+                  fontWeight: 500,
+                  lineHeight: 1.2,
+                }}
+              >
+                ⌘K
+              </Box>
+            </Button>
+          </Tooltip>
           <Tooltip title="Headroom context and memory">
             <Button
               size="small"
@@ -428,7 +491,9 @@ export function WorkstationShell({
               onClick={toggleHeadroom}
               sx={{
                 ...topBarButton,
+                position: 'relative',
                 color: headroomOpen ? ink.primary : ink.secondary,
+                ...(headroomOpen ? activeIndicator : {}),
                 backgroundColor: headroomOpen ? accent.violetSelected : 'transparent',
                 borderColor: headroomOpen ? accent.violetBorder : 'transparent',
               }}
@@ -447,6 +512,8 @@ export function WorkstationShell({
               onClick={toggleRig}
               sx={{
                 ...topBarButton,
+                position: 'relative',
+                ...(rigOpen ? activeIndicator : {}),
                 color: rigOpen ? ink.primary : ink.secondary,
                 backgroundColor: rigOpen ? accent.violetSelected : 'transparent',
                 borderColor: rigOpen ? accent.violetBorder : 'transparent',
@@ -480,9 +547,11 @@ export function WorkstationShell({
               onClick={toggleActivity}
               sx={{
                 ...topBarButton,
+                position: 'relative',
                 color: activityOpen ? ink.primary : ink.secondary,
                 backgroundColor: activityOpen ? accent.violetMuted : 'transparent',
                 borderColor: activityOpen ? accent.violetBorder : 'transparent',
+                ...(activityOpen ? activeIndicator : {}),
                 '&:hover': {
                   color: ink.primary,
                   backgroundColor: activityOpen ? accent.violetHover : surface.overlay,
@@ -735,6 +804,44 @@ export function WorkstationShell({
       >
         {renderHeadroom(() => setHeadroomOpen(false))}
       </Drawer>
+
+      {/* Quick Switcher overlay — Cmd+K / Ctrl+K */}
+      <QuickSwitcherModal
+        open={quickSwitcherOpen}
+        onClose={() => setQuickSwitcherOpen(false)}
+        items={[
+          {
+            id: 'rig',
+            label: 'Rig Governance & Connections',
+            category: 'Drawer',
+            shortcut: '⌘1',
+            action: () => {
+              setQuickSwitcherOpen(false);
+              toggleRig();
+            },
+          },
+          {
+            id: 'headroom',
+            label: 'Headroom Context & Memory',
+            category: 'Drawer',
+            shortcut: '⌘2',
+            action: () => {
+              setQuickSwitcherOpen(false);
+              toggleHeadroom();
+            },
+          },
+          {
+            id: 'activity',
+            label: 'Activity Feed & Status Board',
+            category: 'Drawer',
+            shortcut: '⌘3',
+            action: () => {
+              setQuickSwitcherOpen(false);
+              toggleActivity();
+            },
+          },
+        ]}
+      />
     </Box>
   );
 }

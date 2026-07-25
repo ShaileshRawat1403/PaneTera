@@ -15,7 +15,7 @@
 import React from 'react';
 import { Box, Button, Stack, Typography } from '@mui/material';
 import { accent, elevation, ink, radius, surface, typography } from '../../theme/cssTokens';
-import { enterStyles, transition } from '../../theme/motion';
+import { enterStyles, transition, duration, easing } from '../../theme/motion';
 
 export interface CanvasStartProps {
   onChooseProject: () => void;
@@ -74,6 +74,10 @@ function StartAction({
           borderColor: primary ? accent.violetBorder : surface.borderStrong,
           boxShadow: elevation.cardHover,
           transform: 'translateY(-1px)',
+        },
+        '&:active': {
+          transform: 'scale(0.98)',
+          transition: transition(['transform'], duration.instant),
         },
         ...focusRing,
       }}
@@ -135,7 +139,7 @@ export function CanvasStart({ onChooseProject, onConnectCapability, onDescribeGo
         }}
       >
         {/* Left: the choice and the instruction. */}
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, ...enterStyles(), animationDelay: '0ms' }}>
           <Typography
             variant="overline"
             sx={{ color: ink.muted, fontWeight: 600, fontSize: '0.6875rem', letterSpacing: '0.09em' }}
@@ -167,7 +171,7 @@ export function CanvasStart({ onChooseProject, onConnectCapability, onDescribeGo
         </Box>
 
         {/* Right: the three real starts. */}
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, ...enterStyles(), animationDelay: '80ms' }}>
           <Typography variant="caption" sx={{ color: ink.muted, fontWeight: 600, letterSpacing: '0.02em' }}>
             Start here
           </Typography>

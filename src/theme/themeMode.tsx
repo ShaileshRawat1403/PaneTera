@@ -37,6 +37,20 @@ export function useThemeModeController() {
   useEffect(() => {
     document.documentElement.style.colorScheme = mode;
     document.documentElement.dataset.theme = mode;
+
+    // Smooth 200ms cross-fade when the theme switches — unless reduced motion
+    // is preferred, in which case the switch is instant.
+    const mql =
+      typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+        ? window.matchMedia('(prefers-reduced-motion: reduce)')
+        : null;
+    if (mql?.matches) return;
+
+    const root = document.documentElement;
+    root.style.transition = 'background-color 200ms ease, color 200ms ease';
+    const cleanup = () => { root.style.transition = ''; };
+    const timer = setTimeout(cleanup, 250);
+    return () => { clearTimeout(timer); cleanup(); };
   }, [mode]);
 
   const value = useMemo<ThemeModeContextValue>(

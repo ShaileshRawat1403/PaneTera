@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { Box } from '@mui/material';
-import { accent, surface } from '../../theme/cssTokens';
+import { accent, ink, surface } from '../../theme/cssTokens';
+import { transition, duration } from '../../theme/motion';
 
 interface PaneDividerProps {
   label: string;
@@ -57,8 +58,29 @@ export function PaneDivider({ label, value, min, max, onChange, onReset }: PaneD
         backgroundColor: surface.border,
         position: 'relative',
         touchAction: 'none',
+        transition: transition(['background-color'], duration.quick),
+        // Expanded invisible hit zone for easier pointer targeting.
         '&::after': { content: '""', position: 'absolute', inset: '0 -4px' },
-        '&:hover, &:focus-visible': { backgroundColor: accent.violet, outline: 'none' },
+        // Centered 3-dot grip indicator: three 3px circles with 4px gap.
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: 3,
+          height: 19, // 3 dots * 3px + 2 gaps * 4px + 2px padding
+          backgroundImage: `radial-gradient(circle, ${ink.muted} 1.5px, transparent 1.5px)`,
+          backgroundSize: '3px 7px',
+          backgroundRepeat: 'repeat-y',
+          opacity: 0.6,
+          transition: transition(['opacity'], duration.quick),
+        },
+        '&:hover, &:focus-visible': {
+          backgroundColor: accent.violet,
+          outline: 'none',
+          '&::before': { opacity: 1 },
+        },
       }}
     />
   );
