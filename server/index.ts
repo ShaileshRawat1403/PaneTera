@@ -1245,6 +1245,20 @@ async function askOpenAI(query: string, history: any[] = []): Promise<{ reply: s
           required: ['workspaceName', 'command']
         }
       }
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'fetchWebPage',
+        description: 'Inspects a public website URL, probes its framing headers, and opens a public web preview on the canvas.',
+        parameters: {
+          type: 'object',
+          properties: {
+            url: { type: 'string', description: 'The absolute http/https public web URL to inspect.' }
+          },
+          required: ['url']
+        }
+      }
     }
   ];
 
@@ -1310,6 +1324,17 @@ async function askOpenAI(query: string, history: any[] = []): Promise<{ reply: s
           uiComponent = {
             type: 'ProposedAction',
             data: buildProposedActionData(args.workspaceName, args.command, args.reason || '')
+          };
+        } else if (name === 'fetchWebPage') {
+          const outcome = await probeWebPreview(args.url);
+          toolResult = { url: args.url, outcome };
+          uiComponent = {
+            type: 'WebPreview',
+            data: {
+              url: args.url,
+              name: new URL(args.url).hostname.replace(/^www\./, ''),
+              outcome
+            }
           };
         } else {
           throw new Error(`Unknown function: ${name}`);
@@ -1730,13 +1755,23 @@ async function resolveQueryLocally(query: string): Promise<{ reply: string; uiCo
     }
   }
 
-  // 4.5. Web search intent — no live web search is wired up. Say so
-  // plainly instead of returning results that look real but aren't.
+  // 4.5. Web search intent — probe DuckDuckGo search preview and display in canvas
   const webSearchRegex = /(?:search web for|web search for|search web|search the web for)\s+(.+)/i;
   const webSearchMatch = query.match(webSearchRegex);
   if (webSearchMatch) {
+    const keyword = webSearchMatch[1].trim();
+    const targetUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(keyword)}`;
+    const outcome = await probeWebPreview(targetUrl);
     return {
-      reply: `Live web search is not connected in this build. I can still open a public web address in the canvas, or search inside a registered workspace.`
+      reply: `I searched the web for "${keyword}" and opened the live web preview in the canvas.`,
+      uiComponent: {
+        type: 'WebPreview',
+        data: {
+          url: targetUrl,
+          name: `DuckDuckGo: ${keyword}`,
+          outcome,
+        }
+      }
     };
   }
 
