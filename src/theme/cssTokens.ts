@@ -51,4 +51,11 @@ export const elevation = {
   focusRing: 'var(--panetera-elevation-focus-ring)',
 } as const;
 
+export const glass = {
+  raisedRgb: 'var(--panetera-glass-raised-rgb)',
+  overlayRgb: 'var(--panetera-glass-overlay-rgb)',
+  borderRgb: 'var(--panetera-glass-border-rgb)',
+  violetRgb: 'var(--panetera-glass-violet-rgb)',
+} as const;
+
 export { radius, SPACING_UNIT, typography } from './tokens';

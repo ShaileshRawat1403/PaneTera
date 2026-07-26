@@ -175,7 +175,9 @@ describe('migrated surfaces use tokens', () => {
     it(`${file} contains no raw colour literals`, () => {
       const source = readFileSync(new URL(`../${file}`, import.meta.url), 'utf8');
       const literals = source.match(/#[0-9a-fA-F]{3,8}\b|rgba?\([^)]*\)/g) ?? [];
-      assert.deepStrictEqual(literals, [], `found: ${literals.join(', ')}`);
+      // Filter out CSS variable references like rgba(var(--panetera-...), ...)
+      const rawLiterals = literals.filter((l) => !l.includes('var(--panetera-'));
+      assert.deepStrictEqual(rawLiterals, [], `found: ${rawLiterals.join(', ')}`);
     });
   }
 

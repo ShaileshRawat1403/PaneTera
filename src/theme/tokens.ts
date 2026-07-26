@@ -128,6 +128,29 @@ export const elevation = {
   focusRing: `0 0 0 3px ${accent.violetMuted}`,
 } as const;
 
+/** Glassmorphic RGB values for backdrop-filter effects. */
+export const glass = {
+  /** raised surface RGB (33, 30, 27). */
+  raisedRgb: '33, 30, 27',
+  /** overlay surface RGB (42, 38, 34). */
+  overlayRgb: '42, 38, 34',
+  /** border RGB (58, 52, 48). */
+  borderRgb: '58, 52, 48',
+  /** accent violet RGB (185, 165, 232). */
+  violetRgb: '185, 165, 232',
+} as const;
+
+export const lightGlass = {
+  /** raised surface RGB for light mode (255, 255, 255). */
+  raisedRgb: '255, 255, 255',
+  /** overlay surface RGB for light mode (255, 255, 255). */
+  overlayRgb: '255, 255, 255',
+  /** border RGB for light mode (212, 212, 211). */
+  borderRgb: '212, 212, 211',
+  /** accent violet RGB for light mode (109, 70, 194). */
+  violetRgb: '109, 70, 194',
+} as const;
+
 /**
  * Light mode keeps the same warm, restrained identity: parchment becomes the
  * ground, graphite becomes the ink, and violet remains the sole interaction

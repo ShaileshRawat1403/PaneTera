@@ -27,6 +27,7 @@ import { headroomRouter } from './headroom/routes';
 import { nativeRouter } from './native/routes';
 import { tesseraRouter } from './tessera/routes';
 import { agentRouter } from './agent/routes';
+import { modelRouter } from './modelRoutes';
 import { LocalScopeStore, type LocalSelectionKind, type LocalSelectionGrant } from './headroom/localScopeStore';
 import { PANETERA_ASSISTANT_INSTRUCTION } from './assistantInstruction';
 import { geminiGenerateContentUrl } from './modelConfig';
@@ -91,6 +92,7 @@ app.use('/api/headroom', headroomRouter);
 app.use('/api/native-grants', nativeRouter);
 app.use('/api/tessera', tesseraRouter);
 app.use('/api/agent', agentRouter);
+app.use('/api/models', modelRouter);
 
 // ── Rook MCP Memory Bridge (optional) ────────────────────────────────────────
 // Spawns `rook mcp memory` as a child process and communicates over stdio

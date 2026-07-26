@@ -10,9 +10,11 @@ import { createTheme, type ThemeOptions } from '@mui/material/styles';
 import {
   accent as darkAccent,
   elevation as darkElevation,
+  glass as darkGlass,
   ink as darkInk,
   lightAccent,
   lightElevation,
+  lightGlass,
   lightInk,
   lightStatus,
   lightSurface,
@@ -32,6 +34,7 @@ export function createPaneteraTheme(mode: PaneTeraThemeMode) {
   const accent = mode === 'light' ? lightAccent : darkAccent;
   const status = mode === 'light' ? lightStatus : darkStatus;
   const elevation = mode === 'light' ? lightElevation : darkElevation;
+  const glass = mode === 'light' ? lightGlass : darkGlass;
 
   const options: ThemeOptions = {
   spacing: SPACING_UNIT,
@@ -133,6 +136,10 @@ export function createPaneteraTheme(mode: PaneTeraThemeMode) {
           '--panetera-elevation-card-hover': elevation.cardHover,
           '--panetera-elevation-overlay': elevation.overlay,
           '--panetera-elevation-focus-ring': elevation.focusRing,
+          '--panetera-glass-raised-rgb': glass.raisedRgb,
+          '--panetera-glass-overlay-rgb': glass.overlayRgb,
+          '--panetera-glass-border-rgb': glass.borderRgb,
+          '--panetera-glass-violet-rgb': glass.violetRgb,
           '--panetera-font-sans': typography.sans,
           '--panetera-font-mono': typography.mono,
           '--panetera-duration-quick': `${duration.quick}ms`,

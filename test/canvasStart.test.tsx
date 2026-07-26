@@ -107,7 +107,9 @@ describe('the workstation slice stays on theme tokens', () => {
         .replace(/\/\*[\s\S]*?\*\//g, '')
         .replace(/^\s*\/\/.*$/gm, '');
       const literals = source.match(/#[0-9a-fA-F]{3,8}\b|rgba?\([^)]*\)/g) ?? [];
-      assert.deepStrictEqual(literals, [], `unexpected colour literals: ${literals.join(', ')}`);
+      // Filter out CSS variable references like rgba(var(--panetera-...), ...)
+      const rawLiterals = literals.filter((l) => !l.includes('var(--panetera-'));
+      assert.deepStrictEqual(rawLiterals, [], `unexpected colour literals: ${rawLiterals.join(', ')}`);
     });
   }
 });

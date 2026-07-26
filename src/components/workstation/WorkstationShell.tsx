@@ -346,15 +346,14 @@ export function WorkstationShell({
         sx={{
           height: 56,
           minHeight: 56,
-          borderBottom: `1px solid ${surface.border}`,
+          borderBottom: `1px solid rgba(var(--panetera-glass-border-rgb), 0.5)`,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           px: { xs: 1.5, md: 2.5 },
-          backgroundColor: surface.raised,
-          // Glassmorphic depth: backdrop blur lifts the bar visually while the
-          // semi-transparent surface lets the workspace breathe through.
-          backdropFilter: 'blur(12px)',
+          backgroundColor: `rgba(var(--panetera-glass-raised-rgb), 0.7)`,
+          backdropFilter: 'blur(24px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(24px) saturate(180%)',
           boxShadow: elevation.raised,
           zIndex: 1,
         }}

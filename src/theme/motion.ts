@@ -104,12 +104,72 @@ export function scrollBehavior(reduced: boolean = prefersReducedMotion()): Scrol
   return reduced ? 'auto' : 'smooth';
 }
 
+/**
+ * Hover depth effect: subtle lift with enhanced shadow.
+ * Use on interactive cards and panels.
+ */
+export function hoverDepth(reduced: boolean = prefersReducedMotion()) {
+  if (reduced) return {};
+  return {
+    transition: `transform ${duration.quick}ms ${easing.standard}, box-shadow ${duration.quick}ms ${easing.standard}`,
+    '&:hover': {
+      transform: 'translateY(-2px)',
+      boxShadow: '0 8px 24px rgba(0, 0, 0, 0.35)',
+    },
+  };
+}
+
+/**
+ * Focus glow effect: violet ring with smooth transition.
+ * Use on interactive elements that need visible focus.
+ */
+export function focusGlow(reduced: boolean = prefersReducedMotion()) {
+  if (reduced) return {};
+  return {
+    '&:focus-visible': {
+      outline: 'none',
+      boxShadow: '0 0 0 3px rgba(var(--panetera-glass-violet-rgb), 0.35)',
+    },
+  };
+}
+
+/**
+ * Send button pulse: subtle scale on hover.
+ */
+export function sendPulse(reduced: boolean = prefersReducedMotion()) {
+  if (reduced) return {};
+  return {
+    transition: `transform ${duration.instant}ms ${easing.standard}, background-color ${duration.instant}ms ${easing.standard}`,
+    '&:hover': {
+      transform: 'scale(1.05)',
+    },
+    '&:active': {
+      transform: 'scale(0.95)',
+    },
+  };
+}
+
+/**
+ * Staggered entrance: delay based on index.
+ * Use on lists of items that enter together.
+ */
+export function staggerEnter(index: number, reduced: boolean = prefersReducedMotion()) {
+  if (reduced) return {};
+  return {
+    animation: `panetera-enter ${duration.quick}ms ${easing.enter} ${index * 50}ms both`,
+  };
+}
+
 export const motion = {
   duration,
   easing,
   transition,
   enterStyles,
   chipEnterStyles,
+  hoverDepth,
+  focusGlow,
+  sendPulse,
+  staggerEnter,
   prefersReducedMotion,
   REDUCED_MOTION_QUERY,
 } as const;

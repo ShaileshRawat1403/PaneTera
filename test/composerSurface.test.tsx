@@ -193,10 +193,12 @@ describe('composer surfaces use theme tokens, not literals', () => {
     it(`${file} contains no raw colour literals`, () => {
       const source = readFileSync(new URL(`../${file}`, import.meta.url), 'utf8');
       const literals = source.match(/#[0-9a-fA-F]{3,8}\b|rgba?\([^)]*\)/g) ?? [];
+      // Filter out CSS variable references like rgba(var(--panetera-...), ...)
+      const rawLiterals = literals.filter((l) => !l.includes('var(--panetera-'));
       assert.deepStrictEqual(
-        literals,
+        rawLiterals,
         [],
-        `${file} should read colours from src/theme/tokens.ts, found: ${literals.join(', ')}`,
+        `${file} should read colours from src/theme/tokens.ts, found: ${rawLiterals.join(', ')}`,
       );
     });
   }

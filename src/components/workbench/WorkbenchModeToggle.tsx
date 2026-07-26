@@ -4,6 +4,8 @@ import ForumIcon from '@mui/icons-material/Forum';
 import SplitScreenIcon from '@mui/icons-material/VerticalSplit';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import CodeIcon from '@mui/icons-material/Code';
+import { accent, ink, radius, surface } from '../../theme/cssTokens';
+import { transition } from '../../theme/motion';
 
 export type WorkbenchMode = 'conversation' | 'native-focus' | 'split' | 'local-app';
 
@@ -33,12 +35,12 @@ export const WorkbenchModeToggle: React.FC<WorkbenchModeToggleProps> = ({
         alignItems: 'center',
         px: 3,
         py: 1,
-        borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-        background: 'rgba(255, 255, 255, 0.01)',
+        borderBottom: `1px solid ${surface.border}`,
+        backgroundColor: surface.base,
       }}
     >
-      <Typography variant="caption" sx={{ color: '#94a3b8', fontWeight: 700, letterSpacing: '0.05em' }}>
-        WORKBENCH MODE: <span style={{ color: '#b794f4' }}>{mode.toUpperCase()}</span>
+      <Typography variant="caption" sx={{ color: ink.muted, fontWeight: 700, letterSpacing: '0.05em' }}>
+        WORKBENCH MODE: <span style={{ color: accent.violet }}>{mode.toUpperCase()}</span>
       </Typography>
 
       <Stack direction="row" spacing={1}>
@@ -53,13 +55,14 @@ export const WorkbenchModeToggle: React.FC<WorkbenchModeToggleProps> = ({
                 fontSize: '0.65rem',
                 py: 0.25,
                 px: 1.5,
-                borderRadius: '6px',
-                background: mode === 'conversation' ? '#7f5af0' : 'transparent',
-                borderColor: 'rgba(255,255,255,0.08)',
-                color: mode === 'conversation' ? '#fff' : '#cbd5e1',
+                borderRadius: `${radius.sm}px`,
+                backgroundColor: mode === 'conversation' ? accent.violet : 'transparent',
+                borderColor: surface.border,
+                color: mode === 'conversation' ? ink.onAccent : ink.secondary,
+                transition: transition(['background-color', 'border-color', 'color']),
                 '&:hover': {
-                  background: mode === 'conversation' ? '#6d47dd' : 'rgba(255,255,255,0.02)'
-                }
+                  backgroundColor: mode === 'conversation' ? accent.violet : surface.overlay,
+                },
               }}
             >
               Chat
@@ -79,13 +82,14 @@ export const WorkbenchModeToggle: React.FC<WorkbenchModeToggleProps> = ({
                 fontSize: '0.65rem',
                 py: 0.25,
                 px: 1.5,
-                borderRadius: '6px',
-                background: mode === 'split' ? '#7f5af0' : 'transparent',
-                borderColor: 'rgba(255,255,255,0.08)',
-                color: mode === 'split' ? '#fff' : '#cbd5e1',
+                borderRadius: `${radius.sm}px`,
+                backgroundColor: mode === 'split' ? accent.violet : 'transparent',
+                borderColor: surface.border,
+                color: mode === 'split' ? ink.onAccent : ink.secondary,
+                transition: transition(['background-color', 'border-color', 'color']),
                 '&:hover': {
-                  background: mode === 'split' ? '#6d47dd' : 'rgba(255,255,255,0.02)'
-                }
+                  backgroundColor: mode === 'split' ? accent.violet : surface.overlay,
+                },
               }}
             >
               Split
@@ -105,13 +109,14 @@ export const WorkbenchModeToggle: React.FC<WorkbenchModeToggleProps> = ({
                 fontSize: '0.65rem',
                 py: 0.25,
                 px: 1.5,
-                borderRadius: '6px',
-                background: mode === 'native-focus' ? '#7f5af0' : 'transparent',
-                borderColor: 'rgba(255,255,255,0.08)',
-                color: mode === 'native-focus' ? '#fff' : '#cbd5e1',
+                borderRadius: `${radius.sm}px`,
+                backgroundColor: mode === 'native-focus' ? accent.violet : 'transparent',
+                borderColor: surface.border,
+                color: mode === 'native-focus' ? ink.onAccent : ink.secondary,
+                transition: transition(['background-color', 'border-color', 'color']),
                 '&:hover': {
-                  background: mode === 'native-focus' ? '#6d47dd' : 'rgba(255,255,255,0.02)'
-                }
+                  backgroundColor: mode === 'native-focus' ? accent.violet : surface.overlay,
+                },
               }}
             >
               Focus Active UI
@@ -130,13 +135,14 @@ export const WorkbenchModeToggle: React.FC<WorkbenchModeToggleProps> = ({
                 fontSize: '0.65rem',
                 py: 0.25,
                 px: 1.5,
-                borderRadius: '6px',
-                background: mode === 'local-app' ? '#7f5af0' : 'transparent',
-                borderColor: 'rgba(255,255,255,0.08)',
-                color: mode === 'local-app' ? '#fff' : '#cbd5e1',
+                borderRadius: `${radius.sm}px`,
+                backgroundColor: mode === 'local-app' ? accent.violet : 'transparent',
+                borderColor: surface.border,
+                color: mode === 'local-app' ? ink.onAccent : ink.secondary,
+                transition: transition(['background-color', 'border-color', 'color']),
                 '&:hover': {
-                  background: mode === 'local-app' ? '#6d47dd' : 'rgba(255,255,255,0.02)'
-                }
+                  backgroundColor: mode === 'local-app' ? accent.violet : surface.overlay,
+                },
               }}
             >
               Local App
