@@ -17,14 +17,18 @@ import { BrowserObservationView } from './nativeWorkbench/BrowserObservationView
 import { BrowserExtractionView } from './nativeWorkbench/BrowserExtractionView';
 import { WorkspacesCatalog } from './nativeWorkbench/WorkspacesCatalog';
 import { accent, ink, radius, status, surface, typography } from '../theme/cssTokens';
+import { useAgentRunPolling } from '../hooks/useAgentRunPolling';
 interface ComponentProps {
   uiComponent: UiComponent;
   onAction: (query: string) => void;
   onApproveAction?: (id: string, workspaceName: string, command: string) => void;
   onCancelAction?: (id: string) => void;
+  onApproveBrowserAction?: (runId: string) => void;
+  onRejectBrowserAction?: (runId: string) => void;
   onStartContentWorkflow?: (form: any) => void;
   activeLens?: string;
   variant?: 'feed' | 'main' | 'chat' | 'native-plane' | 'live-plane';
+  token?: string;
 }
 
 function ResolutionNotice({ kind, children }: { kind: 'success' | 'danger'; children: React.ReactNode }) {
@@ -40,7 +44,7 @@ function ResolutionNotice({ kind, children }: { kind: 'success' | 'danger'; chil
   );
 }
 
-export const InteractiveComponent: React.FC<ComponentProps> = ({ uiComponent, onAction, onApproveAction, onCancelAction, onStartContentWorkflow, activeLens, variant = 'main' }) => {
+export const InteractiveComponent: React.FC<ComponentProps> = ({ uiComponent, onAction, onApproveAction, onCancelAction, onApproveBrowserAction, onRejectBrowserAction, onStartContentWorkflow, activeLens, variant = 'main', token = '' }) => {
   const { type, data } = uiComponent;
   // Local only — the message log itself stays append-only/immutable, so
   // "did I already act on this" lives here rather than mutating history.
@@ -932,6 +936,21 @@ export const InteractiveComponent: React.FC<ComponentProps> = ({ uiComponent, on
   }
   if (type === 'BrowserObservation') {
     return <BrowserObservationView data={data} variant={variant === 'feed' ? 'feed' : 'main'} />;
+  }
+
+  if (type === 'AgentRun' && data) {
+    const { AgentRunCard } = require('./workbench/AgentRunCard');
+    const runId = data?.runId || data?.run?.runId || null;
+    const isActive = ['queued', 'planning', 'running', 'waiting-approval', 'verifying'].includes(data?.status || data?.run?.status || '');
+    const { data: polledData } = useAgentRunPolling(isActive ? runId : null, token);
+    const displayData = polledData?.run ? { ...data, ...polledData.run, events: polledData.run.events || data.events } : data;
+    return (
+      <AgentRunCard
+        result={displayData}
+        onApprove={onApproveBrowserAction ? (rid: string, _approvalId: string) => onApproveBrowserAction(rid) : undefined}
+        onCancel={onRejectBrowserAction ? (rid: string) => onRejectBrowserAction(rid) : undefined}
+      />
+    );
   }
 
   if (type === 'BrowserExtraction') {

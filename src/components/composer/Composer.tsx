@@ -19,6 +19,8 @@ import AddIcon from '@mui/icons-material/Add';
 import SendIcon from '@mui/icons-material/Send';
 import { accent, elevation, ink, radius, surface, typography } from '../../theme/cssTokens';
 import { enterStyles, transition } from '../../theme/motion';
+import { ModelSelector } from './ModelSelector';
+import type { ModelDescriptor } from '../../hooks/useModelSelection';
 import { SlashMenu } from './SlashMenu';
 import { AttachmentMenu } from './AttachmentMenu';
 import { WebLinkEntry } from './WebLinkEntry';
@@ -66,21 +68,14 @@ export interface ComposerSubmission {
 interface Props {
   onSubmit: (submission: ComposerSubmission) => void;
   resolverContext?: Partial<Omit<ResolverContext, 'includedContextCount'>>;
-  /**
-   * Host-provided attachment picker for workspace-scoped kinds. Absent means
-   * those options are shown disabled: the composer never reads the filesystem
-   * itself, and external filesystem selection waits for temporary attachment
-   * scopes.
-   */
   onRequestAttachment?: (kind: ContextKind) => Promise<AttachRequest | null>;
-  /** What the host can actually do. Drives which menu rows exist at all. */
   availability?: Partial<AttachmentAvailability>;
   placeholder?: string;
-  /**
-   * Bumped by the host to request focus (e.g. from the canvas "Describe your goal"
-   * start). Moving focus is all it does: it inserts and submits nothing.
-   */
   focusRequestKey?: number;
+  modelOptions?: ModelDescriptor[];
+  activeModel?: ModelDescriptor | null;
+  onSelectModel?: (model: ModelDescriptor) => void;
+  modelSelectorOpen?: number;
 }
 
 const DEFAULT_AVAILABILITY: AttachmentAvailability = {
@@ -113,6 +108,10 @@ export const Composer: React.FC<Props> = ({
   availability,
   placeholder = 'Ask PaneTera, type / for actions…',
   focusRequestKey,
+  modelOptions = [],
+  activeModel = null,
+  onSelectModel,
+  modelSelectorOpen = 0,
 }) => {
   const [tray, setTray] = useState<ContextTray>(EMPTY_TRAY);
   const [webEntryOpen, setWebEntryOpen] = useState(false);
@@ -467,6 +466,15 @@ export const Composer: React.FC<Props> = ({
           </Typography>
 
           <Box sx={{ flex: 1 }} />
+
+          {modelOptions.length > 0 && onSelectModel && (
+            <ModelSelector
+              models={modelOptions}
+              activeModel={activeModel}
+              onSelect={onSelectModel}
+              externalOpenKey={modelSelectorOpen}
+            />
+          )}
 
           {/*
             The send control carries the accent only when there is something to

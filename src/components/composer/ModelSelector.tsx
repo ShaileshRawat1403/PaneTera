@@ -12,6 +12,8 @@ interface ModelSelectorProps {
   activeModel: ModelDescriptor | null;
   onSelect: (model: ModelDescriptor) => void;
   disabled?: boolean;
+  /** When true, programmatically opens the dropdown. */
+  externalOpenKey?: number;
 }
 
 const providerColors: Record<string, string> = {
@@ -33,11 +35,17 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   activeModel,
   onSelect,
   disabled = false,
+  externalOpenKey = 0,
 }) => {
   const [open, setOpen] = useState(false);
   const [hoveredIndex, setHoveredIndex] = useState(-1);
   const containerRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  // Respond to external open requests (Cmd+M)
+  useEffect(() => {
+    if (externalOpenKey > 0) setOpen(true);
+  }, [externalOpenKey]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {

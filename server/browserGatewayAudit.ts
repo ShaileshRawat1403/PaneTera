@@ -29,14 +29,19 @@ export function auditBrowserPortalDisconnect(
 }
 
 export function auditBrowserExtensionEvent(
-  event: 'browser.pair' | 'browser.disconnect',
+  event: 'browser.pair' | 'browser.disconnect'
+    | 'browser.action.preview-claim' | 'browser.action.preview-complete'
+    | 'browser.action.dispatch-claim' | 'browser.action.complete'
+    | 'browser.inspection.claim' | 'browser.inspection.complete'
+    | 'browser.observation.claim' | 'browser.observation.complete',
   session: BrowserActorSession,
+  details?: Record<string, unknown>,
 ): TypedAuditRecord {
   return logTypedAudit({
     event,
     actor: browserExtensionActor(session),
     outcome: 'success',
     policyDecision: 'allowed',
-    details: { capability: event },
+    details: { capability: event, ...details },
   });
 }

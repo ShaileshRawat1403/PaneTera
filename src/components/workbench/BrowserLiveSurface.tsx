@@ -57,7 +57,34 @@ export function BrowserLiveSurface({ initialFrame, onClose }: BrowserLiveSurface
   const [clickMode, setClickMode] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
+  const [captured, setCaptured] = useState(false);
   const inFlight = useRef(false);
+
+  const captureAsEvidence = async () => {
+    try {
+      const resp = await fetch('/api/browser/observations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transactionId: crypto.randomUUID(),
+          idempotencyKey: crypto.randomUUID(),
+          capability: 'browser.dom.observe',
+          isPhase1: true,
+          target: { tabId: 0, frameId: 0, expectedOrigin: new URL(frame.url).origin },
+          payload: {
+            title: frame.title,
+            url: frame.url,
+            origin: new URL(frame.url).origin,
+            selectedText: '',
+          },
+          capturedAt: frame.capturedAt,
+        }),
+      });
+      if (resp.ok) setCaptured(true);
+    } catch {
+      // Silent — evidence capture is best-effort from the live surface
+    }
+  };
 
   const run = async (action: 'snapshot' | 'focus') => {
     if (inFlight.current) return;
@@ -244,11 +271,10 @@ export function BrowserLiveSurface({ initialFrame, onClose }: BrowserLiveSurface
         <Button
           size="small"
           variant="outlined"
-          onClick={() => {
-            console.log('Capturing evidence:', frame);
-          }}
+          onClick={captureAsEvidence}
+          disabled={captured}
         >
-          Capture as evidence
+          {captured ? 'Captured' : 'Capture as evidence'}
         </Button>
         <Button size="small" color="error" startIcon={<StopCircleOutlinedIcon />} onClick={onClose}>
           End live view

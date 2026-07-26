@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import fs from 'fs';
 import path from 'path';
 
-export type BrowserActionCapability = 'browser.click.execute';
+export type BrowserActionCapability = 'browser.click.execute' | 'browser.fill.execute' | 'browser.scroll.execute' | 'browser.select.execute';
 export type BrowserActionPreviewStatus =
   | 'queued'
   | 'claimed'
@@ -68,6 +68,10 @@ export interface BrowserAction {
   interruptedAt?: string;
   interruptionReason?: string;
   result?: BrowserActionResult;
+  /** Value to fill into text inputs (for browser.fill.execute). */
+  fillValue?: string;
+  /** Scroll direction (for browser.scroll.execute). */
+  scrollDirection?: 'up' | 'down' | 'left' | 'right';
 }
 
 export interface ClaimedBrowserAction {
@@ -91,7 +95,7 @@ interface PersistedBrowserActions {
 }
 
 const ACTION_TTL_MS = 2 * 60 * 1000;
-const ALLOWED_ROLES = new Set(['button', 'link', 'checkbox', 'radio', 'tab']);
+const ALLOWED_ROLES = new Set(['button', 'link', 'checkbox', 'radio', 'tab', 'textbox', 'combobox', 'listbox', 'slider', 'menuitem']);
 
 function cloneAction(action: StoredBrowserAction): BrowserAction {
   const {
@@ -194,9 +198,11 @@ export class BrowserActionStore {
     capability: BrowserActionCapability;
     target: BrowserActionTarget;
     expectedOutcome: string;
+    fillValue?: string;
+    scrollDirection?: 'up' | 'down' | 'left' | 'right';
   }): BrowserAction {
-    if (input.capability !== 'browser.click.execute') {
-      throw new Error('Only browser.click.execute is supported in this milestone');
+    if (!['browser.click.execute', 'browser.fill.execute', 'browser.scroll.execute', 'browser.select.execute'].includes(input.capability)) {
+      throw new Error('Only browser.click.execute, browser.fill.execute, browser.scroll.execute, and browser.select.execute are supported');
     }
 
     const now = new Date();
@@ -211,6 +217,8 @@ export class BrowserActionStore {
       previewStatus: 'queued',
       createdAt: now.toISOString(),
       expiresAt: new Date(now.getTime() + ACTION_TTL_MS).toISOString(),
+      fillValue: input.fillValue ? boundedText(input.fillValue, 'fillValue', 5000) : undefined,
+      scrollDirection: input.scrollDirection,
     };
     this.actions.set(action.actionId, action);
     this.persist();

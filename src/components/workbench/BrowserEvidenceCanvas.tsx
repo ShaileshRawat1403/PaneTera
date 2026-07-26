@@ -82,22 +82,46 @@ export function BrowserEvidenceCanvas({ records, onReturnToPreview }: BrowserEvi
   const [loading, setLoading] = useState(!records);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch extractions on mount if records not provided
+  // Fetch extractions on mount and auto-refresh every 10 seconds
   useEffect(() => {
     if (records && records.length > 0) return;
     const fetchExtractions = async () => {
       try {
         setLoading(true);
-        setExtractions([]);
-        setError(null);
-      } catch (err) {
-        setError('Failed to load extractions');
+        const resp = await fetch('/api/evidence');
+        if (resp.ok) {
+          const data = await resp.json();
+          const items: ExtractionSummary[] = [
+            ...(data.extractions || []).map((e: any) => ({
+              extractionId: e.extractionId || e.parentCaptureId || 'ext',
+              parentCaptureId: e.parentCaptureId,
+              type: e.capability || e.type || 'text',
+              capturedAt: e.source?.capturedAt || new Date().toISOString(),
+              title: e.source?.title || e.title || 'Extraction',
+              url: e.source?.url || e.url,
+            })),
+            ...(data.observations || []).map((o: any) => ({
+              extractionId: o.captureId || 'obs',
+              parentCaptureId: o.captureId,
+              type: 'observation',
+              capturedAt: o.capturedAt || new Date().toISOString(),
+              title: o.title || 'Observation',
+              url: o.url,
+            })),
+          ];
+          if (items.length > 0) setExtractions(items);
+          setError(null);
+        }
+      } catch {
+        setError('Failed to load evidence');
       } finally {
         setLoading(false);
       }
     };
 
-    fetchExtractions();
+    void fetchExtractions();
+    const interval = setInterval(fetchExtractions, 10_000);
+    return () => clearInterval(interval);
   }, [records]);
 
   const selectedExtraction = useMemo(() => {

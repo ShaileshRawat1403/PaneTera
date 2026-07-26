@@ -22,6 +22,8 @@ import { PreviewPanel, FeedItem } from './components/PreviewPanel';
 import { InteractiveComponent } from './components/InteractiveComponent';
 import { WorkstationShell } from './components/workstation/WorkstationShell';
 import { CanvasStart } from './components/workstation/CanvasStart';
+import { ContextBriefPanel } from './components/workstation/ContextBriefPanel';
+import { BrowserEvidenceCanvas } from './components/workbench/BrowserEvidenceCanvas';
 import { PaneDivider } from './components/workstation/PaneDivider';
 import {
   maxConversationWidth,
@@ -29,6 +31,8 @@ import {
   usePersistentPaneWidth,
 } from './components/workstation/paneSizing';
 import { workstationGuidance } from './components/workstation/guidance';
+import { buildContextBrief } from '../src/context/contextBrief';
+import type { ProjectSnapshot, NextAction } from '../src/context/contextBrief';
 import type { HeadroomCapsuleView } from './components/headroom/HeadroomPanel';
 import type { UiComponent } from '../shared/uiComponent';
 import SearchIcon from '@mui/icons-material/Search';
@@ -48,6 +52,9 @@ import { DependencyMapCard } from './components/workbench/DependencyMapCard';
 import DeviceHubIcon from '@mui/icons-material/DeviceHub';
 
 import { useWorkbenchPreferences } from './hooks/useWorkbenchPreferences';
+import { useModelSelection } from './hooks/useModelSelection';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { exportAsMarkdown, exportAsJson, downloadFile, copyToClipboard } from './utils/exportConversation';
 import { WorkbenchEmptyState } from './components/workbench/WorkbenchEmptyState';
 import { WorkbenchFailureState } from './components/workbench/WorkbenchFailureState';
 import { LiveWorkbenchSurface } from './components/workbench/LiveWorkbenchSurface';
@@ -118,6 +125,8 @@ const App: React.FC = () => {
   const [activeHeadroomCapsule, setActiveHeadroomCapsule] = useState<HeadroomCapsuleView | null>(null);
   const [rigRequestKey, setRigRequestKey] = useState(0);
   const [headroomRequestKey, setHeadroomRequestKey] = useState(0);
+  const [showEvidenceCanvas, setShowEvidenceCanvas] = useState(false);
+  const [modelSelectorKey, setModelSelectorKey] = useState(0);
   const [projectPickerRequestKey, setProjectPickerRequestKey] = useState(0);
   // Bumped to ask the composer to take focus (e.g. from the canvas "Describe your
   // goal" start). It moves focus only; it inserts and submits nothing.
@@ -150,6 +159,29 @@ const App: React.FC = () => {
   });
 
   const { prefs, setAppId } = useWorkbenchPreferences();
+  const { models: modelList, activeModel, selectModel } = useModelSelection();
+
+  // Keyboard shortcuts
+  const handleCopy = React.useCallback(async () => {
+    const md = exportAsMarkdown(messages.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })));
+    const ok = await copyToClipboard(md);
+    if (ok) addMessage({ role: 'assistant', content: 'Conversation copied to clipboard.' });
+  }, [messages]);
+
+  const handleExport = React.useCallback(() => {
+    const chatMessages = messages.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    downloadFile(exportAsMarkdown(chatMessages), `panetera-conversation-${timestamp}.md`, 'text/markdown');
+    downloadFile(exportAsJson(chatMessages), `panetera-conversation-${timestamp}.json`, 'application/json');
+  }, [messages]);
+
+  useKeyboardShortcuts({
+    onModelSelector: React.useCallback(() => {
+      setModelSelectorKey(k => k + 1);
+    }, []),
+    onCopy: handleCopy,
+    onExport: handleExport,
+  });
   const [localAppStatus, setLocalAppStatus] = React.useState<string>('checking');
   const [localAppDef, setLocalAppDef] = React.useState<any>(null);
   const [webPreview, setWebPreview] = useState<WebPreviewRequest | null>(null);
@@ -1020,6 +1052,7 @@ const App: React.FC = () => {
   const planExecutors: PlanExecutors = {
     openRig: () => setRigRequestKey((value) => value + 1),
     openHeadroom: () => setHeadroomRequestKey((value) => value + 1),
+    openEvidence: () => { setShowEvidenceCanvas(true); setActiveComponent(null); },
     webOpen: (plan) => {
       clearWebPreviewInspection();
       setWebPreview({ url: plan.url, name: plan.label });
@@ -1104,6 +1137,53 @@ const App: React.FC = () => {
     // performs that effect itself, so declaring a no-op here would be exactly
     // the placeholder the derivation is meant to prevent. The composer
     // declares that capability for itself.
+    agentRun: async (plan) => {
+      setLoading(true);
+      addMessage({ role: 'user', content: plan.objective });
+      setActiveReply(null);
+
+      try {
+        const resp = await fetch('/api/agent/run', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            objective: plan.objective,
+            context: plan.context,
+          }),
+        });
+
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          throw new Error(err.error?.message || `Agent run failed (${resp.status})`);
+        }
+
+        const result = await resp.json();
+        setActiveComponent({
+          type: 'AgentRun',
+          data: result,
+        });
+        addMessage({
+          role: 'assistant',
+          content: result.reply || 'Agent run completed.',
+          intent: 'run',
+          toolsUsed: result.events
+            ?.filter((e: any) => e.type === 'tool.completed')
+            .map((e: any) => ({ tool: e.data?.capability || 'unknown', status: 'success' as const })),
+        });
+        setActiveReply(result.reply || null);
+      } catch (err: any) {
+        addMessage({
+          role: 'assistant',
+          content: `Agent run failed: ${err.message}`,
+          intent: 'needs_capability',
+        });
+      } finally {
+        setLoading(false);
+      }
+    },
     chat: async (plan) => {
       setLoading(true);
 
@@ -1172,6 +1252,7 @@ const App: React.FC = () => {
             persona: activeLens,
             captureId: activeComponent?.type === 'BrowserObservation' ? activeComponent.data.captureId : undefined,
             attachedContext: plan.context,
+            modelId: activeModel?.id,
           }
         : {
             query: effectiveMessage,
@@ -1180,6 +1261,7 @@ const App: React.FC = () => {
               parts: [{ text: message.content }],
             })),
             attachedContext: plan.context,
+            modelId: activeModel?.id,
           };
 
       const apiPromise = fetch(endpoint, {
@@ -1213,6 +1295,7 @@ const App: React.FC = () => {
           role: 'assistant',
           content: answer ?? 'I could not produce a response.',
           intent: data.intent || plan.intentFamily,
+          model: activeModel?.name || activeModel?.id || undefined,
           // data.uiComponent is routed to the canvas above, not stored here.
           toolsUsed: data.toolsUsed,
           filesInspected: data.filesInspected,
@@ -1300,7 +1383,32 @@ const App: React.FC = () => {
     // The plan is the execution boundary. App never inspects readiness or
     // family itself, so a non-ready envelope cannot reach a backend by
     // omission here.
-    const plan = planSubmission(submission);
+    //
+    // When the deterministic resolver falls through to 'converse', the
+    // model-classifier can re-route ambiguous prompts to the right surface.
+    let effectiveSubmission = submission;
+    if (submission.intent.family === 'converse' && submission.intent.readiness === 'ready') {
+      try {
+        const classifyResp = await fetch('/api/classify-intent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ query: submission.intent.rawInput }),
+        });
+        if (classifyResp.ok) {
+          const { family, confidence } = await classifyResp.json();
+          if (family && family !== 'converse' && confidence >= 0.7) {
+            effectiveSubmission = {
+              ...submission,
+              intent: { ...submission.intent, family, confidence },
+            };
+          }
+        }
+      } catch {
+        // Classifier unavailable — proceed with original intent
+      }
+    }
+
+    const plan = planSubmission(effectiveSubmission);
 
     if (plan.kind === 'blocked') {
       addMessage({
@@ -1394,6 +1502,36 @@ const App: React.FC = () => {
 
   const handleClearFeed = () => {
     setPreviewFeed([]);
+  };
+
+  const handleApproveBrowserAction = async (runId: string) => {
+    try {
+      const resp = await fetch(`/api/agent/run/${runId}/approve-browser`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!resp.ok) {
+        const data = await resp.json();
+        addMessage({ role: 'assistant', content: `Approval failed: ${data.error?.message || 'Unknown error'}` });
+      }
+    } catch {
+      addMessage({ role: 'assistant', content: 'Failed to communicate with server for browser action approval.' });
+    }
+  };
+
+  const handleRejectBrowserAction = async (runId: string) => {
+    try {
+      const resp = await fetch(`/api/agent/run/${runId}/reject-browser`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!resp.ok) {
+        const data = await resp.json();
+        addMessage({ role: 'assistant', content: `Rejection failed: ${data.error?.message || 'Unknown error'}` });
+      }
+    } catch {
+      addMessage({ role: 'assistant', content: 'Failed to communicate with server for browser action rejection.' });
+    }
   };
 
   const fetchDraftContent = async (runId: string): Promise<string | undefined> => {
@@ -1780,9 +1918,12 @@ const App: React.FC = () => {
           onAction={handleSend}
           onApproveAction={handleApproveAction}
           onCancelAction={handleRemoveItem}
+          onApproveBrowserAction={handleApproveBrowserAction}
+          onRejectBrowserAction={handleRejectBrowserAction}
           onStartContentWorkflow={handleStartContentWorkflow}
           activeLens={activeLens}
           variant={isSoothsayerLivePlaneActive ? 'native-plane' : 'main'}
+          token={token}
         />
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
           <Button
@@ -2041,6 +2182,10 @@ const App: React.FC = () => {
                     hasWebLinks: true,
                     hasMcpResources: mcpResources.length > 0,
                   }}
+                  modelOptions={modelList}
+                  activeModel={activeModel}
+                  onSelectModel={selectModel}
+                  modelSelectorOpen={modelSelectorKey}
                 />
               </Box>
             </Box>
@@ -2059,7 +2204,43 @@ const App: React.FC = () => {
             currentObjective: headroomObjective.trim() || null,
           };
 
-          const emptyCanvasNode = (
+          const contextBrief = buildContextBrief({
+            projects: workspacesList.map((w) => ({
+              id: w.id,
+              name: w.name,
+              lastTouchedAt: undefined,
+              reachable: true,
+              activeRuns: 0,
+              attention: [],
+              trackedBecause: w.id === activeWorkspace?.id ? 'pinned' : undefined,
+            })),
+            activeProjectId: activeWorkspace?.id ?? null,
+            objective: headroomObjective.trim() || null,
+            now: new Date(),
+          });
+
+          const handleBriefAction = (action: NextAction) => {
+            switch (action.kind) {
+              case 'focus-composer':
+                setRevealConversationKey((v) => v + 1);
+                break;
+              case 'open-project-picker':
+                setProjectPickerRequestKey((v) => v + 1);
+                break;
+              case 'open-surface':
+                if (action.surface === 'rig') setRigRequestKey((v) => v + 1);
+                else if (action.surface === 'headroom') setHeadroomRequestKey((v) => v + 1);
+                else if (action.surface === 'audit') setIsAuditLogsOpen(true);
+                break;
+              case 'submit-message':
+                handleSend(action.message);
+                break;
+            }
+          };
+
+          const emptyCanvasNode = activeWorkspace ? (
+            <ContextBriefPanel brief={contextBrief} onAction={handleBriefAction} />
+          ) : (
             <CanvasStart
               onChooseProject={() => setProjectPickerRequestKey((value) => value + 1)}
               onConnectCapability={() => setRigRequestKey((value) => value + 1)}
@@ -2117,6 +2298,10 @@ const App: React.FC = () => {
                 </Box>
               </Box>
             )
+          ) : showEvidenceCanvas ? (
+            <BrowserEvidenceCanvas
+              onReturnToPreview={() => setShowEvidenceCanvas(false)}
+            />
           ) : activeComponent ? (
             renderActiveCard()
           ) : activeWorkspace ? (

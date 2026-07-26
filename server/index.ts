@@ -936,7 +936,7 @@ app.get('/api/desktop/apps', (req, res) => {
 // not a stub to grow into.
 
 // Gemini Q&A execution handler
-async function askGemini(query: string, history: any[] = []): Promise<{ reply: string; uiComponent?: any }> {
+async function askGemini(query: string, history: any[] = [], modelId?: string): Promise<{ reply: string; uiComponent?: any }> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw new Error('GEMINI_API_KEY environment variable is missing.');
@@ -944,7 +944,8 @@ async function askGemini(query: string, history: any[] = []): Promise<{ reply: s
 
   // Key travels in a header, never in the URL — URLs leak into logs,
   // error traces, and proxies.
-  const url = geminiGenerateContentUrl(process.env.GEMINI_MODEL);
+  const geminiModel = modelId || process.env.GEMINI_MODEL;
+  const url = geminiGenerateContentUrl(geminiModel);
 
   const contentsPayload: any[] = [];
   for (const h of history) {
@@ -1167,13 +1168,14 @@ async function askGemini(query: string, history: any[] = []): Promise<{ reply: s
 }
 
 // OpenAI Q&A execution handler
-async function askOpenAI(query: string, history: any[] = []): Promise<{ reply: string; uiComponent?: any }> {
+async function askOpenAI(query: string, history: any[] = [], modelId?: string): Promise<{ reply: string; uiComponent?: any }> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     throw new Error('OPENAI_API_KEY environment variable is missing.');
   }
 
   const url = 'https://api.openai.com/v1/chat/completions';
+  const resolvedModel = modelId || 'gpt-4o-mini';
 
   const messagesPayload: any[] = [
     {
@@ -1300,7 +1302,7 @@ async function askOpenAI(query: string, history: any[] = []): Promise<{ reply: s
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: resolvedModel,
         messages: messagesPayload,
         tools,
         tool_choice: 'auto'
@@ -1391,13 +1393,14 @@ async function askOpenAI(query: string, history: any[] = []): Promise<{ reply: s
 }
 
 // Local Ollama Q&A offline execution fallback handler
-async function askOllama(query: string): Promise<{ reply: string; uiComponent?: any }> {
+async function askOllama(query: string, modelId?: string): Promise<{ reply: string; uiComponent?: any }> {
+  const ollamaModel = modelId?.replace('ollama:', '') || 'llama3';
   const url = 'http://localhost:11434/api/generate';
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: 'llama3',
+      model: ollamaModel,
       prompt: `${PANETERA_ASSISTANT_INSTRUCTION}\nQuery: ${query}\n` +
               `You cannot execute anything from this offline path — if asked to build, test, or lint, tell the user ` +
               `to try again once the portal's main connection is available so the request can go through approval.\n` +
@@ -2241,12 +2244,13 @@ app.get('/api/myai-workspaces/audit', (req: Request, res: Response) => {
 
 // Orchestrator Chat V0 endpoint (strictly read-only)
 app.post('/api/orchestrator/chat', async (req: Request, res: Response) => {
-  const { message, workspaceId, selectedFile, persona, captureId } = req.body as {
+  const { message, workspaceId, selectedFile, persona, captureId, modelId } = req.body as {
     message: string;
     workspaceId: string | null;
     selectedFile: string | null;
     persona: 'engineer' | 'pm' | 'ba' | 'qa' | 'exec';
     captureId?: string;
+    modelId?: string;
   };
 
   if (!message) {
@@ -2268,7 +2272,8 @@ app.post('/api/orchestrator/chat', async (req: Request, res: Response) => {
       selectedFile,
       persona || 'engineer',
       resolveWorkspacePath,
-      captureId
+      captureId,
+      modelId
     );
     res.json(response);
   } catch (err: any) {
@@ -2278,7 +2283,7 @@ app.post('/api/orchestrator/chat', async (req: Request, res: Response) => {
 
 // Post chat endpoint - routes queries to natural language engine
 app.post('/api/chat', async (req, res) => {
-  const { query, history } = req.body as { query: string; history?: any[] };
+  const { query, history, modelId } = req.body as { query: string; history?: any[]; modelId?: string };
   if (!query) {
     return res.status(400).json({ error: 'query missing' });
   }
@@ -2322,6 +2327,44 @@ app.post('/api/chat', async (req, res) => {
     }
   };
 
+  // Route by selected model provider, then fall back to the cascade
+  const modelProvider = modelId?.startsWith('ollama:') ? 'ollama'
+    : modelId?.startsWith('claude') ? 'anthropic'
+    : modelId?.startsWith('gemini') ? 'google'
+    : modelId?.startsWith('gpt') || modelId?.startsWith('o4') ? 'openai'
+    : null;
+
+  // If a specific provider was selected, try that provider first
+  if (modelProvider === 'google' && process.env.GEMINI_API_KEY) {
+    try {
+      const result = await askGemini(augmentedQuery, history || [], modelId);
+      autoRemember(result);
+      return res.json(result);
+    } catch (e: any) {
+      console.warn('\n[Warning] Gemini API failed:', e.message || e);
+    }
+  } else if (modelProvider === 'openai' && process.env.OPENAI_API_KEY) {
+    try {
+      const result = await askOpenAI(augmentedQuery, history || [], modelId);
+      autoRemember(result);
+      return res.json(result);
+    } catch (e: any) {
+      console.warn('\n[Warning] OpenAI API failed:', e.message || e);
+    }
+  } else if (modelProvider === 'ollama') {
+    try {
+      const ollamaResult = await askOllama(augmentedQuery, modelId);
+      autoRemember(ollamaResult);
+      return res.json(ollamaResult);
+    } catch (e: any) {
+      console.warn('\n[Warning] Ollama failed:', e.message || e);
+    }
+  } else if (modelProvider === 'anthropic') {
+    // Anthropic not yet supported — fall through to cascade
+    console.warn('\n[Info] Anthropic provider not yet supported, falling back to cascade.');
+  }
+
+  // Fallback cascade: Gemini → OpenAI → Ollama → deterministic
   // 1. Try Gemini first (if key exists)
   if (process.env.GEMINI_API_KEY) {
     try {
@@ -2336,7 +2379,7 @@ app.post('/api/chat', async (req, res) => {
   // 2. Try OpenAI second (if key exists)
   if (process.env.OPENAI_API_KEY) {
     try {
-      const result = await askOpenAI(augmentedQuery, history || []);
+      const result = await askOpenAI(augmentedQuery, history || [], modelId);
       autoRemember(result);
       return res.json(result);
     } catch (e: any) {
@@ -2360,6 +2403,85 @@ app.post('/api/chat', async (req, res) => {
   } catch (fallbackErr: any) {
     console.error('[Error in local fallback resolver]:', fallbackErr);
     res.status(500).json({ error: fallbackErr.message || 'Error processing query.' });
+  }
+});
+
+// Intent classifier endpoint — uses a lightweight LLM call to classify
+// ambiguous prompts that don't match deterministic patterns.
+app.post('/api/classify-intent', async (req, res) => {
+  const { query } = req.body as { query: string };
+  if (!query) {
+    return res.status(400).json({ error: 'query missing' });
+  }
+
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    return res.json({ family: 'converse', confidence: 0 });
+  }
+
+  try {
+    const prompt = `Classify this user message into ONE of these intent families. Return JSON only.
+Families: converse, project, web-surface, live-app, artifact, run, proposal, rig, headroom, evidence
+
+Rules:
+- "converse": general question, greeting, or anything not matching other families
+- "project": choose, switch, or open a workspace/project
+- "web-surface": open, show, close a website URL
+- "live-app": open a registered application
+- "artifact": inspect, examine, explain code or files
+- "run": start, execute, or run something (agent execution)
+- "proposal": approve, reject, or review an action
+- "rig": configure tools, connections, or MCP servers
+- "headroom": context, capsules, or memory
+- "evidence": browser observations, extractions, or provenance
+
+User message: "${query}"
+
+Respond with JSON: { "family": "...", "confidence": 0.0-1.0 }`;
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'user', content: prompt }],
+        response_format: { type: 'json_object' },
+        max_tokens: 100,
+        temperature: 0,
+      }),
+    });
+
+    if (!response.ok) {
+      return res.json({ family: 'converse', confidence: 0 });
+    }
+
+    const data = await response.json();
+    const text = data.choices?.[0]?.message?.content;
+    const parsed = JSON.parse(text || '{}');
+
+    const validFamilies = ['converse', 'project', 'web-surface', 'live-app', 'artifact', 'run', 'proposal', 'rig', 'headroom', 'evidence'];
+    const family = validFamilies.includes(parsed.family) ? parsed.family : 'converse';
+    const confidence = typeof parsed.confidence === 'number' ? Math.min(1, Math.max(0, parsed.confidence)) : 0;
+
+    res.json({ family, confidence });
+  } catch {
+    res.json({ family: 'converse', confidence: 0 });
+  }
+});
+
+// Evidence browsing endpoint — returns recent browser observations + extractions
+// for the evidence canvas surface.
+app.get('/api/evidence', (_req, res) => {
+  try {
+    const { browserEvidenceStore } = require('./browserEvidenceStore') as typeof import('./browserEvidenceStore');
+    const observations = browserEvidenceStore.getObservations() ?? [];
+    const extractions = browserEvidenceStore.getRecentExtractions(50) ?? [];
+    res.json({ observations, extractions, count: observations.length + extractions.length });
+  } catch {
+    res.json({ observations: [], extractions: [], count: 0 });
   }
 });
 

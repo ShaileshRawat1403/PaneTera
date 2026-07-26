@@ -271,6 +271,128 @@ export function setupMcpServer(transactionId: string, principal: McpClientPrinci
     async (args) => browserGetEvidence(principal, transactionId, args),
   );
 
+  // Execution tools — governed browser actions
+  server.tool(
+    'browser_propose_click',
+    'Propose a governed click action on a browser element. Requires operator approval before execution.',
+    {
+      installationId: z.string().describe('The browser installation ID'),
+      tabId: z.number().describe('The browser tab ID'),
+      expectedOrigin: z.string().describe('The expected origin of the page'),
+      role: z.string().describe('The ARIA role of the target element'),
+      accessibleName: z.string().describe('The accessible name of the target element'),
+      elementFingerprint: z.string().describe('The fingerprint of the target element'),
+      expectedOutcome: z.string().describe('What clicking this element should accomplish'),
+    },
+    async (args) => {
+      const { browserActionStore } = await import('../browserActionStore');
+      const action = browserActionStore.propose({
+        installationId: args.installationId,
+        capability: 'browser.click.execute',
+        target: {
+          tabId: args.tabId,
+          frameId: 0,
+          expectedOrigin: args.expectedOrigin,
+          role: args.role,
+          accessibleName: args.accessibleName,
+          elementFingerprint: args.elementFingerprint,
+        },
+        expectedOutcome: args.expectedOutcome,
+      });
+      return { content: [{ type: 'text', text: JSON.stringify(action) }] };
+    },
+  );
+
+  server.tool(
+    'browser_propose_fill',
+    'Propose a governed fill action on a browser text input. Requires operator approval before execution.',
+    {
+      installationId: z.string().describe('The browser installation ID'),
+      tabId: z.number().describe('The browser tab ID'),
+      expectedOrigin: z.string().describe('The expected origin of the page'),
+      role: z.string().describe('The ARIA role of the target element (textbox, combobox)'),
+      accessibleName: z.string().describe('The accessible name of the target element'),
+      elementFingerprint: z.string().describe('The fingerprint of the target element'),
+      fillValue: z.string().describe('The value to fill into the input'),
+      expectedOutcome: z.string().describe('What filling this input should accomplish'),
+    },
+    async (args) => {
+      const { browserActionStore } = await import('../browserActionStore');
+      const action = browserActionStore.propose({
+        installationId: args.installationId,
+        capability: 'browser.fill.execute',
+        target: {
+          tabId: args.tabId,
+          frameId: 0,
+          expectedOrigin: args.expectedOrigin,
+          role: args.role,
+          accessibleName: args.accessibleName,
+          elementFingerprint: args.elementFingerprint,
+        },
+        expectedOutcome: args.expectedOutcome,
+        fillValue: args.fillValue,
+      });
+      return { content: [{ type: 'text', text: JSON.stringify(action) }] };
+    },
+  );
+
+  server.tool(
+    'browser_propose_scroll',
+    'Propose a governed scroll action on the browser page. Requires operator approval before execution.',
+    {
+      installationId: z.string().describe('The browser installation ID'),
+      tabId: z.number().describe('The browser tab ID'),
+      expectedOrigin: z.string().describe('The expected origin of the page'),
+      direction: z.enum(['up', 'down', 'left', 'right']).describe('The scroll direction'),
+      expectedOutcome: z.string().describe('What scrolling should accomplish'),
+    },
+    async (args) => {
+      const { browserActionStore } = await import('../browserActionStore');
+      const action = browserActionStore.propose({
+        installationId: args.installationId,
+        capability: 'browser.scroll.execute',
+        target: {
+          tabId: args.tabId,
+          frameId: 0,
+          expectedOrigin: args.expectedOrigin,
+          role: 'document',
+          accessibleName: `Scroll ${args.direction}`,
+          elementFingerprint: `scroll-${args.direction}-${args.tabId}`,
+        },
+        expectedOutcome: args.expectedOutcome,
+        scrollDirection: args.direction,
+      });
+      return { content: [{ type: 'text', text: JSON.stringify(action) }] };
+    },
+  );
+
+  server.tool(
+    'browser_inspect_elements',
+    'Request element discovery on a browser tab. Returns available interactive elements for subsequent actions.',
+    {
+      installationId: z.string().describe('The browser installation ID'),
+    },
+    async (args) => {
+      const { browserInspectionStore } = await import('../browserInspectionStore');
+      const request = browserInspectionStore.create(args.installationId);
+      return { content: [{ type: 'text', text: JSON.stringify(request) }] };
+    },
+  );
+
+  server.tool(
+    'browser_get_action_status',
+    'Check the status of a proposed browser action.',
+    {
+      actionId: z.string().describe('The action ID to check'),
+    },
+    async (args) => {
+      const { browserActionStore } = await import('../browserActionStore');
+      const action = browserActionStore.get(args.actionId);
+      if (!action) return { content: [{ type: 'text', text: 'Action not found' }] };
+      return { content: [{ type: 'text', text: JSON.stringify(action) }] };
+    },
+  );
+
   server.prompt(
     'browser_explain_capture',
     'Summarize the provided capture and explain its key context.',

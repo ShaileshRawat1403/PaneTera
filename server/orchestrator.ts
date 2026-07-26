@@ -121,10 +121,11 @@ async function askGemini(prompt: string): Promise<any> {
 }
 
 // Ask OpenAI helper
-async function askOpenAI(prompt: string): Promise<any> {
+async function askOpenAI(prompt: string, modelId?: string): Promise<any> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error('No OpenAI key');
   const url = 'https://api.openai.com/v1/chat/completions';
+  const resolvedModel = modelId || 'gpt-4o-mini';
   const response = await fetch(url, {
     method: 'POST',
     headers: {
@@ -132,7 +133,7 @@ async function askOpenAI(prompt: string): Promise<any> {
       Authorization: `Bearer ${apiKey}`
     },
     body: JSON.stringify({
-      model: 'gpt-4o-mini',
+      model: resolvedModel,
       messages: [{ role: 'user', content: prompt }],
       response_format: { type: 'json_object' }
     })
@@ -168,7 +169,8 @@ export async function handleOrchestratorQuery(
   selectedFile: string | null,
   persona: 'engineer' | 'pm' | 'ba' | 'qa' | 'exec',
   workspacePathResolver: (id: string) => Promise<{ name: string; path: string }>,
-  captureId?: string
+  captureId?: string,
+  modelId?: string
 ): Promise<OrchestratorResponse> {
   
   if (!workspaceId) {
@@ -309,7 +311,7 @@ export async function handleOrchestratorQuery(
       const prompt = `System Instruction:\n${sysInstruction}\n\nUser Query: ${message}\n\nWorkspace: ${workspaceName}\nSelected File: ${selectedFile}\nPersona: ${persona}\n\nTool outputs:\n${JSON.stringify(toolOutputs, null, 2)}`;
       let llmRes: any;
       if (promptProvider === 'gemini') llmRes = await askGemini(prompt);
-      else if (promptProvider === 'openai') llmRes = await askOpenAI(prompt);
+      else if (promptProvider === 'openai') llmRes = await askOpenAI(prompt, modelId);
       else if (promptProvider === 'ollama') llmRes = await askOllama(prompt);
 
       if (llmRes && llmRes.answer) {

@@ -43,6 +43,8 @@ export type SubmissionPlan =
   | { kind: 'clear-context' }
   | { kind: 'open-headroom' }
   | { kind: 'open-rig' }
+  | { kind: 'open-evidence' }
+  | { kind: 'agent-run'; objective: string; context: ContextDescriptor[] }
   | {
       kind: 'chat';
       endpoint: 'orchestrator' | 'general';
@@ -206,14 +208,15 @@ export function planSubmission(input: SubmissionInput): SubmissionPlan {
     // No default. Every family that can reach a backend is named above, so a
     // new family fails the type check here rather than silently becoming chat.
     case 'run':
+      return {
+        kind: 'agent-run',
+        objective: intent.rawInput,
+        context: describeContext(context),
+      };
     case 'proposal':
     case 'rig':
       return { kind: 'open-rig' };
     case 'evidence':
-      return {
-        kind: 'blocked',
-        readiness: intent.readiness,
-        reason: 'That surface is not connected yet.',
-      };
+      return { kind: 'open-evidence' };
   }
 }

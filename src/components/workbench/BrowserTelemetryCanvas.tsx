@@ -35,8 +35,31 @@ export function BrowserTelemetryCanvas({
 }: BrowserTelemetryCanvasProps) {
   const [captured, setCaptured] = useState(false);
 
-  const handleCapture = () => {
+  const handleCapture = async () => {
     setCaptured(true);
+    // Send telemetry as a browser observation to the governed pipeline
+    try {
+      await fetch('/api/browser/observations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transactionId: crypto.randomUUID(),
+          idempotencyKey: crypto.randomUUID(),
+          capability: 'browser.telemetry.capture',
+          isPhase1: true,
+          target: { tabId: 0, frameId: 0, expectedOrigin: 'https://local' },
+          payload: {
+            title: 'Browser Telemetry Capture',
+            url: 'pane://telemetry',
+            origin: 'https://local',
+            selectedText: JSON.stringify(telemetry),
+          },
+          capturedAt: new Date().toISOString(),
+        }),
+      });
+    } catch {
+      // Silent — telemetry capture is best-effort
+    }
     if (onCaptureEvidence) {
       onCaptureEvidence(telemetry);
     }

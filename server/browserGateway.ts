@@ -34,6 +34,9 @@ export type {
 
 import { browserEvidenceStore } from './browserEvidenceStore';
 import { buildPhase1ObservationPayload, buildStoredExtraction, validateBrowserEnvelope } from './browserGatewayValidation';
+import { browserActionStore } from './browserActionStore';
+import { browserInspectionStore } from './browserInspectionStore';
+import { browserObservationRequestStore } from './browserObservationRequestStore';
 
 let activePairingCode: string | null = null;
 let pairingCodeExpires: Date | null = null;
@@ -391,6 +394,184 @@ browserRouter.get('/observations/:captureId', (req: Request, res: Response) => {
   }
 
   res.json(item || ext);
+});
+
+// ---------------------------------------------------------------------------
+// Browser Action Execution Pipeline
+// ---------------------------------------------------------------------------
+
+// GET /api/browser/actions/pending -> Chrome polls for a preview-queued action
+browserRouter.get('/actions/pending', requireExtensionToken, (req: Request, res: Response) => {
+  const session = (req as any).browserSession as BrowserSession;
+  const claimed = browserActionStore.claimNextPreview(session.installationId);
+  if (!claimed) return res.json({ pending: false });
+  auditBrowserExtensionEvent('browser.action.preview-claim', session, { actionId: claimed.action.actionId });
+  res.json({
+    pending: true,
+    actionId: claimed.action.actionId,
+    capability: claimed.action.capability,
+    previewToken: claimed.previewToken,
+    target: claimed.action.target,
+    expectedOutcome: claimed.action.expectedOutcome,
+  });
+});
+
+// POST /api/browser/actions/preview-result -> Chrome reports preview outcome
+browserRouter.post('/actions/preview-result', requireExtensionToken, (req: Request, res: Response) => {
+  const session = (req as any).browserSession as BrowserSession;
+  const { actionId, previewToken, result } = req.body ?? {};
+  if (typeof actionId !== 'string' || typeof previewToken !== 'string' || !result) {
+    return res.status(400).json({ error: 'actionId, previewToken, and result are required' });
+  }
+  try {
+    const action = browserActionStore.completePreview(actionId, session.installationId, previewToken, {
+      status: result.status === 'previewed' || result.status === 'stale-target' || result.status === 'failed' ? result.status : 'failed',
+      actualOrigin: result.actualOrigin || '',
+      elementFingerprint: result.elementFingerprint || '',
+      url: result.url,
+      title: result.title,
+      message: result.message,
+    });
+    auditBrowserExtensionEvent('browser.action.preview-complete', session, { actionId, status: action.previewStatus });
+    res.json({ actionId, previewStatus: action.previewStatus });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(400).json({ error: message });
+  }
+});
+
+// GET /api/browser/actions/claim -> Chrome polls for an approved action to dispatch
+browserRouter.get('/actions/claim', requireExtensionToken, (req: Request, res: Response) => {
+  const session = (req as any).browserSession as BrowserSession;
+  const claimed = browserActionStore.claimNext(session.installationId);
+  if (!claimed) return res.json({ pending: false });
+  auditBrowserExtensionEvent('browser.action.dispatch-claim', session, { actionId: claimed.action.actionId });
+  res.json({
+    pending: true,
+    actionId: claimed.action.actionId,
+    capability: claimed.action.capability,
+    dispatchToken: claimed.dispatchToken,
+    target: claimed.action.target,
+    expectedOutcome: claimed.action.expectedOutcome,
+  });
+});
+
+// POST /api/browser/actions/complete -> Chrome reports execution outcome
+browserRouter.post('/actions/complete', requireExtensionToken, (req: Request, res: Response) => {
+  const session = (req as any).browserSession as BrowserSession;
+  const { actionId, dispatchToken, result } = req.body ?? {};
+  if (typeof actionId !== 'string' || typeof dispatchToken !== 'string' || !result) {
+    return res.status(400).json({ error: 'actionId, dispatchToken, and result are required' });
+  }
+  try {
+    const action = browserActionStore.complete(actionId, session.installationId, dispatchToken, {
+      status: result.status === 'completed' || result.status === 'failed' || result.status === 'stale-target' ? result.status : 'failed',
+      actualOrigin: result.actualOrigin || '',
+      elementFingerprint: result.elementFingerprint || '',
+      url: result.url,
+      title: result.title,
+      message: result.message,
+      postActionCaptureId: result.postActionCaptureId,
+    });
+    auditBrowserExtensionEvent('browser.action.complete', session, { actionId, status: action.status });
+    res.json({ actionId, status: action.status });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(400).json({ error: message });
+  }
+});
+
+// GET /api/browser/actions/:actionId -> Portal polls action status
+browserRouter.get('/actions/:actionId', requirePortalToken, (req: Request, res: Response) => {
+  const action = browserActionStore.get(req.params.actionId);
+  if (!action) return res.status(404).json({ error: 'Action not found' });
+  res.json(action);
+});
+
+// ---------------------------------------------------------------------------
+// Browser Inspection Pipeline (element discovery)
+// ---------------------------------------------------------------------------
+
+// GET /api/browser/inspections/pending -> Chrome polls for inspection requests
+browserRouter.get('/inspections/pending', requireExtensionToken, (req: Request, res: Response) => {
+  const session = (req as any).browserSession as BrowserSession;
+  const claimed = browserInspectionStore.claimNext(session.installationId);
+  if (!claimed) return res.json({ pending: false });
+  auditBrowserExtensionEvent('browser.inspection.claim', session, { requestId: claimed.requestId });
+  res.json({
+    pending: true,
+    requestId: claimed.requestId,
+    capability: claimed.capability,
+  });
+});
+
+// POST /api/browser/inspections/complete -> Chrome reports inspection outcome
+browserRouter.post('/inspections/complete', requireExtensionToken, (req: Request, res: Response) => {
+  const session = (req as any).browserSession as BrowserSession;
+  const { requestId, status, captureId, extractionId, error } = req.body ?? {};
+  if (typeof requestId !== 'string') {
+    return res.status(400).json({ error: 'requestId is required' });
+  }
+  try {
+    const result = browserInspectionStore.complete(requestId, session.installationId, {
+      status: status === 'completed' || status === 'failed' ? status : 'failed',
+      captureId,
+      extractionId,
+      error,
+    });
+    auditBrowserExtensionEvent('browser.inspection.complete', session, { requestId, status: result.status });
+    res.json({ requestId, status: result.status });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(400).json({ error: message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Browser Observation Polling
+// ---------------------------------------------------------------------------
+
+// GET /api/browser/observations/pending -> Chrome polls for observation requests
+browserRouter.get('/observations/pending', requireExtensionToken, (req: Request, res: Response) => {
+  const session = (req as any).browserSession as BrowserSession;
+  const claimed = browserObservationRequestStore.claimNext(session.installationId);
+  if (!claimed) return res.json({ pending: false });
+  auditBrowserExtensionEvent('browser.observation.claim', session, { requestId: claimed.requestId });
+  res.json({
+    pending: true,
+    requestId: claimed.requestId,
+  });
+});
+
+// POST /api/browser/observations/complete -> Chrome reports observation outcome
+browserRouter.post('/observations/complete', requireExtensionToken, (req: Request, res: Response) => {
+  const session = (req as any).browserSession as BrowserSession;
+  const { requestId, status, captureId, error } = req.body ?? {};
+  if (typeof requestId !== 'string') {
+    return res.status(400).json({ error: 'requestId is required' });
+  }
+  try {
+    const result = browserObservationRequestStore.complete(requestId, session.installationId, {
+      status: status === 'completed' || status === 'failed' ? status : 'failed',
+      captureId,
+      error,
+    });
+    auditBrowserExtensionEvent('browser.observation.complete', session, { requestId, status: result.status });
+    res.json({ requestId, status: result.status });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(400).json({ error: message });
+  }
+});
+
+// POST /api/browser/observations/request -> Portal requests an observation from Chrome
+browserRouter.post('/observations/request', requirePortalToken, (req: Request, res: Response) => {
+  const { installationId } = req.body ?? {};
+  if (typeof installationId !== 'string') {
+    return res.status(400).json({ error: 'installationId is required' });
+  }
+  const request = browserObservationRequestStore.create(installationId);
+  res.json({ requestId: request.requestId, status: request.status });
 });
 
 export function getPairedBrowserInstallations(): Array<{ installationId: string; pairedAt?: Date }> {

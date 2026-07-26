@@ -29,6 +29,7 @@ export const UI_COMPONENT_TYPES = [
   'BrowserObservation',
   'WorkspacesCatalog',
   'BrowserExtraction',
+  'AgentRun',
 ] as const;
 
 export type UiComponentType = (typeof UI_COMPONENT_TYPES)[number];

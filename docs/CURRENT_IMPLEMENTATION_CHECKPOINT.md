@@ -2,8 +2,8 @@
 
 **Commit:** `a4a1664` (development baseline; not a release)
 **Status:** In development — not release-ready
-**Date:** 2026-07-21
-**Scope:** Workstation, native context, governed Rig/MCP, durable Headroom, and UI/UX convergence
+**Date:** 2026-07-26
+**Scope:** Workstation, native context, governed Rig/MCP, durable Headroom, browser execution pipeline, model selection, agent runtime, and UI/UX convergence
 
 No release tag is associated with this baseline. The temporary local tag
 `v0.9.0-alpha-workstation` was removed after product review. A clean build and
@@ -66,6 +66,52 @@ product is ready to release.
 
 ### Initiative A: Canvas Start & Surface Polish
 - `EmptyState.tsx`, `LoadingState.tsx`, `ErrorState.tsx`, `SuccessState.tsx`: State component library
+
+### Feature Suite: Agent Runtime & Browser Execution (2026-07-26)
+
+#### Agent Runtime Integration
+- `server/agent/` with `runStore`, `capabilities`, `runtime`, `browserRunCoordinator`, `openaiResponsesProvider`, `providerFactory`, `types`
+- `server/agent/rigCapabilities.ts` bridges `RigToolAdapter` → `AgentCapability[]`
+- `POST /api/agent/run` endpoint for governed agent execution
+- `AgentRunCard` renders run results with status chips, event timeline, cancel/approve buttons
+
+#### Model Selection & Provider Routing
+- 10-model `modelStore.ts` across 4 providers (OpenAI, Anthropic, Google, Ollama)
+- `useModelSelection` hook with localStorage persistence
+- Glassmorphic `ModelSelector` dropdown in Composer action bar
+- Server-side provider routing based on model ID prefix
+- Model badge on assistant messages showing which model generated the response
+
+#### Browser Operator Execution Pipeline
+- Chrome extension routes: `GET /actions/pending`, `POST /actions/preview-result`, `GET /actions/claim`, `POST /actions/complete`
+- Inspection routes: `GET /inspections/pending`, `POST /inspections/complete`
+- Observation polling: `GET /observations/pending`, `POST /observations/complete`, `POST /observations/request`
+- UI approval routes: `POST /api/agent/run/:runId/approve-browser`, `/reject-browser`
+- Extended action types: `browser.click.execute`, `browser.fill.execute`, `browser.scroll.execute`, `browser.select.execute`
+- MCP execution tools: `browser_propose_click`, `browser_propose_fill`, `browser_propose_scroll`, `browser_inspect_elements`, `browser_get_action_status`
+- `UnifiedApprovalCard` routes browser-action proposals to `BrowserActionProposalCard`
+
+#### Context Brief & Evidence
+- `ContextBriefPanel` renders 4-question read model (What/Now/Attention/Next)
+- `BrowserEvidenceCanvas` with auto-refresh (10s polling)
+- `/evidence` command opens evidence browsing surface
+- `BrowserLiveSurface` "Capture as evidence" button wired to governed pipeline
+- `BrowserTelemetryCanvas` capture wired to observations API
+
+#### Intent Classification
+- `POST /api/classify-intent` endpoint using `gpt-4o-mini` for ambiguous prompts
+- Client-side fallback when deterministic matcher falls to `converse`
+
+#### Keyboard Shortcuts & Export
+- `Cmd+M`: Opens model selector dropdown
+- `Cmd+Shift+C`: Copies conversation as Markdown to clipboard
+- `Cmd+Shift+E`: Downloads conversation as `.md` and `.json` files
+- `src/utils/exportConversation.ts`: Export utilities
+
+#### Glassmorphic UI & Micro-Animations
+- Glass tokens: `glass.raisedRgb` with `blur(24px) saturate(180%)`
+- Micro-animations in `src/theme/motion.ts` (all respect `prefers-reduced-motion`)
+- Glassmorphic top bar and dropdowns
 
 ## Remaining release-candidate work
 

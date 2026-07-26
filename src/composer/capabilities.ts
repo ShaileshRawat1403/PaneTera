@@ -44,6 +44,8 @@ export interface PlanExecutors {
   clearContext?: (plan: PlanOf<'clear-context'>) => void | Promise<void>;
   openHeadroom?: (plan: PlanOf<'open-headroom'>) => void | Promise<void>;
   openRig?: (plan: PlanOf<'open-rig'>) => void | Promise<void>;
+  openEvidence?: (plan: PlanOf<'open-evidence'>) => void | Promise<void>;
+  agentRun?: (plan: PlanOf<'agent-run'>) => void | Promise<void>;
   chat?: (plan: PlanOf<'chat'>) => void | Promise<void>;
 }
 
@@ -65,6 +67,8 @@ export function capabilitiesFrom(executors: PlanExecutors): CapabilityKey[] {
   if (executors.clearContext) claimed.push('headroom:clear');
   if (executors.openHeadroom) claimed.push('headroom');
   if (executors.openRig) claimed.push('rig');
+  if (executors.openEvidence) claimed.push('evidence');
+  if (executors.agentRun) claimed.push('run');
   if (executors.chat) {
     // One handler serves both, since the plan carries the endpoint.
     claimed.push('converse', 'artifact');
@@ -112,6 +116,10 @@ export async function executePlan(
       return run(executors.openHeadroom);
     case 'open-rig':
       return run(executors.openRig);
+    case 'open-evidence':
+      return run(executors.openEvidence);
+    case 'agent-run':
+      return run(executors.agentRun);
     case 'chat':
       return run(executors.chat);
   }

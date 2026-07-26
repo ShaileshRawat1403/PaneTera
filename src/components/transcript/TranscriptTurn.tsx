@@ -16,6 +16,7 @@ export interface TranscriptMessage {
   role: 'user' | 'assistant';
   content: string;
   intent?: string;
+  model?: string;
   toolsUsed?: { tool: string; status: 'success' | 'denied' | 'failed'; reason?: string }[];
   filesInspected?: { path: string; purpose: string }[];
   citations?: { path: string; label: string }[];
@@ -94,6 +95,24 @@ export const TranscriptTurn: React.FC<Props> = ({ message, onSelectFile, onSugge
         >
           {isUser ? '👤 You' : '⚡ PaneTera'}
         </Typography>
+        {!isUser && message.model && (
+          <Typography
+            variant="caption"
+            sx={{
+              color: ink.muted,
+              fontFamily: typography.mono,
+              fontSize: '0.625rem',
+              ml: 0.5,
+              px: 0.5,
+              py: 0.1,
+              borderRadius: `${radius.sm}px`,
+              backgroundColor: surface.canvas,
+              border: `1px solid ${surface.border}`,
+            }}
+          >
+            {message.model}
+          </Typography>
+        )}
       </Box>
 
       <Paper
