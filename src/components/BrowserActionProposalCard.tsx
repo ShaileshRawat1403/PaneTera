@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { Box, Button, Chip, Stack, Typography } from '@mui/material';
-import { accent, ink, radius, status, surface, typography } from '../theme/tokens';
+import { accent, ink, radius, status, surface, typography } from '../theme/cssTokens';
 import { singleFire } from './singleFire';
 
 interface BrowserActionProposalCardProps {

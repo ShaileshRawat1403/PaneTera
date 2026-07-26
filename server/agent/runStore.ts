@@ -142,6 +142,10 @@ export class AgentRunStore {
     return this.runs.get(runId)?.status === 'canceled';
   }
 
+  list(): AgentRun[] {
+    return [...this.runs.values()].map((run) => structuredClone(run));
+  }
+
   private requireRun(runId: string): AgentRun {
     const run = this.runs.get(runId);
     if (!run) throw new Error(`Unknown agent run: ${runId}`);
