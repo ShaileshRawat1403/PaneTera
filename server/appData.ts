@@ -27,3 +27,6 @@ export function getTesseraAppDataDir(): string {
   fs.mkdirSync(dataDir, { recursive: true, mode: 0o700 });
   return dataDir;
 }
+
+// Alias for newer code referencing the renamed function
+export const getPaneTeraAppDataDir = getTesseraAppDataDir;

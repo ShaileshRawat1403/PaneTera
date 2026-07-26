@@ -392,3 +392,22 @@ browserRouter.get('/observations/:captureId', (req: Request, res: Response) => {
 
   res.json(item || ext);
 });
+
+export function getPairedBrowserInstallations(): Array<{ installationId: string; pairedAt?: Date }> {
+  const seen = new Set<string>();
+  const result: Array<{ installationId: string; pairedAt?: Date }> = [];
+  for (const session of sessions.values()) {
+    if (!seen.has(session.installationId)) {
+      seen.add(session.installationId);
+      result.push({ installationId: session.installationId, pairedAt: session.pairedAt });
+    }
+  }
+  return result;
+}
+
+export function isBrowserInstallationPaired(installationId: string): boolean {
+  for (const session of sessions.values()) {
+    if (session.installationId === installationId) return true;
+  }
+  return false;
+}
