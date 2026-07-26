@@ -6,7 +6,7 @@ import type {
   AgentToolCall,
 } from './types';
 
-export const DEFAULT_OPENAI_AGENT_MODEL = 'gpt-5.6-sol';
+export const DEFAULT_OPENAI_AGENT_MODEL = 'gpt-4o-mini';
 
 type FetchLike = typeof fetch;
 
