@@ -65,11 +65,13 @@ export class RunHistory {
     if (query.model) {
       filtered = filtered.filter((r) => r.model === query.model);
     }
-    if (query.since) {
-      filtered = filtered.filter((r) => r.completedAt >= query.since);
+    if (query.since !== undefined) {
+      const since = query.since;
+      filtered = filtered.filter((r) => r.completedAt >= since);
     }
-    if (query.until) {
-      filtered = filtered.filter((r) => r.completedAt <= query.until);
+    if (query.until !== undefined) {
+      const until = query.until;
+      filtered = filtered.filter((r) => r.completedAt <= until);
     }
 
     const total = filtered.length;

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { createAgentRuntime } from './agentFactory';
 import type { AgentRuntime } from './runtime';
 import { approvePendingBrowserAction, rejectPendingBrowserAction } from './browserRunCoordinator';
+import { agentRunLimiter } from '../middleware/rateLimiter';
 
 let cachedRuntime: AgentRuntime | null = null;
 let runtimeInitializationAttempted = false;
@@ -16,7 +17,7 @@ function getRuntime(): AgentRuntime | null {
 export const agentRouter = Router();
 
 // Agent runs
-agentRouter.post('/run', handleAgentRun);
+agentRouter.post('/run', agentRunLimiter, handleAgentRun);
 agentRouter.get('/runs', handleListRuns);
 agentRouter.get('/run/:runId', handleGetRun);
 agentRouter.get('/run/:runId/events', handleRunEvents);

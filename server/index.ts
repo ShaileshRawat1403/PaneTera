@@ -28,9 +28,19 @@ import { nativeRouter } from './native/routes';
 import { tesseraRouter } from './tessera/routes';
 import { agentRouter } from './agent/routes';
 import { modelRouter } from './modelRoutes';
+import { schemaRouter } from './schema/routes';
+import { registerItOpsDomain } from './domains/itops/tools';
+
+// Register IT Ops domain schemas on startup
+registerItOpsDomain();
 import { LocalScopeStore, type LocalSelectionKind, type LocalSelectionGrant } from './headroom/localScopeStore';
 import { PANETERA_ASSISTANT_INSTRUCTION } from './assistantInstruction';
 import { geminiGenerateContentUrl } from './modelConfig';
+import { securityHeaders, corsHeaders } from './middleware/securityHeaders';
+import { apiLimiter, agentRunLimiter } from './middleware/rateLimiter';
+import { requestLogger } from './logging/logger';
+import { metricsMiddleware } from './logging/metrics';
+import { manifestCache, historyCache } from './middleware/cache';
 
 dotenv.config();
 
@@ -38,13 +48,11 @@ export const app = express();
 const PORT = Number(process.env.PORT) || 4000;
 const TOKEN = process.env.PORTAL_TOKEN || '';
 
-app.use((_req: Request, res: Response, next: NextFunction) => {
-  res.setHeader('Content-Security-Policy', "default-src 'self'");
-  res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  next();
-});
+// Security and middleware
+app.use(securityHeaders);
+app.use(corsHeaders);
+app.use(requestLogger);
+app.use(metricsMiddleware);
 
 // Fail fast if token placeholder is still present
 if (TOKEN === 'changeme-12345' || !TOKEN) {
@@ -53,20 +61,6 @@ if (TOKEN === 'changeme-12345' || !TOKEN) {
 }
 
 app.use(express.json({ limit: '2mb' }));
-
-// CORS – restrict to localhost and extension origins only
-app.use((req: Request, res: Response, next: NextFunction) => {
-  const origin = req.headers.origin;
-  if (origin && (origin.startsWith('http://localhost') || origin.startsWith('chrome-extension://'))) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS,DELETE');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
-    if (req.method === 'OPTIONS') {
-      return res.sendStatus(204);
-    }
-  }
-  next();
-});
 
 // Mount browser gateway router BEFORE global master token check middleware
 app.use('/api/browser', browserRouter);
@@ -93,6 +87,7 @@ app.use('/api/native-grants', nativeRouter);
 app.use('/api/tessera', tesseraRouter);
 app.use('/api/agent', agentRouter);
 app.use('/api/models', modelRouter);
+app.use('/api/schemas', schemaRouter);
 
 // ── Rook MCP Memory Bridge (optional) ────────────────────────────────────────
 // Spawns `rook mcp memory` as a child process and communicates over stdio
@@ -1673,6 +1668,43 @@ export async function resolveGatewayCardLocally(query: string): Promise<{ reply:
     }
   }
 
+  // IT Ops schema-driven cards
+  if (q.includes('deployment pipeline') || q.includes('deploy status') || q.includes('deployment status')) {
+    const { getDeploymentStatusPayload } = require('./domains/itops/tools');
+    const payload = getDeploymentStatusPayload();
+    return {
+      reply: 'Here is the current deployment pipeline status across all environments.',
+      uiComponent: {
+        type: 'SchemaCard',
+        data: payload,
+      }
+    };
+  }
+
+  if (q.includes('metrics dashboard') || q.includes('show metrics') || q.includes('operational metrics') || q.includes('system metrics')) {
+    const { getMetricsPayload } = require('./domains/itops/tools');
+    const payload = getMetricsPayload();
+    return {
+      reply: 'Here are the current operational metrics and KPIs.',
+      uiComponent: {
+        type: 'SchemaCard',
+        data: payload,
+      }
+    };
+  }
+
+  if (q.includes('approval gate') || q.includes('release gate') || q.includes('release approval') || q.includes('show approval')) {
+    const { getApprovalGatePayload } = require('./domains/itops/tools');
+    const payload = getApprovalGatePayload();
+    return {
+      reply: 'Here is the governed release approval gate with pre-flight checks.',
+      uiComponent: {
+        type: 'SchemaCard',
+        data: payload,
+      }
+    };
+  }
+
   const setupProposal = await buildRepoSetupProposal(query);
   if (setupProposal) {
     return {
@@ -2255,6 +2287,17 @@ app.post('/api/orchestrator/chat', async (req: Request, res: Response) => {
 
   if (!message) {
     return res.status(400).json({ error: 'Missing required field: message' });
+  }
+
+  // Strict local workbench intents must resolve before any LLM path.
+  try {
+    const gatewayCard = await resolveGatewayCardLocally(message);
+    if (gatewayCard) {
+      return res.json(gatewayCard);
+    }
+  } catch (gatewayErr: any) {
+    console.error('[Error in local gateway resolver]:', gatewayErr);
+    return res.status(500).json({ error: gatewayErr.message || 'Error processing gateway card.' });
   }
 
   const resolveWorkspacePath = async (wId: string) => {

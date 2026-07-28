@@ -341,6 +341,15 @@ function selectFromNaturalLanguage(input: string, context: ResolverContext): Fam
     return { family: 'artifact', args: { target: inspectMatch.target } };
   }
 
+  // Schema-driven domain cards (IT Ops, etc.) must resolve before the web
+  // preview matcher so "show deployment pipeline" is not mistaken for a
+  // request to open a webpage. Routed as converse so the server-side gateway
+  // resolver catches the query and emits the correct SchemaCard uiComponent.
+  const SCHEMA_CARD_PHRASE = /^(?:show|open|display|view)\s+(?:the\s+)?(?:deployment\s+pipeline|metrics\s+dashboard|approval\s+gate|release\s+gate|deploy\s+status|operational\s+metrics|system\s+metrics|it\s*ops)/i;
+  if (SCHEMA_CARD_PHRASE.test(input.trim())) {
+    return { family: 'converse', args: {} };
+  }
+
   const webIntent = resolveWebPreviewIntent(input, context.hasOpenWebPreview);
   if (webIntent?.kind === 'open') {
     return {

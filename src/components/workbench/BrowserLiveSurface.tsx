@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Box,
@@ -121,6 +121,22 @@ export function BrowserLiveSurface({ initialFrame, onClose }: BrowserLiveSurface
       setPending(false);
     }
   };
+
+  const scrollCooldown = useRef(false);
+  const handleWheel = useCallback(
+    (e: React.WheelEvent) => {
+      e.preventDefault();
+      if (scrollCooldown.current || inFlight.current) return;
+      const delta = e.deltaY;
+      if (Math.abs(delta) < 10) return;
+      scrollCooldown.current = true;
+      const direction = delta > 0 ? 'down' : 'up';
+      void handleScroll(direction);
+      window.setTimeout(() => { scrollCooldown.current = false; }, 400);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [frame.sessionId]
+  );
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -285,10 +301,11 @@ export function BrowserLiveSurface({ initialFrame, onClose }: BrowserLiveSurface
 
       <Box sx={{ flexGrow: 1, minHeight: 0, display: 'grid', gridTemplateColumns: component ? { xs: '1fr', lg: 'minmax(0, 1fr) 340px' } : '1fr' }}>
         <Box
+          onWheel={handleWheel}
           sx={{
             minWidth: 0,
             minHeight: 0,
-            overflow: 'auto',
+            overflow: 'hidden',
             p: { xs: 1, md: 2 },
             backgroundColor: surface.canvas,
           }}

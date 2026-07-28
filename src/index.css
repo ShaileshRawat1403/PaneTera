@@ -11,7 +11,46 @@
  *     the warm graphite surfaces and put ambient green on screen at all times.
  *   - looping blink and pulse animations. Continuous motion with no state
  *     change behind it is decoration, and it never stops asking for attention.
+ *
+ * Modern enhancements:
+ *   - Improved glassmorphism effects
+ *   - Refined shadows and depth
+ *   - Smooth micro-interactions
+ *   - Better focus states
  */
+
+:root {
+  /* Modern color tokens derived from panetera Theme CSS variables */
+  --pt-surface-base: var(--panetera-surface-base);
+  --pt-surface-canvas: var(--panetera-surface-canvas);
+  --pt-surface-raised: var(--panetera-surface-raised);
+  --pt-surface-raised-hover: var(--panetera-surface-raised-hover);
+  --pt-surface-overlay: var(--panetera-surface-overlay);
+  --pt-surface-sunken: var(--panetera-surface-sunken);
+  --pt-surface-border: var(--panetera-surface-border);
+  --pt-surface-border-strong: var(--panetera-surface-border-strong);
+
+  /* Modern accent */
+  --pt-accent-violet: var(--panetera-accent-violet);
+  --pt-accent-violet-muted: var(--panetera-accent-violet-muted);
+  --pt-accent-violet-hover: var(--panetera-accent-violet-hover);
+  --pt-accent-violet-border: var(--panetera-accent-violet-border);
+
+  /* Glass effect */
+  --pt-glass-blur: 24px;
+  --pt-glass-saturation: 180%;
+
+  /* Transitions */
+  --pt-transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --pt-transition-normal: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --pt-transition-smooth: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Elevation */
+  --pt-shadow-sm: var(--panetera-shadow-sm);
+  --pt-shadow-md: var(--panetera-shadow-md);
+  --pt-shadow-lg: var(--panetera-shadow-lg);
+  --pt-shadow-glow: var(--panetera-shadow-glow);
+}
 
 html,
 body,
@@ -23,8 +62,11 @@ body,
   /* Values come from the theme; the fallbacks keep the page sane before the
      provider mounts. */
   font-family: var(--panetera-font-sans, ui-sans-serif, system-ui, sans-serif);
-  background: var(--panetera-surface-base, #181614);
-  color: var(--panetera-ink-primary, #f2ede4);
+  background: var(--panetera-surface-base);
+  color: var(--panetera-ink-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 * {
@@ -38,38 +80,10 @@ samp {
   font-family: var(--panetera-font-mono, ui-monospace, monospace);
 }
 
-/* Entrance for cards arriving in the canvas. Governed by the motion tokens:
-   one pass, no loop, and disabled entirely under reduced motion. */
-@keyframes paneteraCardEnter {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.feed-card-animation {
-  animation: paneteraCardEnter var(--panetera-duration-settled, 200ms)
-    var(--panetera-easing-enter, cubic-bezier(0.16, 0.84, 0.44, 1)) forwards;
-}
-
-/* A caret marks an active stream, so it should exist only while that is true.
-   The looping blink is gone; callers add and remove the element. */
-.terminal-cursor {
-  display: inline-block;
-  width: 6px;
-  height: 14px;
-  margin-left: 2px;
-  border-radius: 1px;
-  background-color: var(--panetera-accent-violet, #b9a5e8);
-}
-
+/* Modern scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -77,16 +91,17 @@ samp {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--panetera-surface-border, #3a3430);
+  background: var(--panetera-surface-border);
   border-radius: 99px;
+  transition: background 0.2s ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--panetera-surface-border-strong, #4c443e);
+  background: var(--panetera-surface-border-strong);
 }
 
 * {
-  scrollbar-color: var(--panetera-surface-border, #3a3430) transparent;
+  scrollbar-color: var(--panetera-surface-border) transparent;
   scrollbar-width: thin;
 }
 
@@ -96,8 +111,58 @@ samp {
   overscroll-behavior-y: contain;
 }
 
-/* One reduced-motion policy, matching src/theme/motion.ts: no animation, not a
-   faster one. Elements appear rather than arrive. */
+/* Modern focus styles */
+*:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--panetera-accent-violet);
+}
+
+/* Entrance for cards arriving in the canvas. */
+@keyframes paneteraCardEnter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.feed-card-animation {
+  animation: paneteraCardEnter 300ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* Terminal cursor */
+.terminal-cursor {
+  display: inline-block;
+  width: 6px;
+  height: 14px;
+  margin-left: 2px;
+  border-radius: 1px;
+  background-color: var(--panetera-accent-violet);
+}
+
+/* Modern glass panel */
+.glass-panel {
+  background: var(--panetera-surface-raised);
+  backdrop-filter: blur(var(--pt-glass-blur)) saturate(var(--pt-glass-saturation));
+  -webkit-backdrop-filter: blur(var(--pt-glass-blur)) saturate(var(--pt-glass-saturation));
+  border: 1px solid var(--panetera-surface-border);
+  border-radius: 16px;
+}
+
+/* Modern card hover effect */
+.modern-card-hover {
+  transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.modern-card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--panetera-shadow-md);
+}
+
+/* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

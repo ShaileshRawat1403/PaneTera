@@ -1,0 +1,59 @@
+[
+  {
+    "id": "itops.deployment-pipeline",
+    "version": "1.0.0",
+    "domain": "itops",
+    "type": "status-board",
+    "title": "IT Ops Deployment Pipeline",
+    "description": "Multi-stage CI/CD production release pipeline",
+    "fields": [
+      { "name": "columns", "type": "array", "label": "Stages", "required": true },
+      { "name": "items", "type": "array", "label": "Deployments", "required": true }
+    ],
+    "actions": [
+      { "id": "promote_stage", "type": "execute", "label": "Promote to Production", "requiresApproval": true }
+    ],
+    "renderHints": {
+      "badge": "CI/CD Pipeline",
+      "accentColor": "#0ea5e9"
+    }
+  },
+  {
+    "id": "itops.metrics-dashboard",
+    "version": "1.0.0",
+    "domain": "itops",
+    "type": "metric-group",
+    "title": "Production System Metrics",
+    "description": "Real-time latency, error rates, and cluster health",
+    "fields": [
+      { "name": "metrics", "type": "array", "label": "Telemetry Indicators", "required": true }
+    ],
+    "actions": [
+      { "id": "refresh_telemetry", "type": "execute", "label": "Refresh Metrics" }
+    ],
+    "renderHints": {
+      "badge": "Cluster Health",
+      "accentColor": "#10b981"
+    }
+  },
+  {
+    "id": "itops.approval-gate",
+    "version": "1.0.0",
+    "domain": "itops",
+    "type": "proposal-gate",
+    "title": "Production Release Gate · Service v2.4",
+    "description": "Governed pre-flight policy checks before traffic cutover",
+    "fields": [
+      { "name": "checkList", "type": "array", "label": "Rule Checks", "required": true },
+      { "name": "proposalId", "type": "string", "label": "Release ID", "required": true }
+    ],
+    "actions": [
+      { "id": "approve_release", "type": "approve", "label": "Approve & Promote Release", "requiresApproval": true, "variant": "primary" },
+      { "id": "reject_release", "type": "reject", "label": "Block & Rollback", "requiresApproval": false, "variant": "danger" }
+    ],
+    "renderHints": {
+      "badge": "Governed Release",
+      "accentColor": "#7c3aed"
+    }
+  }
+]

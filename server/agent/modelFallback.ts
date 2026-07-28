@@ -72,7 +72,7 @@ export class ModelFallbackChain {
       const start = Date.now();
 
       try {
-        const response = await this.executeWithTimeout(fn, config.timeoutMs);
+        const response = await this.executeWithTimeout(fn, config, config.timeoutMs);
         const duration = Date.now() - start;
 
         const attempt: ModelAttempt = {
@@ -173,21 +173,13 @@ export class ModelFallbackChain {
     this.history = [];
   }
 
-  private async executeWithTimeout<T>(fn: (config: ModelConfig) => Promise<T>, timeoutMs: number): Promise<T> {
+  private async executeWithTimeout<T>(fn: (config: ModelConfig) => Promise<T>, config: ModelConfig, timeoutMs: number): Promise<T> {
     return new Promise<T>((resolve, reject) => {
       const timer = setTimeout(() => {
         reject(new Error(`Request timed out after ${timeoutMs}ms`));
       }, timeoutMs);
 
-      fn({
-        id: '',
-        provider: 'openai',
-        model: '',
-        priority: 0,
-        maxRetries: 0,
-        timeoutMs: 0,
-        enabled: true,
-      })
+      fn(config)
         .then((result) => {
           clearTimeout(timer);
           resolve(result);

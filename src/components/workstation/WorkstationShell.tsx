@@ -26,6 +26,8 @@ import DarkModeIcon from '@mui/icons-material/DarkMode';
 import LightModeIcon from '@mui/icons-material/LightMode';
 import SearchIcon from '@mui/icons-material/Search';
 import { PaneMark } from './PaneMark';
+import { EvidencePanel } from '../evidence/EvidencePanel';
+import { ResizableDrawer } from './ResizableDrawer';
 import { accent, elevation, ink, radius, status, surface } from '../../theme/cssTokens';
 import { themeToggleLabel, useThemeMode } from '../../theme/themeMode';
 import { transition, duration } from '../../theme/motion';
@@ -85,6 +87,10 @@ export interface WorkstationShellProps {
   revealConversationKey?: number;
   /** Called after a requested conversation reveal is active and ready for focus. */
   onConversationRevealed?: () => void;
+  /** Dispatch a markup toolbar action (explain, search, annotate) as a composer query. */
+  onMarkupAction?: (query: string) => void;
+  /** Store a canvas text annotation in headroom. */
+  onMarkupAnnotate?: (text: string, annotation: string) => void;
 }
 
 /** Shared focus treatment. Visible focus is a contract requirement. */
@@ -139,6 +145,8 @@ export function WorkstationShell({
   canvasHasContent = false,
   revealConversationKey = 0,
   onConversationRevealed,
+  onMarkupAction,
+  onMarkupAnnotate,
 }: WorkstationShellProps) {
   const { mode: themeMode, toggleMode } = useThemeMode();
   const [activityOpen, setActivityOpen] = useState(false);
@@ -696,15 +704,24 @@ export function WorkstationShell({
               }}
             >
               {canvas}
+              <EvidencePanel />
               <MarkupToolbar
                 onAnnotate={(text, annotation) => {
-                  console.log('Annotate:', text, annotation);
+                  if (onMarkupAnnotate) {
+                    onMarkupAnnotate(text, annotation);
+                  } else if (onMarkupAction) {
+                    onMarkupAction(`Annotate "${text}": ${annotation}`);
+                  }
                 }}
                 onExplain={(text) => {
-                  console.log('Explain:', text);
+                  if (onMarkupAction) {
+                    onMarkupAction(`Explain this: ${text}`);
+                  }
                 }}
                 onSearch={(text) => {
-                  console.log('Search:', text);
+                  if (onMarkupAction) {
+                    onMarkupAction(`Search workspace for: ${text}`);
+                  }
                 }}
               />
             </Box>
@@ -737,72 +754,35 @@ export function WorkstationShell({
         <Box sx={{ p: 2 }}>{renderWorkspaceSelector(closeWorkspacePopover)}</Box>
       </Popover>
 
-      <Drawer
+      <ResizableDrawer
         id="activity-drawer"
-        anchor="right"
+        ariaLabel="Activity drawer"
         open={activityOpen}
         onClose={toggleActivity}
-        variant="temporary"
-        // Drawer in MUI v5 exposes the paper slot as PaperProps rather than
-        // slotProps.paper, unlike Popover above. The panel (PreviewPanel) owns its
-        // own fixed header and body-only scroll, matching Rig/Headroom, so it is
-        // rendered directly rather than wrapped in a second scroll container.
-        PaperProps={{
-          role: 'region',
-          'aria-label': 'Activity drawer',
-          sx: {
-            width: 'min(420px, 92vw)',
-            backgroundColor: surface.raised,
-            borderLeft: `1px solid ${surface.border}`,
-            boxShadow: elevation.overlay,
-            color: ink.primary,
-          },
-        }}
+        defaultWidth={440}
       >
         {renderActivity(() => setActivityOpen(false))}
-      </Drawer>
+      </ResizableDrawer>
 
-      <Drawer
+      <ResizableDrawer
         id="rig-drawer"
-        anchor="right"
+        ariaLabel="Rig drawer"
         open={rigOpen}
         onClose={toggleRig}
-        variant="temporary"
-        PaperProps={{
-          role: 'region',
-          'aria-label': 'Rig drawer',
-          sx: {
-            width: 'min(620px, 96vw)',
-            backgroundColor: surface.raised,
-            borderLeft: `1px solid ${surface.border}`,
-            boxShadow: elevation.overlay,
-            color: ink.primary,
-          },
-        }}
+        defaultWidth={640}
       >
         {renderRig(() => setRigOpen(false))}
-      </Drawer>
+      </ResizableDrawer>
 
-      <Drawer
+      <ResizableDrawer
         id="headroom-drawer"
-        anchor="right"
+        ariaLabel="Headroom drawer"
         open={headroomOpen}
         onClose={toggleHeadroom}
-        variant="temporary"
-        PaperProps={{
-          role: 'region',
-          'aria-label': 'Headroom drawer',
-          sx: {
-            width: 'min(560px, 96vw)',
-            backgroundColor: surface.raised,
-            borderLeft: `1px solid ${surface.border}`,
-            boxShadow: elevation.overlay,
-            color: ink.primary,
-          },
-        }}
+        defaultWidth={580}
       >
         {renderHeadroom(() => setHeadroomOpen(false))}
-      </Drawer>
+      </ResizableDrawer>
 
       {/* Quick Switcher overlay — Cmd+K / Ctrl+K */}
       <QuickSwitcherModal

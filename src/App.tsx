@@ -2383,6 +2383,19 @@ const App: React.FC = () => {
                 canvasHasContent={Boolean(
                   webPreview || workbenchMode === 'local-app' || activeComponent || activeWorkspace,
                 )}
+                onMarkupAction={handleSend}
+                onMarkupAnnotate={async (text, annotation) => {
+                  if (!activeHeadroomCapsule?.capsuleId || !token) return;
+                  try {
+                    await fetch(`/api/headroom/capsules/${activeHeadroomCapsule.capsuleId}/annotations`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                      body: JSON.stringify({ target: text, text: annotation }),
+                    });
+                  } catch {
+                    // Annotation storage is best-effort
+                  }
+                }}
               />
           );
       })()}

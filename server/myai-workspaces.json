@@ -23,6 +23,14 @@
       "type": "repo",
       "enabled": true,
       "status": "online"
+    },
+    {
+      "id": "MY SDKs",
+      "name": "MY SDKs",
+      "path": "/Users/Shailesh/MYAIAGENTS/MY SDKs",
+      "type": "repo",
+      "enabled": true,
+      "status": "online"
     }
   ]
 }

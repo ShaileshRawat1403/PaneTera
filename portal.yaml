@@ -5,3 +5,5 @@ workspaces:
     path: /Users/Shailesh/MYAIAGENTS/websiteops-pothos-proof
   - name: pruningmypothos
     folder: pruningmypothos
+  - name: MY SDKs
+    folder: /Users/Shailesh/MYAIAGENTS/MY SDKs

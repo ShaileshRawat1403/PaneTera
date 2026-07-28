@@ -75,3 +75,32 @@ headroomRouter.delete('/capsules/:capsuleId', async (req, res) => {
     return res.status(404).json({ error: error instanceof Error ? error.message : String(error) });
   }
 });
+
+headroomRouter.post('/capsules/:capsuleId/annotations', async (req, res) => {
+  try {
+    const { capsuleId } = req.params;
+    const { target, text, sourceFile, sourceLine } = req.body;
+    if (typeof target !== 'string' || typeof text !== 'string') {
+      return res.status(400).json({ error: 'target and text are required strings.' });
+    }
+    const capsules = store.listCapsules();
+    const capsule = capsules.find((c) => c.capsuleId === capsuleId);
+    if (!capsule) return res.status(404).json({ error: 'Capsule not found.' });
+
+    const annotation = {
+      target,
+      text,
+      createdAt: new Date().toISOString(),
+      ...(typeof sourceFile === 'string' && { sourceFile }),
+      ...(typeof sourceLine === 'number' && { sourceLine }),
+    };
+    const updated = await store.saveCapsule({
+      ...capsule,
+      annotations: [...(capsule.annotations ?? []), annotation],
+    });
+    auditOperatorAction({ event: 'headroom.capsule.annotation.added', principal: operatorPrincipalForRequest(req), details: { capsuleId, target: target.slice(0, 80) } });
+    return res.status(201).json({ annotation, capsule: updated });
+  } catch (error: unknown) {
+    return res.status(400).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
