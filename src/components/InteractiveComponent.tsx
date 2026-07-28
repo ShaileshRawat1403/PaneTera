@@ -18,6 +18,8 @@ import { BrowserExtractionView } from './nativeWorkbench/BrowserExtractionView';
 import { WorkspacesCatalog } from './nativeWorkbench/WorkspacesCatalog';
 import { accent, ink, radius, status, surface, typography } from '../theme/cssTokens';
 import { useAgentRunPolling } from '../hooks/useAgentRunPolling';
+import { AgentRunCard } from './workbench/AgentRunCard';
+import { SchemaCardRenderer } from './schema/SchemaCardRenderer';
 interface ComponentProps {
   uiComponent: UiComponent;
   onAction: (query: string) => void;
@@ -939,7 +941,6 @@ export const InteractiveComponent: React.FC<ComponentProps> = ({ uiComponent, on
   }
 
   if (type === 'AgentRun' && data) {
-    const { AgentRunCard } = require('./workbench/AgentRunCard');
     const runId = data?.runId || data?.run?.runId || null;
     const isActive = ['queued', 'planning', 'running', 'waiting-approval', 'verifying'].includes(data?.status || data?.run?.status || '');
     const { data: polledData } = useAgentRunPolling(isActive ? runId : null, token);
@@ -955,6 +956,28 @@ export const InteractiveComponent: React.FC<ComponentProps> = ({ uiComponent, on
 
   if (type === 'BrowserExtraction') {
     return <BrowserExtractionView data={data} variant={variant === 'feed' ? 'feed' : 'main'} />;
+  }
+
+  if (type === 'SchemaCard' && data) {
+    return (
+      <SchemaCardRenderer
+        schemaId={data.schemaId || data.schema?.id || 'generic.status-board'}
+        data={data.data || data}
+        inlineSchema={data.schema}
+        onAction={(actionId: string, payload: Record<string, unknown>) => {
+          if (onAction) {
+            const proposalId = payload.proposalId || data.data?.proposalId;
+            if (actionId === 'approve' && proposalId) {
+              onAction(`Approve proposal ${proposalId}`);
+            } else if (actionId === 'reject' && proposalId) {
+              onAction(`Reject proposal ${proposalId}`);
+            } else {
+              onAction(`Schema action: ${actionId}${proposalId ? ` for ${proposalId}` : ''}`);
+            }
+          }
+        }}
+      />
+    );
   }
 
   return null;
