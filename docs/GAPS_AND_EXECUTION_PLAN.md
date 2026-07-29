@@ -178,6 +178,18 @@ to `--test-concurrency=1` if needed.
 *Gate:* discovered file count equals the old chain, full suite passes, a planted
 failing test does not abort the others, coverage report generates.
 
+*S1.1 outcome (2026-07-29, gate passed):* runner is
+`node --import tsx --test --test-concurrency=1 --test-timeout=30000
+'test/**/*.test.ts' 'test/**/*.test.tsx'`. Reviewer verified against `d9759d1`:
+old chain ran 106 unique files, disk has 127, zero old-chain files dropped
+(clean `comm`), so the migration surfaced 21 previously-unrun test files without
+losing any. 288 ok, 5 not ok. All 5 failures are in never-run files and are
+pre-existing, not regressions:
+`mcpV0`, `mcpV0OfficialClient`, `openaiResponsesProvider`, `canvasHeader`,
+`transcriptDrawerPolish`. Carry-forward: these 5 must be fixed or explicitly
+quarantined with a tracked reference in S1.4 before the suite can become a CI
+gate. `--test-concurrency=1` is required because 3 files bind port 4000.
+
 **S1.2 ESLint.** No config exists; `eslint` and the react/hooks plugins are
 installed but unused, and `lint` is only `tsc`. Add a flat `eslint.config.js`,
 enable the plugins, encode the theme-token and import rules, and change `lint`
