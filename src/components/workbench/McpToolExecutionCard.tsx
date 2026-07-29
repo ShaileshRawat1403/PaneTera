@@ -3,7 +3,7 @@ import { Box, Typography, Chip, Button, IconButton } from '@mui/material';
 import BuildIcon from '@mui/icons-material/Build';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CheckIcon from '@mui/icons-material/Check';
-import { surface, ink, accent, status, radius, typography, elevation } from '../../theme/cssTokens';
+import { surface, ink, accent, status, radius, typography } from '../../theme/cssTokens';
 
 interface McpToolExecutionCardProps {
   toolName: string;
@@ -41,11 +41,14 @@ export function McpToolExecutionCard({
         backgroundColor: surface.raised,
         border: `1px solid ${isError ? status.danger : surface.border}`,
         borderRadius: `${radius.md}px`,
-        boxShadow: elevation.card,
+        backdropFilter: 'blur(12px)',
+        transition: 'border-color 200ms ease, box-shadow 200ms ease',
         overflow: 'hidden',
+        '&:hover': {
+          borderColor: isError ? status.danger : surface.borderStrong,
+        },
       }}
     >
-      {/* Header */}
       <Box
         sx={{
           p: 2,
@@ -63,7 +66,7 @@ export function McpToolExecutionCard({
             <Typography variant="subtitle2" sx={{ color: ink.primary, fontWeight: 600 }}>
               {toolName}
             </Typography>
-            <Typography variant="caption" sx={{ color: ink.muted, fontSize: '11px' }}>
+            <Typography variant="caption" sx={{ color: ink.muted }}>
               {serverName} {durationMs !== undefined ? `• ${durationMs}ms` : ''}
             </Typography>
           </Box>
@@ -75,16 +78,25 @@ export function McpToolExecutionCard({
             size="small"
             sx={{
               height: 20,
-              fontSize: '10px',
-              fontWeight: 600,
+              fontSize: '0.65rem',
+              fontWeight: 700,
               backgroundColor: isError ? status.dangerMuted : surface.sunken,
               color: isError ? status.danger : status.neutral,
               border: `1px solid ${isError ? status.danger : surface.border}`,
             }}
           />
 
-          <IconButton size="small" onClick={handleCopy} title="Copy result">
-            {copied ? <CheckIcon sx={{ color: status.success, fontSize: 16 }} /> : <ContentCopyIcon sx={{ color: ink.muted, fontSize: 16 }} />}
+          <IconButton
+            size="small"
+            onClick={handleCopy}
+            title="Copy result"
+            sx={{
+              color: ink.muted,
+              transition: 'color 150ms ease',
+              '&:hover': { color: ink.primary, backgroundColor: accent.violetMuted },
+            }}
+          >
+            {copied ? <CheckIcon sx={{ color: status.success, fontSize: 16 }} /> : <ContentCopyIcon sx={{ fontSize: 16 }} />}
           </IconButton>
 
           {onRerun && (
@@ -92,13 +104,19 @@ export function McpToolExecutionCard({
               size="small"
               onClick={() => onRerun(toolName, args)}
               sx={{
-                fontSize: '11px',
+                fontSize: '0.75rem',
                 color: ink.secondary,
                 border: `1px solid ${surface.border}`,
                 px: 1,
                 py: 0.25,
                 borderRadius: `${radius.sm}px`,
                 textTransform: 'none',
+                transition: 'border-color 150ms ease, color 150ms ease',
+                '&:hover': {
+                  borderColor: accent.violetBorder,
+                  color: accent.violet,
+                  backgroundColor: 'transparent',
+                },
               }}
             >
               Re-run
@@ -107,18 +125,19 @@ export function McpToolExecutionCard({
         </Box>
       </Box>
 
-      {/* Arguments Toggle */}
       {Object.keys(args).length > 0 && (
         <Box sx={{ px: 2, py: 1, borderBottom: `1px solid ${surface.border}` }}>
           <Button
             size="small"
             onClick={() => setShowArgs(!showArgs)}
             sx={{
-              fontSize: '11px',
+              fontSize: '0.7rem',
               color: ink.muted,
               textTransform: 'none',
               p: 0,
               minWidth: 'auto',
+              transition: 'color 150ms ease',
+              '&:hover': { color: ink.secondary, backgroundColor: 'transparent' },
             }}
           >
             {showArgs ? 'Hide arguments ▲' : 'Show arguments ▼'}
@@ -131,11 +150,11 @@ export function McpToolExecutionCard({
                 p: 1.5,
                 backgroundColor: surface.sunken,
                 borderRadius: `${radius.sm}px`,
-                fontSize: '11px',
+                fontSize: '0.7rem',
                 fontFamily: typography.mono,
                 color: ink.secondary,
                 overflow: 'auto',
-                maxHeight: '150px',
+                maxHeight: 150,
               }}
             >
               {JSON.stringify(args, null, 2)}
@@ -144,9 +163,8 @@ export function McpToolExecutionCard({
         </Box>
       )}
 
-      {/* Result Area */}
       <Box sx={{ p: 2 }}>
-        <Typography variant="caption" sx={{ color: ink.muted, fontWeight: 600, display: 'block', mb: 1, fontSize: '11px' }}>
+        <Typography variant="caption" sx={{ color: ink.muted, fontWeight: 650, display: 'block', mb: 1 }}>
           TOOL RESULT
         </Typography>
         <Box
@@ -156,11 +174,11 @@ export function McpToolExecutionCard({
             p: 1.5,
             backgroundColor: surface.sunken,
             borderRadius: `${radius.sm}px`,
-            fontSize: '12px',
+            fontSize: '0.7rem',
             fontFamily: typography.mono,
             color: isError ? status.danger : ink.primary,
             overflow: 'auto',
-            maxHeight: '300px',
+            maxHeight: 300,
             whiteSpace: 'pre-wrap',
             wordBreak: 'break-word',
             lineHeight: 1.5,

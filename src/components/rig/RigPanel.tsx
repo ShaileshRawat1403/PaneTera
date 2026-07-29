@@ -567,13 +567,15 @@ function RigPanelSession({ token, onClose, onResourcesChanged }: Props): React.R
           return (
             <Box
               key={connection.connectionId}
-              // A card that needs attention gets a stronger left keyline in its
-              // tone, so attention is carried by structure, not colour alone.
               sx={{
                 border: `1px solid ${card.needsAttention ? toneColor : surface.border}`,
                 borderLeft: card.needsAttention ? `3px solid ${toneColor}` : `1px solid ${surface.border}`,
                 borderRadius: `${radius.md}px`,
-                overflow: 'hidden',
+                backdropFilter: 'blur(12px)',
+                transition: 'border-color 200ms ease, box-shadow 200ms ease, transform 150ms ease',
+                '&:hover': {
+                  borderColor: card.needsAttention ? toneColor : surface.borderStrong,
+                },
               }}
             >
               <Box sx={{ p: 1.5 }}>
@@ -614,19 +616,70 @@ function RigPanelSession({ token, onClose, onResourcesChanged }: Props): React.R
                         sx={{
                           color: ink.primary,
                           borderColor: accent.violetBorder,
-                          '&:hover': { backgroundColor: accent.violetMuted, borderColor: accent.violetBorder },
+                          borderRadius: `${radius.sm}px`,
+                          textTransform: 'none',
+                          fontWeight: 600,
+                          transition: 'background-color 150ms ease, border-color 150ms ease',
+                          '&:hover': { backgroundColor: accent.violetMuted, borderColor: accent.violet },
                         }}
                       >
                         {actionLabel('review-connect', connection.state)}
                       </Button>
                     )}
                     {showRefresh && (
-                      <Button size="small" onClick={() => act(connection.connectionId, 'refresh')} disabled={Boolean(busy) || !canMutate} aria-describedby={pausedDescribedBy}>Refresh</Button>
+                      <Button
+                        size="small"
+                        onClick={() => act(connection.connectionId, 'refresh')}
+                        disabled={Boolean(busy) || !canMutate}
+                        aria-describedby={pausedDescribedBy}
+                        sx={{
+                          fontSize: '0.75rem',
+                          color: ink.secondary,
+                          border: `1px solid ${surface.border}`,
+                          borderRadius: `${radius.sm}px`,
+                          textTransform: 'none',
+                          fontWeight: 600,
+                          transition: 'border-color 150ms ease, color 150ms ease',
+                          '&:hover': { borderColor: accent.violetBorder, color: accent.violet, backgroundColor: 'transparent' },
+                        }}
+                      >
+                        Refresh
+                      </Button>
                     )}
                     {showStop && (
-                      <Button size="small" onClick={() => act(connection.connectionId, 'stop')} disabled={Boolean(busy) || !canMutate} aria-describedby={pausedDescribedBy}>Stop</Button>
+                      <Button
+                        size="small"
+                        onClick={() => act(connection.connectionId, 'stop')}
+                        disabled={Boolean(busy) || !canMutate}
+                        aria-describedby={pausedDescribedBy}
+                        sx={{
+                          fontSize: '0.75rem',
+                          color: ink.secondary,
+                          border: `1px solid ${surface.border}`,
+                          borderRadius: `${radius.sm}px`,
+                          textTransform: 'none',
+                          fontWeight: 600,
+                          transition: 'border-color 150ms ease, color 150ms ease',
+                          '&:hover': { borderColor: status.danger, color: status.danger, backgroundColor: 'transparent' },
+                        }}
+                      >
+                        Stop
+                      </Button>
                     )}
-                    <Button size="small" aria-expanded={isExpanded} onClick={() => setExpanded(isExpanded ? null : connection.connectionId)}>
+                    <Button
+                      size="small"
+                      aria-expanded={isExpanded}
+                      onClick={() => setExpanded(isExpanded ? null : connection.connectionId)}
+                      sx={{
+                        fontSize: '0.75rem',
+                        color: ink.secondary,
+                        borderRadius: `${radius.sm}px`,
+                        textTransform: 'none',
+                        fontWeight: 600,
+                        transition: 'color 150ms ease',
+                        '&:hover': { color: accent.violet, backgroundColor: 'transparent' },
+                      }}
+                    >
                       {isExpanded
                         ? 'Hide'
                         : `Inspect (${capabilities.length}${card.inventoryTruncated ? ' shown' : ''})`}
@@ -675,7 +728,7 @@ function RigPanelSession({ token, onClose, onResourcesChanged }: Props): React.R
                         </Typography>
                         <Stack spacing={1}>
                           {items.map((capability) => (
-                            <Box key={capability.capabilityId} sx={{ p: 1.25, border: `1px solid ${surface.border}`, borderRadius: `${radius.sm}px`, backgroundColor: surface.raised }}>
+                            <Box key={capability.capabilityId} sx={{ p: 1.25, border: `1px solid ${surface.border}`, borderRadius: `${radius.sm}px`, backgroundColor: surface.raised, transition: 'border-color 150ms ease', '&:hover': { borderColor: surface.borderStrong } }}>
                               {/* Identity leads; the governance controls sit to the
                                   right and wrap beneath the identity on narrow widths. */}
                               <Stack direction="row" alignItems="flex-start" justifyContent="space-between" gap={1} flexWrap="wrap">
@@ -739,12 +792,42 @@ function RigPanelSession({ token, onClose, onResourcesChanged }: Props): React.R
                                     <Alert
                                       severity="warning"
                                       sx={{ mt: 1 }}
-                                      action={<Button onClick={() => approveAndRun(connection.connectionId, capability)} disabled={Boolean(busy) || !canMutate} aria-describedby={pausedDescribedBy}>Approve and run</Button>}
+                                      action={
+                                        <Button
+                                          onClick={() => approveAndRun(connection.connectionId, capability)}
+                                          disabled={Boolean(busy) || !canMutate}
+                                          aria-describedby={pausedDescribedBy}
+                                          sx={{
+                                            fontSize: '0.75rem',
+                                            fontWeight: 600,
+                                            textTransform: 'none',
+                                            borderRadius: `${radius.sm}px`,
+                                          }}
+                                        >
+                                          Approve and run
+                                        </Button>
+                                      }
                                     >
                                       Review the exact connection, capability, and arguments before running once.
                                     </Alert>
                                   ) : (
-                                    <Button size="small" sx={{ mt: 0.75 }} onClick={() => propose(connection.connectionId, capability)} disabled={Boolean(busy) || !canMutate} aria-describedby={pausedDescribedBy}>
+                                    <Button
+                                      size="small"
+                                      sx={{
+                                        mt: 0.75,
+                                        fontSize: '0.75rem',
+                                        color: ink.secondary,
+                                        border: `1px solid ${surface.border}`,
+                                        borderRadius: `${radius.sm}px`,
+                                        textTransform: 'none',
+                                        fontWeight: 600,
+                                        transition: 'border-color 150ms ease, color 150ms ease',
+                                        '&:hover': { borderColor: accent.violetBorder, color: accent.violet, backgroundColor: 'transparent' },
+                                      }}
+                                      onClick={() => propose(connection.connectionId, capability)}
+                                      disabled={Boolean(busy) || !canMutate}
+                                      aria-describedby={pausedDescribedBy}
+                                    >
                                       Review invocation
                                     </Button>
                                   )}

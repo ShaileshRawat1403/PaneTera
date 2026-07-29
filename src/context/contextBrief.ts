@@ -115,23 +115,31 @@ export interface ContextBriefInput {
   staleAfterDays?: number;
 }
 
-/**
- * A recommended action, with its effect stated rather than encoded in a string.
- *
- * An earlier version carried a single `message` field where an empty string
- * meant "focus the composer", `/project` meant "open the picker" and anything
- * else meant "submit this". That made the renderer infer behaviour from magic
- * values, which is exactly the kind of coupling that breaks silently when a
- * label changes.
- */
+/** A recommended action, with its effect stated rather than encoded in a string. */
 export type NextAction =
   | { kind: 'focus-composer'; label: string; projectId?: string }
   | { kind: 'open-project-picker'; label: string }
-  // Surfaces are surface-scoped on purpose. Rig, Headroom and Audit are not
-  // per-project views, so carrying a project here would invite the renderer to
-  // scope them to one, which is a redirection the union exists to prevent.
   | { kind: 'open-surface'; surface: 'rig' | 'headroom' | 'audit'; label: string }
   | { kind: 'submit-message'; message: string; label: string; projectId?: string };
+
+/**
+ * An AI-suggested workflow, surfaced proactively based on current context.
+ *
+ * These sit alongside the deterministic `next` recommendation and answer
+ * "What could I do next?" with domain-aware suggestions from registered
+ * tools, recent conversation context, or learned patterns.
+ *
+ * `confidence` is a simple 1–5 score. The renderer uses it to decide visual
+ * emphasis: 5 = brass accent (highly recommended), 3–4 = violet (useful),
+ * 1–2 = muted (optional).
+ */
+export interface SuggestedWorkflow {
+  label: string;
+  description: string;
+  action: NextAction;
+  confidence: 1 | 2 | 3 | 4 | 5;
+  source?: string;
+}
 
 /** A bounded view of a collection: what to show, and how much there was. */
 export interface Bounded<T> {
@@ -148,6 +156,8 @@ export interface ContextBrief {
   attention: Bounded<AttentionItem>;
   /** Question 4. At most one. */
   next: NextAction | null;
+  /** Proactive AI-suggested workflows, beyond the deterministic recommendation. */
+  suggestions: Bounded<SuggestedWorkflow>;
   /** Projects that are fine. Counted, not enumerated, so silence stays silent. */
   quietProjectCount: number;
 }
@@ -425,6 +435,9 @@ export function buildContextBrief(input: ContextBriefInput): ContextBrief {
       activeProjectId: input.activeProjectId,
       objective: input.objective,
     }),
+    // Suggestions start empty. The server injects AI-suggested workflows
+    // based on conversation context and registered tool capabilities.
+    suggestions: { items: [], total: 0 },
     // Counted, not listed. Enumerating healthy projects is how a brief turns
     // into the dashboard the contract rules out.
     //

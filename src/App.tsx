@@ -32,7 +32,7 @@ import {
 } from './components/workstation/paneSizing';
 import { workstationGuidance } from './components/workstation/guidance';
 import { buildContextBrief } from '../src/context/contextBrief';
-import type { ProjectSnapshot, NextAction } from '../src/context/contextBrief';
+import type { ProjectSnapshot, NextAction, SuggestedWorkflow } from '../src/context/contextBrief';
 import type { HeadroomCapsuleView } from './components/headroom/HeadroomPanel';
 import type { UiComponent } from '../shared/uiComponent';
 import SearchIcon from '@mui/icons-material/Search';
@@ -149,6 +149,7 @@ const App: React.FC = () => {
   const [activeQuery, setActiveQuery] = useState<string | null>(null);
   const [activeLens, setActiveLens] = useState<'engineer' | 'pm' | 'ba' | 'qa' | 'exec'>('engineer');
   const [workspacesList, setWorkspacesList] = useState<any[]>([]);
+  const [workflowSuggestions, setWorkflowSuggestions] = useState<SuggestedWorkflow[]>([]);
   const [soothsayerStatus, setSoothsayerStatus] = useState<'online' | 'offline' | 'checking' | 'unconfigured' | 'degraded'>('checking');
   const [backendHealth, setBackendHealth] = useState<{ status: string; mode: string; workspaceCount: number; memoryBridgeReady: boolean } | null>(null);
 
@@ -654,6 +655,32 @@ const App: React.FC = () => {
       })
       .catch(() => {});
   }, [token]);
+
+  // Fetch workflow suggestions when workspaces or active workspace changes
+  useEffect(() => {
+    if (!token) return;
+    const active = activeWorkspace;
+    const params = new URLSearchParams();
+    if (active?.id) params.set('projectId', active.id);
+    if (active?.name) params.set('projectName', active.name);
+    fetch(`/api/workflow-suggestions?${params.toString()}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data && Array.isArray(data.suggestions)) {
+          const mapped: SuggestedWorkflow[] = data.suggestions.map((s: any) => ({
+            label: s.label,
+            description: s.description,
+            confidence: s.confidence as 1 | 2 | 3 | 4 | 5,
+            source: s.source,
+            action: s.action as SuggestedWorkflow['action'],
+          }));
+          setWorkflowSuggestions(mapped);
+        }
+      })
+      .catch(() => {});
+  }, [token, activeWorkspace, workspacesList]);
 
   // Client-side direct connection ping to live deployed app
   useEffect(() => {
@@ -2218,6 +2245,10 @@ const App: React.FC = () => {
             objective: headroomObjective.trim() || null,
             now: new Date(),
           });
+          // Merge server-provided AI suggestions into the brief
+          if (workflowSuggestions.length > 0) {
+            contextBrief.suggestions = { items: workflowSuggestions, total: workflowSuggestions.length };
+          }
 
           const handleBriefAction = (action: NextAction) => {
             switch (action.kind) {

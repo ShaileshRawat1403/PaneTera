@@ -26,11 +26,22 @@ import { Box, Typography, Button, Chip } from '@mui/material';
 import { accent, ink, radius, status, surface, typography } from '../theme/cssTokens';
 import { transition } from '../theme/motion';
 import { singleFire } from './singleFire';
+import { PreviewRenderer } from './PreviewRenderer';
 
 interface EvidenceLink {
   id: string;
   label: string;
   type: 'screenshot' | 'extraction' | 'observation';
+}
+
+/** A live preview of the proposed action's expected output. */
+interface ExecutionPreview {
+  /** Renderable content to preview before approving. */
+  content: string;
+  /** How to render the preview content. */
+  format: 'markdown' | 'code' | 'text' | 'json' | 'diff-preview';
+  /** Label shown above the preview area. */
+  label?: string;
 }
 
 interface ProposedActionCardProps {
@@ -66,6 +77,9 @@ interface ProposedActionCardProps {
     riskLevel?: 'safe' | 'review' | 'dangerous';
     diff?: { additions: string[]; deletions: string[] };
   }[];
+
+  /** Live preview of the proposed action's output before approval. */
+  preview?: ExecutionPreview;
 }
 
 /** Plain language for an internal execution mode identifier. */
@@ -126,6 +140,7 @@ export const ProposedActionCard: React.FC<ProposedActionCardProps> = ({
   evidenceLinks,
   onEvidenceClick,
   steps,
+  preview,
 }) => {
   // Approving fires once, immediately. The previous version started a
   // two-second countdown with an Undo, which meant the consequential moment was
@@ -142,6 +157,7 @@ export const ProposedActionCard: React.FC<ProposedActionCardProps> = ({
   // remains the real boundary.
   const submittingRef = useRef(false);
   const [submitting, setSubmitting] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
 
   const handleApprove = () =>
     singleFire(submittingRef, () => {
@@ -402,6 +418,32 @@ export const ProposedActionCard: React.FC<ProposedActionCardProps> = ({
               </Box>
             ))}
           </Box>
+        </Box>
+      )}
+
+      {/* Live Preview — rendered before evidence links so the user sees the
+          proposed result alongside the diff and evidence. */}
+      {preview && (
+        <Box sx={{ mt: 1.5 }}>
+          <Button
+            size="small"
+            onClick={() => setShowPreview(!showPreview)}
+            sx={{
+              fontSize: '0.7rem',
+              color: accent.violet,
+              textTransform: 'none',
+              p: 0,
+              minWidth: 'auto',
+              fontWeight: 600,
+              transition: 'color 150ms ease',
+              '&:hover': { color: accent.violet, textDecoration: 'underline', backgroundColor: 'transparent' },
+            }}
+          >
+            {showPreview ? 'Hide preview ▲' : 'Preview result ▼'}
+          </Button>
+          {showPreview && (
+            <PreviewRenderer content={preview.content} format={preview.format} label={preview.label} />
+          )}
         </Box>
       )}
 

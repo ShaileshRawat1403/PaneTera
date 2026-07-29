@@ -849,6 +849,7 @@ describe('the brief refuses to become a dashboard', () => {
       'next',
       'now',
       'quietProjectCount',
+      'suggestions',
       'working',
     ]);
   });

@@ -2515,6 +2515,90 @@ Respond with JSON: { "family": "...", "confidence": 0.0-1.0 }`;
   }
 });
 
+// Workflow suggestions endpoint — returns AI-guided suggestions based on
+// project context and registered tool capabilities.
+app.get('/api/workflow-suggestions', async (req, res) => {
+  try {
+    const projectId = (req.query.projectId as string) || '';
+    const projectName = (req.query.projectName as string) || '';
+    const suggestions: {
+      label: string;
+      description: string;
+      action: { kind: string; label: string; message?: string; surface?: string; projectId?: string };
+      confidence: number;
+      source?: string;
+    }[] = [];
+
+    // If a specific project is active, suggest project-relevant workflows
+    if (projectName) {
+      suggestions.push({
+        label: `Inspect ${projectName}`,
+        description: 'Browse the project structure, recent changes, and health status.',
+        action: { kind: 'submit-message', label: `Inspect ${projectName}`, message: `what is the current state of ${projectName}`, projectId },
+        confidence: 4,
+        source: 'workspace',
+      });
+    }
+
+    // Suggest IT Ops inspection for any active project
+    if (projectName) {
+      suggestions.push({
+        label: 'Check deployment pipeline',
+        description: 'View IT Ops deployment status, recent runs, and pipeline health.',
+        action: { kind: 'submit-message', label: 'Check deployment pipeline', message: `show deployment pipeline for ${projectName}`, projectId },
+        confidence: 3,
+        source: 'it-ops',
+      });
+    }
+
+    // Suggestion to set a goal if no project is active
+    if (!projectName) {
+      suggestions.push({
+        label: 'Open a project',
+        description: 'Choose a workspace to start working on.',
+        action: { kind: 'open-project-picker', label: 'Open a project' },
+        confidence: 5,
+        source: 'workspace',
+      });
+    }
+
+    // Browse browser observation
+    suggestions.push({
+      label: 'Browse live web preview',
+      description: 'Open an interactive browser view to inspect a live page.',
+      action: { kind: 'submit-message', label: 'Browse web preview', message: 'show latest browser observation' },
+      confidence: 2,
+      source: 'browser',
+    });
+
+    // Content workflow suggestion
+    if (projectName) {
+      suggestions.push({
+        label: 'Draft content update',
+        description: 'Write a blog post, documentation, or content update for the project.',
+        action: { kind: 'submit-message', label: 'Draft content update', message: `write a blog post about recent updates in ${projectName}`, projectId },
+        confidence: 2,
+        source: 'content-ops',
+      });
+    }
+
+    // Soothsayer integration
+    if (projectName) {
+      suggestions.push({
+        label: 'Open Soothsayer dashboard',
+        description: 'View the live Soothsayer application dashboard and workflows.',
+        action: { kind: 'submit-message', label: 'Open Soothsayer', message: 'show soothsayer ui', projectId },
+        confidence: 3,
+        source: 'soothsayer',
+      });
+    }
+
+    res.json({ suggestions });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message, suggestions: [] });
+  }
+});
+
 // Evidence browsing endpoint — returns recent browser observations + extractions
 // for the evidence canvas surface.
 app.get('/api/evidence', (_req, res) => {

@@ -8,14 +8,15 @@
 // the derivation, not the renderer.
 
 import React from 'react';
-import { Box, Button, Chip, Stack, Typography } from '@mui/material';
+import { Box, Button, Chip, Stack, Tooltip, Typography } from '@mui/material';
 import BoltIcon from '@mui/icons-material/Bolt';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PriorityHighIcon from '@mui/icons-material/PriorityHigh';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import { accent, elevation, ink, radius, status, surface, typography } from '../../theme/cssTokens';
 import { enterStyles, transition, duration, easing } from '../../theme/motion';
-import type { ContextBrief, AttentionItem, NextAction } from '../../context/contextBrief';
+import type { ContextBrief, AttentionItem, NextAction, SuggestedWorkflow } from '../../context/contextBrief';
 
 interface ContextBriefPanelProps {
   brief: ContextBrief;
@@ -100,14 +101,71 @@ function NextActionCard({ action, onAction }: { action: NextAction; onAction?: (
   );
 }
 
+function SuggestedWorkflowCard({
+  suggestion,
+  onAction,
+}: {
+  suggestion: SuggestedWorkflow;
+  onAction?: (action: NextAction) => void;
+}) {
+  const isHighConfidence = suggestion.confidence >= 4;
+  const borderColor = isHighConfidence ? status.brass : accent.violetBorder;
+  const bgColor = isHighConfidence ? status.brassMuted : accent.violetMuted;
+  const hoverBg = isHighConfidence ? status.brassMuted : accent.violetHover;
+  const iconColor = isHighConfidence ? status.brass : accent.violet;
+  return (
+    <Button
+      onClick={() => onAction?.(suggestion.action)}
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'flex-start',
+        gap: 0.5,
+        p: 1.5,
+        borderRadius: `${radius.md}px`,
+        border: `1px solid ${borderColor}`,
+        backgroundColor: bgColor,
+        textTransform: 'none',
+        textAlign: 'left',
+        width: '100%',
+        transition: transition(['background-color', 'border-color', 'box-shadow', 'transform']),
+        '&:hover': {
+          backgroundColor: hoverBg,
+          boxShadow: elevation.cardHover,
+          transform: 'translateY(-1px)',
+        },
+        '&:active': { transform: 'scale(0.98)' },
+        '&:focus-visible': { outline: 'none', boxShadow: elevation.focusRing, borderColor },
+      }}
+    >
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: '100%' }}>
+        <AutoAwesomeIcon sx={{ fontSize: 14, color: iconColor, flexShrink: 0 }} />
+        <Typography sx={{ color: ink.primary, fontWeight: 600, fontSize: '0.8125rem', flex: 1 }}>
+          {suggestion.label}
+        </Typography>
+        {suggestion.source && (
+          <Tooltip title={suggestion.source}>
+            <Typography variant="caption" sx={{ color: ink.muted, fontSize: '0.625rem', flexShrink: 0 }}>
+              {suggestion.source}
+            </Typography>
+          </Tooltip>
+        )}
+      </Box>
+      <Typography variant="caption" sx={{ color: ink.secondary, fontSize: '0.75rem', lineHeight: 1.4, ml: 3 }}>
+        {suggestion.description}
+      </Typography>
+    </Button>
+  );
+}
+
 export function ContextBriefPanel({ brief, onAction }: ContextBriefPanelProps): React.ReactElement {
   const hasWorking = brief.working !== null;
   const hasNow = brief.now.activeRunCount > 0;
   const hasAttention = brief.attention.total > 0;
   const hasNext = brief.next !== null;
+  const hasSuggestions = brief.suggestions.items.length > 0;
 
-  // A completely healthy brief with nothing to report stays minimal
-  const isMinimal = !hasWorking && !hasNow && !hasAttention && !hasNext;
+  const isMinimal = !hasWorking && !hasNow && !hasAttention && !hasNext && !hasSuggestions;
 
   if (isMinimal) {
     return (
@@ -242,6 +300,23 @@ export function ContextBriefPanel({ brief, onAction }: ContextBriefPanelProps): 
             <Box sx={{ mt: 0.75 }}>
               <NextActionCard action={brief.next!} onAction={onAction} />
             </Box>
+          </Box>
+        )}
+
+        {/* AI-guided suggestions */}
+        {hasSuggestions && (
+          <Box sx={{ ...enterStyles(), animationDelay: '240ms' }}>
+            <SectionLabel icon={<AutoAwesomeIcon />} question="Suggested actions" />
+            <Stack spacing={1} sx={{ mt: 0.75 }}>
+              {brief.suggestions.items.map((suggestion, idx) => (
+                <SuggestedWorkflowCard key={idx} suggestion={suggestion} onAction={onAction} />
+              ))}
+            </Stack>
+            {brief.suggestions.total > brief.suggestions.items.length && (
+              <Typography variant="caption" sx={{ color: ink.muted, mt: 0.5, display: 'block', fontSize: '0.6875rem' }}>
+                +{brief.suggestions.total - brief.suggestions.items.length} more
+              </Typography>
+            )}
           </Box>
         )}
 
