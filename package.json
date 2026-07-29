@@ -9,8 +9,8 @@
     "lint": "tsc --noEmit --project tsconfig.json",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --import tsx --test --test-concurrency=1 'test/**/*.test.ts' 'test/**/*.test.tsx'",
-    "test:coverage": "node --import tsx --experimental-test-coverage --test --test-concurrency=1 'test/**/*.test.ts' 'test/**/*.test.tsx'"
+    "test": "node --import tsx --test --test-concurrency=1 --test-timeout=30000 'test/**/*.test.ts' 'test/**/*.test.tsx'",
+    "test:coverage": "node --import tsx --experimental-test-coverage --test --test-concurrency=1 --test-timeout=30000 'test/**/*.test.ts' 'test/**/*.test.tsx'"
   },
   "dependencies": {
     "@emotion/react": "^11.11.4",
