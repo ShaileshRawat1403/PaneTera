@@ -23,4 +23,5 @@ test_real.js
 test_with_ext.js
 workspace-test-*/
 scratch/
+*.bak
 .DS_Store
