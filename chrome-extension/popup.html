@@ -125,6 +125,40 @@
     }
     .approval-panel strong { display: block; font-size: 12px; margin-bottom: 6px; }
     .approval-panel p { color: #b9b1a6; font-size: 10px; line-height: 1.45; margin: 0 0 10px; }
+    .mode-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      margin-bottom: 10px;
+    }
+    .mode-title { display: block; font-size: 11px; font-weight: 700; color: #f4f4f5; }
+    .mode-hint { display: block; font-size: 9px; color: #71717a; margin-top: 2px; }
+    .switch { position: relative; display: inline-block; width: 40px; height: 22px; flex: none; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute; cursor: pointer; inset: 0;
+      background: rgba(255, 255, 255, 0.12); border-radius: 22px; transition: background 0.2s;
+    }
+    .slider::before {
+      content: ""; position: absolute; height: 16px; width: 16px; left: 3px; bottom: 3px;
+      background: #f4f4f5; border-radius: 50%; transition: transform 0.2s;
+    }
+    .switch input:checked + .slider { background: #ef4444; }
+    .switch input:checked + .slider::before { transform: translateX(18px); }
+    .ungoverned-warn {
+      background: rgba(239, 68, 68, 0.08);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #f87171;
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-size: 9px;
+      line-height: 1.4;
+      margin-bottom: 12px;
+    }
   </style>
 </head>
 <body>
@@ -158,6 +192,21 @@
       <strong>Access:</strong> Safe inspection<br/>
       Observations and evidence are routed to PaneTera Activity.
     </div>
+
+    <div class="mode-row">
+      <div>
+        <span class="mode-title">Full-operator mode</span>
+        <span id="modeHint" class="mode-hint">Governed. Actions require approval.</span>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="modeToggle">
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div id="ungovernedWarn" class="ungoverned-warn" style="display: none;">
+      Ungoverned: navigation, scripting, coordinate input, and diagnostics run directly with no approval gate. The debugger banner will appear while operator sessions are active.
+    </div>
+
     <div class="input-group" style="margin-bottom: 12px;">
       <label>Action</label>
       <select id="capabilitySelect" style="width:100%; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:6px; padding:10px; color:#f4f4f5; font-size:12px; margin-bottom:10px;">

@@ -8,7 +8,7 @@
     "build": "node scripts/build.js",
     "zip": "node scripts/zip.js",
     "test": "npm run test:unit",
-    "test:unit": "npm run build && node test/bundle-registry.test.js && node test/live-session.test.js && node test/origin-validation.test.js && node test/oversized-output.test.js && node test/form-exclusion.test.js && node test/redactor.test.js && node test/contracts.test.js && node test/pairing-bridge.test.js && node test/bridge-lifecycle.test.js && node test/token-refresh.test.js && node test/reproducible-build.test.js && node test/message-routing.test.js && node test/production-probes.test.js",
+    "test:unit": "npm run build && node test/bundle-registry.test.js && node test/live-session.test.js && node test/origin-validation.test.js && node test/oversized-output.test.js && node test/form-exclusion.test.js && node test/redactor.test.js && node test/contracts.test.js && node test/pairing-bridge.test.js && node test/bridge-lifecycle.test.js && node test/token-refresh.test.js && node test/reproducible-build.test.js && node test/message-routing.test.js && node test/production-probes.test.js && node test/operator-mode.test.js && node test/operator-dispatch.test.js",
     "test:chrome": "node scripts/build.js && node test/chrome-acceptance.mjs",
     "test:all": "npm run test:unit && npm run test:chrome"
   },
