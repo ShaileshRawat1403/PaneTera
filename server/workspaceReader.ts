@@ -7,11 +7,15 @@ import yaml from 'js-yaml';
 const getRoot = () => process.env.WORKSPACE_ROOT || '/Users/Shailesh/MYAIAGENTS';
 const PORTAL_YAML = path.join(process.cwd(), 'portal.yaml');
 
+interface PortalYaml {
+  workspaces: Array<{ name: string; folder?: string; path?: string }>;
+}
+
 // Load portal.yaml and validate its structure
 export async function listWorkspaces(): Promise<Array<{name:string; path:string}>> {
   try {
     const raw = await fs.readFile(PORTAL_YAML, 'utf8');
-    const doc = yaml.load(raw) as any;
+    const doc = yaml.load(raw) as PortalYaml;
     if (!doc || !Array.isArray(doc.workspaces)) {
       throw new Error('Invalid portal.yaml format');
     }
@@ -44,7 +48,7 @@ export async function listWorkspaces(): Promise<Array<{name:string; path:string}
 
 export async function addWorkspaceToPortalYaml(name: string, folder: string): Promise<void> {
   const raw = await fs.readFile(PORTAL_YAML, 'utf8');
-  const doc = yaml.load(raw) as any;
+  const doc = yaml.load(raw) as PortalYaml;
   if (!doc || !Array.isArray(doc.workspaces)) {
     throw new Error('Invalid portal.yaml format');
   }

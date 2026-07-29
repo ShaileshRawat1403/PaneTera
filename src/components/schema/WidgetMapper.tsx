@@ -16,13 +16,13 @@ interface WidgetMapperProps {
 export const WidgetMapper: React.FC<WidgetMapperProps> = ({ schema, data, onAction }) => {
   switch (schema.type) {
     case 'status-board':
-      return <StatusBoardWidget schema={schema} data={data as any} onAction={onAction} />;
+      return <StatusBoardWidget schema={schema} data={data as unknown as Parameters<typeof StatusBoardWidget>[0]['data']} onAction={onAction} />;
     case 'metric-group':
-      return <MetricGroupWidget schema={schema} data={data as any} onAction={onAction} />;
+      return <MetricGroupWidget schema={schema} data={data as unknown as Parameters<typeof MetricGroupWidget>[0]['data']} onAction={onAction} />;
     case 'diff':
-      return <DiffWidget schema={schema} data={data as any} onAction={onAction} />;
+      return <DiffWidget schema={schema} data={data as unknown as Parameters<typeof DiffWidget>[0]['data']} onAction={onAction} />;
     case 'proposal-gate':
-      return <ProposalGateWidget schema={schema} data={data as any} onAction={onAction} />;
+      return <ProposalGateWidget schema={schema} data={data as unknown as Parameters<typeof ProposalGateWidget>[0]['data']} onAction={onAction} />;
     case 'form':
       return <FormWidget schema={schema} data={data} onAction={onAction} />;
     default:

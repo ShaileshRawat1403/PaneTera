@@ -70,7 +70,7 @@ export const NativeWorkbenchRenderer: React.FC<NativeWorkbenchRendererProps> = (
                   inputSchema={view.inputSchema || { fields: [] }}
                   actions={view.actions || []}
                   initialValues={initialValues}
-                  onSubmitProposal={onSubmitProposal as any}
+                  onSubmitProposal={onSubmitProposal as (actionId: string, formValues: Record<string, unknown>) => void}
                 />
               );
             }

@@ -133,20 +133,21 @@ export class HeadroomStore {
     const materialized = Object.entries(input.materialized).flatMap(([itemId, exact]) => {
       const source = input.material[itemId];
       if (typeof source !== 'string' || typeof exact !== 'string') return [];
-      const item = input.context.find((candidate: any) => candidate?.id === itemId) as any;
+      const item = input.context.find((candidate) => (candidate as Record<string, unknown>)?.id === itemId) as
+        { materialization?: { mode: string } } | undefined;
       const mode = item?.materialization?.mode;
       if (mode !== 'inline' && mode !== 'retrieved') return [];
       return [{
         itemId,
         sourceDigest: sha256(source),
         materializedDigest: sha256(exact),
-        mode,
+        mode: mode as 'inline' | 'retrieved',
         measurement: { unit: 'bytes' as const, value: bytes(exact) },
         truncated: false,
       }];
     });
     const exclusions: HeadroomEnvelope['exclusions'] = [];
-    for (const candidate of input.context as any[]) {
+    for (const candidate of input.context as Array<Record<string, unknown> & { materialization?: { mode?: string }; included?: boolean; freshness?: string }>) {
       if (!candidate || typeof candidate.id !== 'string') continue;
       if (candidate.included === false) {
         exclusions.push({ itemId: candidate.id, reason: 'user-excluded' });
@@ -157,8 +158,8 @@ export class HeadroomStore {
         continue;
       }
       if (
-        candidate.included !== false
-        && ['inline', 'retrieved'].includes(candidate.materialization?.mode)
+        candidate.included !== (false as boolean)
+        && ['inline', 'retrieved'].includes(candidate.materialization?.mode ?? '')
         && typeof input.materialized[candidate.id] !== 'string'
       ) exclusions.push({ itemId: candidate.id, reason: 'unreachable' });
     }

@@ -576,8 +576,8 @@ const App: React.FC = () => {
 
   const isSoothsayerLivePlaneActive = Boolean(
     activeComponent?.type === 'SoothsayerWorkbench' &&
-    (activeComponent.data as any)?.embed?.allowed &&
-    (activeComponent.data as any)?.embedUrl
+    (activeComponent.data as { embed?: { allowed?: boolean }; embedUrl?: string })?.embed?.allowed &&
+    (activeComponent.data as { embed?: { allowed?: boolean }; embedUrl?: string })?.embedUrl
   );
 
   // Governed content workflow (flowright) input state
@@ -872,7 +872,7 @@ const App: React.FC = () => {
 
   const handleAddWorkspace = async () => {
     try {
-      const dirHandle = await (window as any).showDirectoryPicker();
+      const dirHandle = await (window as Window & { showDirectoryPicker?: () => Promise<{ name: string }> }).showDirectoryPicker!();
       const folderName = dirHandle.name;
       const response = await fetch('/api/workspaces/add', {
         method: 'POST',

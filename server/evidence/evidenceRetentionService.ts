@@ -64,7 +64,6 @@ export const evidenceRetentionService = new EvidenceRetentionService();
 export function setEvidenceRetentionServiceForTest(service: EvidenceRetentionService | undefined) {
   Object.assign(evidenceRetentionService, service || new EvidenceRetentionService());
   if (service === undefined) {
-    // Reset internal state if undefined
-    (evidenceRetentionService as any).leases = new Map();
+    (evidenceRetentionService as unknown as { leases: Map<string, unknown> }).leases = new Map();
   }
 }

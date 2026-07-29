@@ -320,7 +320,7 @@ export async function handleOrchestratorQuery(
         modelActions = llmRes.suggestedActions || [];
       }
     } catch (llmErr) {
-      warnings.push(`LLM provider '${promptProvider}' failed: ${(llmErr as any).message}. Dropping back to deterministic summaries.`);
+      warnings.push(`LLM provider '${promptProvider}' failed: ${(llmErr as Error).message}. Dropping back to deterministic summaries.`);
       promptProvider = 'none';
     }
   }

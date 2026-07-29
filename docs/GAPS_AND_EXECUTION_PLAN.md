@@ -197,12 +197,32 @@ to `eslint . && tsc --noEmit`.
 *Gate:* `npm run lint` runs both and passes, config committed, a planted
 theme-token violation is caught.
 
+*S1.2 outcome (2026-07-29, gate passed):* `.eslintrc.cjs` (legacy format, correct
+for ESLint v8.57) and `.eslintignore` committed; `lint` is
+`eslint . && tsc --noEmit`. Reviewer independently reproduced both rules via
+stdin: theme-token `no-restricted-syntax` warns on a raw hex literal,
+`no-var-requires` errors on `require()`. Full run: 500 problems, 0 errors, 500
+warnings, so it exits 0. Carry-forward: those 500 raw-hex warnings are a
+theming-debt backlog. Until they are burned down and the rule is raised to error
+or `--max-warnings 0`, a green lint is a hollow signal and must not be treated as
+enforcement. Track alongside S1.4.
+
 **S1.3 `as any` burn-down.** 35 remain (Sprint 0 removed 4 with the `.bak`):
 2 in `server/headroom`, 12 in `src`, the rest elsewhere in `server`. Order by
 trust-criticality: audit, provenance, grants, headroom, Rig before UI. Real
 types or narrowed guards, no behavior change.
 *Gate:* zero `as any` in governance/audit paths, total down to target, lint and
 suite green, diff is types only.
+
+*S1.3 outcome (2026-07-29, gate passed):* 14 files, +59/-41, verified type-level
+only (empty behavior-change detector). Real `as any` casts now zero, down from
+35; the two remaining grep matches are prose false positives in `contextBrief.ts`.
+Governance/audit paths at zero. Reviewer checked the relaunder risk: `as unknown
+as` grew 3 to 10, but all 7 new ones are outside governance (4 in
+`WidgetMapper.tsx` widget-data boundary, 3 in server singleton re-init hooks).
+Residual debt to record, not from this pass: 4 `WidgetMapper` casts expose an
+untyped widget-data union, and 3 pre-existing `as unknown as` in
+`server/rig/runtime.ts` are governance-path type holes a later pass should close.
 
 **S1.4 TODO triage.** ~125 markers (119 server, 6 src). Classify, do not
 blanket-fix: each becomes a tracked backlog entry or is deleted. Commit a triage

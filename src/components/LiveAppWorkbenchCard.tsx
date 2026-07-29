@@ -33,7 +33,7 @@ export const LiveAppWorkbenchCard: React.FC<LiveAppWorkbenchCardProps> = ({
     warnings,
   } = data;
 
-  const health = healthRaw as any;
+  const health = healthRaw as { status?: string; endpoint?: string } | null;
 
   // Visual emphasis highlights based on active lens
   const highlightEndpoints = activeLens === 'engineer';
@@ -81,7 +81,7 @@ export const LiveAppWorkbenchCard: React.FC<LiveAppWorkbenchCardProps> = ({
           <Typography variant="caption" sx={{ color: '#7f5af0', fontWeight: 800, letterSpacing: '0.06em' }}>
             LIVE APP WORKBENCH (EXPERIMENTAL)
           </Typography>
-          {health && (
+          {health && health.status && (
             <Chip
               label={health.status.toUpperCase()}
               size="small"
@@ -324,7 +324,7 @@ export const LiveAppWorkbenchCard: React.FC<LiveAppWorkbenchCardProps> = ({
                 Health Check Endpoint {highlightHealth && '— Focused Lens'}
               </Typography>
               <Typography variant="caption" sx={{ fontFamily: 'monospace', color: '#22c55e', display: 'block', mt: 0.5 }}>
-                {health.endpoint} [Status: Available]
+                {health.endpoint ?? '/health'} [Status: Available]
               </Typography>
             </Box>
           )}

@@ -7,6 +7,10 @@ import { authenticatePortalRequest, operatorPrincipalForRequest } from './operat
 
 export const browserRouter = Router();
 
+interface AuthenticatedRequest extends Request {
+  browserSession: BrowserSession;
+}
+
 export interface BrowserSession {
   sessionId: string;
   accessToken: string;
@@ -68,7 +72,7 @@ export function requireExtensionToken(req: Request, res: Response, next: NextFun
   if (!authHeader || !sessions.has(authHeader)) {
     return res.status(401).json({ error: 'Unauthorized: Invalid or missing extension session token' });
   }
-  (req as any).browserSession = sessions.get(authHeader);
+  (req as AuthenticatedRequest).browserSession = sessions.get(authHeader)!;
   next();
 }
 
@@ -228,7 +232,7 @@ browserRouter.get('/health', (req: Request, res: Response) => {
 
 // GET /api/browser/session
 browserRouter.get('/session', requireExtensionToken, (req: Request, res: Response) => {
-  const session = (req as any).browserSession as BrowserSession;
+  const session = (req as AuthenticatedRequest).browserSession as BrowserSession;
   res.json({
     paired: true,
     runtimeId: session.runtimeId,
@@ -239,7 +243,7 @@ browserRouter.get('/session', requireExtensionToken, (req: Request, res: Respons
 
 // DELETE /api/browser/session
 browserRouter.delete('/session', requireExtensionToken, (req: Request, res: Response) => {
-  const session = (req as any).browserSession as BrowserSession;
+  const session = (req as AuthenticatedRequest).browserSession as BrowserSession;
   sessions.delete(session.accessToken);
   refreshTokens.delete(session.refreshToken);
 
@@ -256,7 +260,7 @@ browserRouter.post('/observations', requireExtensionToken, (req: Request, res: R
   const { idempotencyKey } = envelope;
   if (processedIdempotencyKeys.has(idempotencyKey)) return res.status(409).json({ error: 'Duplicate transaction key' });
 
-  const session = (req as any).browserSession as BrowserSession;
+  const session = (req as AuthenticatedRequest).browserSession as BrowserSession;
   
   const ownership: EvidenceOwnership = {
     ownerId: session.installationId,
@@ -402,7 +406,7 @@ browserRouter.get('/observations/:captureId', (req: Request, res: Response) => {
 
 // GET /api/browser/actions/pending -> Chrome polls for a preview-queued action
 browserRouter.get('/actions/pending', requireExtensionToken, (req: Request, res: Response) => {
-  const session = (req as any).browserSession as BrowserSession;
+  const session = (req as AuthenticatedRequest).browserSession as BrowserSession;
   const claimed = browserActionStore.claimNextPreview(session.installationId);
   if (!claimed) return res.json({ pending: false });
   auditBrowserExtensionEvent('browser.action.preview-claim', session, { actionId: claimed.action.actionId });
@@ -418,7 +422,7 @@ browserRouter.get('/actions/pending', requireExtensionToken, (req: Request, res:
 
 // POST /api/browser/actions/preview-result -> Chrome reports preview outcome
 browserRouter.post('/actions/preview-result', requireExtensionToken, (req: Request, res: Response) => {
-  const session = (req as any).browserSession as BrowserSession;
+  const session = (req as AuthenticatedRequest).browserSession as BrowserSession;
   const { actionId, previewToken, result } = req.body ?? {};
   if (typeof actionId !== 'string' || typeof previewToken !== 'string' || !result) {
     return res.status(400).json({ error: 'actionId, previewToken, and result are required' });
@@ -442,7 +446,7 @@ browserRouter.post('/actions/preview-result', requireExtensionToken, (req: Reque
 
 // GET /api/browser/actions/claim -> Chrome polls for an approved action to dispatch
 browserRouter.get('/actions/claim', requireExtensionToken, (req: Request, res: Response) => {
-  const session = (req as any).browserSession as BrowserSession;
+  const session = (req as AuthenticatedRequest).browserSession as BrowserSession;
   const claimed = browserActionStore.claimNext(session.installationId);
   if (!claimed) return res.json({ pending: false });
   auditBrowserExtensionEvent('browser.action.dispatch-claim', session, { actionId: claimed.action.actionId });
@@ -458,7 +462,7 @@ browserRouter.get('/actions/claim', requireExtensionToken, (req: Request, res: R
 
 // POST /api/browser/actions/complete -> Chrome reports execution outcome
 browserRouter.post('/actions/complete', requireExtensionToken, (req: Request, res: Response) => {
-  const session = (req as any).browserSession as BrowserSession;
+  const session = (req as AuthenticatedRequest).browserSession as BrowserSession;
   const { actionId, dispatchToken, result } = req.body ?? {};
   if (typeof actionId !== 'string' || typeof dispatchToken !== 'string' || !result) {
     return res.status(400).json({ error: 'actionId, dispatchToken, and result are required' });
@@ -494,7 +498,7 @@ browserRouter.get('/actions/:actionId', requirePortalToken, (req: Request, res: 
 
 // GET /api/browser/inspections/pending -> Chrome polls for inspection requests
 browserRouter.get('/inspections/pending', requireExtensionToken, (req: Request, res: Response) => {
-  const session = (req as any).browserSession as BrowserSession;
+  const session = (req as AuthenticatedRequest).browserSession as BrowserSession;
   const claimed = browserInspectionStore.claimNext(session.installationId);
   if (!claimed) return res.json({ pending: false });
   auditBrowserExtensionEvent('browser.inspection.claim', session, { requestId: claimed.requestId });
@@ -507,7 +511,7 @@ browserRouter.get('/inspections/pending', requireExtensionToken, (req: Request, 
 
 // POST /api/browser/inspections/complete -> Chrome reports inspection outcome
 browserRouter.post('/inspections/complete', requireExtensionToken, (req: Request, res: Response) => {
-  const session = (req as any).browserSession as BrowserSession;
+  const session = (req as AuthenticatedRequest).browserSession as BrowserSession;
   const { requestId, status, captureId, extractionId, error } = req.body ?? {};
   if (typeof requestId !== 'string') {
     return res.status(400).json({ error: 'requestId is required' });
@@ -533,7 +537,7 @@ browserRouter.post('/inspections/complete', requireExtensionToken, (req: Request
 
 // GET /api/browser/observations/pending -> Chrome polls for observation requests
 browserRouter.get('/observations/pending', requireExtensionToken, (req: Request, res: Response) => {
-  const session = (req as any).browserSession as BrowserSession;
+  const session = (req as AuthenticatedRequest).browserSession as BrowserSession;
   const claimed = browserObservationRequestStore.claimNext(session.installationId);
   if (!claimed) return res.json({ pending: false });
   auditBrowserExtensionEvent('browser.observation.claim', session, { requestId: claimed.requestId });
@@ -545,7 +549,7 @@ browserRouter.get('/observations/pending', requireExtensionToken, (req: Request,
 
 // POST /api/browser/observations/complete -> Chrome reports observation outcome
 browserRouter.post('/observations/complete', requireExtensionToken, (req: Request, res: Response) => {
-  const session = (req as any).browserSession as BrowserSession;
+  const session = (req as AuthenticatedRequest).browserSession as BrowserSession;
   const { requestId, status, captureId, error } = req.body ?? {};
   if (typeof requestId !== 'string') {
     return res.status(400).json({ error: 'requestId is required' });

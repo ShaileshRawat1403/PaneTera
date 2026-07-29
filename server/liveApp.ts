@@ -240,7 +240,7 @@ export async function buildLiveAppWorkbench(
 
     manifestReachable = true;
     if (resp.ok) {
-      const body = (await resp.json()) as any;
+      const body = (await resp.json()) as { environment?: string; version?: string; routes?: unknown[]; features?: unknown[]; health?: Record<string, unknown>; workflows?: unknown[] };
       if (body && typeof body === 'object') {
         manifestAvailable = true;
         environment = body.environment || 'unknown';
@@ -299,7 +299,7 @@ export async function buildLiveAppWorkbench(
 
     workbenchReachable = true;
     if (resp.ok) {
-      const body = (await resp.json()) as any;
+      const body = (await resp.json()) as { views?: AppNativeWorkbenchView[]; app?: string; environment?: string; updatedAt?: string; embed?: Record<string, unknown> };
       if (body && typeof body === 'object' && Array.isArray(body.views)) {
         workbenchAvailable = body.views.length > 0;
         workbenchSource = 'app-native-api';
@@ -316,7 +316,7 @@ export async function buildLiveAppWorkbench(
           const embedOriginAllowed = origin && sameOrigin(origin, baseUrl);
           if (rawEmbed.allowed && secret && embedOriginAllowed) {
             const timestamp = Date.now();
-            const defaultPath = rawEmbed.defaultPath || '/';
+            const defaultPath = typeof rawEmbed.defaultPath === 'string' ? rawEmbed.defaultPath : '/';
             const signature = signPath(defaultPath, secret, timestamp);
             embedUrl = `${origin}/portal-embed?path=${encodeURIComponent(defaultPath)}&token=${timestamp}.${signature}`;
             const signedRoutes = Array.isArray(rawEmbed.routes)

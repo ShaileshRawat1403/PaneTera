@@ -202,7 +202,6 @@ export class ResearchSessionStore {
 export const researchSessionStore = new ResearchSessionStore();
 
 export function resetResearchSessionStoreForTest() {
-  // Re-instantiate based on potentially updated env vars
-  (researchSessionStore as any).baseDir = path.join(getTesseraAppDataDir(), 'research', 'sessions');
-  (researchSessionStore as any).mutex = new SessionMutex();
+  (researchSessionStore as unknown as { baseDir: string }).baseDir = path.join(getTesseraAppDataDir(), 'research', 'sessions');
+  (researchSessionStore as unknown as { mutex: SessionMutex }).mutex = new SessionMutex();
 }

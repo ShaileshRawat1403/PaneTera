@@ -19,6 +19,7 @@ interface BrowserObservationProps {
     domOutline: DomOutlineItem[];
     screenshotDataUrl?: string;
     selectedText?: string;
+    capturedAt?: string;
   } | null;
   variant?: 'feed' | 'main' | 'chat';
 }
@@ -43,7 +44,7 @@ export const BrowserObservationView: React.FC<BrowserObservationProps> = ({ data
     );
   }
 
-  const { url, title, observedAt, domOutline = [], screenshotDataUrl, selectedText, capturedAt } = data as any;
+  const { url, title, observedAt, domOutline = [], screenshotDataUrl, selectedText, capturedAt } = data;
 
   // Group DOM outline by role
   const groupedOutline: Record<string, DomOutlineItem[]> = {};

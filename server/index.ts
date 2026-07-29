@@ -185,7 +185,7 @@ class RookMemoryBridge {
         name: 'retrieve_memories',
         arguments: { category, is_global: false }
       });
-      const text = ((resp.result as any)?.content?.[0]?.text as string) || '';
+      const text = ((resp.result as { content?: Array<{ text?: string }> })?.content?.[0]?.text as string) || '';
       return text ? [text] : [];
     } catch {
       return [];
