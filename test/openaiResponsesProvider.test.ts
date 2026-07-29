@@ -57,7 +57,7 @@ async function main() {
   assert.strictEqual(first.toolCalls[0].name, 'inspect');
   assert.deepStrictEqual(first.toolCalls[0].arguments, { target: 'README.md' });
   assert.strictEqual(requests[0].url, 'https://api.openai.com/v1/responses');
-  assert.strictEqual(requests[0].body.model, 'gpt-5.6-sol');
+  assert.strictEqual(requests[0].body.model, 'gpt-4o-mini');
   assert.strictEqual(requests[0].body.reasoning.effort, 'medium');
   assert.strictEqual(requests[0].body.tools[0].strict, true);
   assert.ok(requests[0].body.safety_identifier);

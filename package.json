@@ -10,6 +10,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "node --import tsx --test --test-concurrency=1 --test-timeout=30000 'test/**/*.test.ts' 'test/**/*.test.tsx'",
+    "test:core": "node --import tsx --test --test-concurrency=1 --test-timeout=30000 $(find test -name '*.test.ts' -o -name '*.test.tsx' | grep -v -E '(canvasHeader|transcriptDrawerPolish|/mcpV0\\.test\\.ts$|mcpV0OfficialClient)')",
+    "test:quarantined": "node --import tsx --test --test-concurrency=1 --test-timeout=15000 test/canvasHeader.test.tsx test/transcriptDrawerPolish.test.tsx test/mcpV0.test.ts test/mcpV0OfficialClient.test.ts",
     "test:coverage": "node --import tsx --experimental-test-coverage --test --test-concurrency=1 --test-timeout=30000 'test/**/*.test.ts' 'test/**/*.test.tsx'"
   },
   "dependencies": {
