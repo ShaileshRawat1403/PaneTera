@@ -4,6 +4,7 @@
 import { spawn, ChildProcess } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
+import { getWorkspaceCatalogPath } from './appData';
 import {
   logTypedAudit,
   humanActor,
@@ -298,7 +299,7 @@ export async function getWorkspaceAdapter(workspaceId: string): Promise<McpWorks
   }
 
   // Check catalog first
-  const catalogPath = path.resolve(__dirname, 'myai-workspaces.json');
+  const catalogPath = getWorkspaceCatalogPath();
   const catalog = JSON.parse(fs.readFileSync(catalogPath, 'utf8'));
   const ws = catalog.workspaces.find((w: any) => w.id === workspaceId);
 

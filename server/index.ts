@@ -12,6 +12,7 @@ import { buildRepoSetupProposal } from './repoSetup';
 import { parseLiveAppIntent, buildLiveAppWorkbench } from './liveApp';
 import { parseWorkflowIntent } from './workflowIntents';
 import { getWorkspaceAdapter, stopWorkspaceAdapter, stopAllWorkspaceAdapters } from './mcpAdapter';
+import { getWorkspaceCatalogPath } from './appData';
 import { fingerprint, normalizeAuditRecord } from './auditRecord';
 import { auditOperatorAction } from './operatorAudit';
 import { authenticatePortalRequest, operatorPrincipalForRequest } from './operatorPrincipal';
@@ -498,7 +499,7 @@ app.post('/api/workspaces/add', async (req, res) => {
     }
 
     // After adding to portal.yaml, also register it in myai-workspaces.json
-    const catalogPath = path.resolve(__dirname, 'myai-workspaces.json');
+    const catalogPath = getWorkspaceCatalogPath();
     const catalog = JSON.parse(fs.readFileSync(catalogPath, 'utf8'));
     
     // We get the absolute path for myai-workspaces.json since it expects it
@@ -1420,7 +1421,7 @@ export async function resolveGatewayCardLocally(query: string): Promise<{ reply:
   const q = query.toLowerCase().trim();
 
   if (q === 'inspect workspaces' || q === 'show workspaces' || q === 'workspaces status' || q === 'show workspaces catalog') {
-    const catalogPath = path.resolve(__dirname, 'myai-workspaces.json');
+    const catalogPath = getWorkspaceCatalogPath();
     const catalog = JSON.parse(fs.readFileSync(catalogPath, 'utf8'));
     return {
       reply: `I loaded the local workspaces catalog. You can enable/disable, monitor, and switch between your registered workspaces.`,
@@ -2100,7 +2101,7 @@ app.post('/api/browser-observation', (req, res) => {
 
 // 1. Get workspaces catalog
 app.get('/api/myai-workspaces', (req: Request, res: Response) => {
-  const catalogPath = path.resolve(__dirname, 'myai-workspaces.json');
+  const catalogPath = getWorkspaceCatalogPath();
   try {
     const data = JSON.parse(fs.readFileSync(catalogPath, 'utf8'));
     res.json(data);
@@ -2116,7 +2117,7 @@ app.post('/api/myai-workspaces/register', (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Missing required parameters (id, name, path).' });
   }
 
-  const catalogPath = path.resolve(__dirname, 'myai-workspaces.json');
+  const catalogPath = getWorkspaceCatalogPath();
   try {
     const catalog = JSON.parse(fs.readFileSync(catalogPath, 'utf8'));
     
@@ -2156,7 +2157,7 @@ app.post('/api/myai-workspaces/toggle', (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Missing workspace id.' });
   }
 
-  const catalogPath = path.resolve(__dirname, 'myai-workspaces.json');
+  const catalogPath = getWorkspaceCatalogPath();
   try {
     const catalog = JSON.parse(fs.readFileSync(catalogPath, 'utf8'));
     const ws = catalog.workspaces.find((w: any) => w.id === id);
@@ -2184,7 +2185,7 @@ app.post('/api/myai-workspaces/toggle', (req: Request, res: Response) => {
 
 // 4. Scan for workspace suggestions in approved roots
 app.get('/api/myai-workspaces/scan', (req: Request, res: Response) => {
-  const catalogPath = path.resolve(__dirname, 'myai-workspaces.json');
+  const catalogPath = getWorkspaceCatalogPath();
   try {
     const catalog = JSON.parse(fs.readFileSync(catalogPath, 'utf8'));
     
@@ -2301,7 +2302,7 @@ app.post('/api/orchestrator/chat', async (req: Request, res: Response) => {
   }
 
   const resolveWorkspacePath = async (wId: string) => {
-    const catalogPath = path.resolve(__dirname, 'myai-workspaces.json');
+    const catalogPath = getWorkspaceCatalogPath();
     const catalog = JSON.parse(fs.readFileSync(catalogPath, 'utf8')) as { workspaces: any[] };
     const found = catalog.workspaces.find(w => w.id === wId);
     if (!found) throw new Error(`Workspace with ID '${wId}' not found.`);

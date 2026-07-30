@@ -25,3 +25,7 @@ workspace-test-*/
 scratch/
 *.bak
 .DS_Store
+
+# Runtime configuration — mutated by endpoints, lives in app-data directory
+portal.yaml
+server/myai-workspaces.json

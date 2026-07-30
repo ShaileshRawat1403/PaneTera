@@ -19,7 +19,6 @@ export function getTesseraAppDataDir(): string {
     const localAppData = process.env.LOCALAPPDATA || path.join(homedir, 'AppData', 'Local');
     dataDir = path.join(localAppData, 'Tessera');
   } else {
-    // Linux and others (XDG Base Directory Specification)
     const xdgDataHome = process.env.XDG_DATA_HOME || path.join(homedir, '.local', 'share');
     dataDir = path.join(xdgDataHome, 'tessera');
   }
@@ -28,5 +27,38 @@ export function getTesseraAppDataDir(): string {
   return dataDir;
 }
 
-// Alias for newer code referencing the renamed function
 export const getPaneTeraAppDataDir = getTesseraAppDataDir;
+
+export function getPortalYamlPath(): string {
+  const appDir = getPaneTeraAppDataDir();
+  const newPath = path.join(appDir, 'portal.yaml');
+  if (fs.existsSync(newPath)) return newPath;
+
+  const legacyPath = path.join(process.cwd(), 'portal.yaml');
+  if (fs.existsSync(legacyPath)) {
+    fs.cpSync(legacyPath, newPath);
+    console.log(`Migrated portal.yaml → ${newPath}`);
+    return newPath;
+  }
+
+  fs.writeFileSync(newPath, '# portal.yaml — runtime workspace catalog\n# Managed by PaneTera. Do not edit while the portal is running.\nworkspaces: []\n');
+  console.log(`Created default portal.yaml at ${newPath}`);
+  return newPath;
+}
+
+export function getWorkspaceCatalogPath(): string {
+  const appDir = getPaneTeraAppDataDir();
+  const newPath = path.join(appDir, 'myai-workspaces.json');
+  if (fs.existsSync(newPath)) return newPath;
+
+  const legacyPath = path.join(__dirname, 'myai-workspaces.json');
+  if (fs.existsSync(legacyPath)) {
+    fs.cpSync(legacyPath, newPath);
+    console.log(`Migrated myai-workspaces.json → ${newPath}`);
+    return newPath;
+  }
+
+  fs.writeFileSync(newPath, '{"workspaces":[]}\n');
+  console.log(`Created default myai-workspaces.json at ${newPath}`);
+  return newPath;
+}

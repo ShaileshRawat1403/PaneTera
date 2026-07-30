@@ -1,0 +1,7 @@
+# portal.example.yaml — Seed workspace catalog for PaneTera
+# Copy this to the PaneTera app-data directory and edit as needed.
+# The runtime copy lives outside the git tree (see getPortalYamlPath()).
+
+workspaces:
+  - name: example-workspace
+    folder: my-project

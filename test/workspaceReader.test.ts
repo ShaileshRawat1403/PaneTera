@@ -2,13 +2,14 @@ import assert from 'assert';
 import fs from 'fs';
 import path from 'path';
 import { listWorkspaces, readFileSafe } from '../server/workspaceReader';
+import { getPortalYamlPath } from '../server/appData';
 
 async function runTests() {
   console.log("Running Workspace Reader Boundary Tests...");
   const tempDir = fs.mkdtempSync(path.join(process.cwd(), 'workspace-test-'));
   
   process.env.WORKSPACE_ROOT = tempDir;
-  const portalYamlPath = path.join(process.cwd(), 'portal.yaml');
+  const portalYamlPath = getPortalYamlPath();
   
   let originalYaml = '';
   if (fs.existsSync(portalYamlPath)) {

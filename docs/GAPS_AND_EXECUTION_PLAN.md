@@ -305,6 +305,16 @@ streams. This table consolidates every open item into a tracked disposition.
 shows all failures (full inventory). `npm run test:quarantined` runs only the 4
 open items for focused debugging.
 
+*S1.4 outcome (2026-07-30, gate passed, Sprint 1 complete):* Reviewer verified
+independently. `openaiResponsesProvider` confirmed passing (1/1). All 123 core
+files were run in batches summing to exactly 1102 tests, 0 fail, 0 cancelled
+(272+279+41+78+98+81+171+82). Quarantine confirmed explicit and non-destructive:
+the 4 files are retained and isolated in `test:quarantined`, not deleted. TODO
+claim confirmed: one real comment marker
+(`test/orchestrator.test.ts:21`); the `server/orchestrator.ts` hit is PaneTera's
+own TODO-search feature, not debt. Operational note: point CI at `test:core`;
+the default `test` remains red by design until the 4 quarantined are fixed.
+
 ### 6.2 TODO/FIXME markers — 1 real, rest are product features
 
 | Count | Location | Disposition |

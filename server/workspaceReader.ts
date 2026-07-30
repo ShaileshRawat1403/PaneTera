@@ -2,10 +2,11 @@
 import path from 'path';
 import fs from 'fs/promises';
 import yaml from 'js-yaml';
+import { getPortalYamlPath } from './appData';
 
 // Settings
 const getRoot = () => process.env.WORKSPACE_ROOT || '/Users/Shailesh/MYAIAGENTS';
-const PORTAL_YAML = path.join(process.cwd(), 'portal.yaml');
+const PORTAL_YAML = getPortalYamlPath();
 
 interface PortalYaml {
   workspaces: Array<{ name: string; folder?: string; path?: string }>;
