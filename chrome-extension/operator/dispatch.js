@@ -15,10 +15,24 @@
 // so the ungoverned lane stays inspectable. The sink never blocks execution.
 
 import { getMode, UNGOVERNED } from './mode.js';
+import { guardAction, PAGE_ACTING_OPS } from './guards.js';
 import * as navigation from './navigation.js';
 import * as script from './script.js';
 import * as vision from './vision.js';
 import * as debugging from './debugging.js';
+
+async function resolveTabUrl(chromeApi, params) {
+  try {
+    if (typeof params?.tabId === 'number') {
+      const tab = await chromeApi.tabs.get(params.tabId);
+      return tab?.url ?? '';
+    }
+    const [active] = await chromeApi.tabs.query({ active: true, currentWindow: true });
+    return active?.url ?? '';
+  } catch {
+    return '';
+  }
+}
 
 /**
  * op -> { fn, governedAllowed, needsChromeApi }
@@ -85,6 +99,17 @@ export async function dispatchOperator(chromeApi, message, adapters = {}) {
       blocked: true,
       error: `"${op}" needs full-operator mode. Toggle governance off to run it directly, or use the governed propose/approve path.`,
     };
+  }
+
+  // Thin safety floor: applies even in ungoverned mode. A page-acting op
+  // against a money-movement origin needs an explicit { confirmed: true }.
+  if (PAGE_ACTING_OPS.has(op)) {
+    const url = await resolveTabUrl(chromeApi, params);
+    const guard = guardAction({ op, url, params });
+    if (!guard.allow) {
+      audit({ op, mode, ok: false, reason: guard.reason, host: guard.host, ts: Date.now() });
+      return { ok: false, op, mode, blocked: true, reason: guard.reason, error: guard.message };
+    }
   }
 
   try {

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>PaneTera Operator Test Harness</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f0f13; color: #e4e4e7; margin: 0; padding: 24px; }
+    h1 { font-size: 16px; color: #b794f4; margin: 0 0 4px; }
+    .sub { font-size: 11px; color: #71717a; margin-bottom: 20px; }
+    .mode-bar { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; margin-bottom: 20px; }
+    .mode-bar strong { font-size: 12px; }
+    #modeState { font-weight: 700; }
+    .mode-governed { color: #22c55e; }
+    .mode-ungoverned { color: #ef4444; }
+    button { background: #7f5af0; border: none; color: #fff; padding: 7px 12px; border-radius: 6px; font-size: 11px; font-weight: 700; cursor: pointer; }
+    button:hover { background: #6d47dd; }
+    button.sec { background: transparent; border: 1px solid rgba(255,255,255,0.12); color: #cbd5e1; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .card { border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 14px; }
+    .card h3 { font-size: 12px; margin: 0 0 10px; color: #f4f4f5; text-transform: uppercase; letter-spacing: 0.03em; }
+    label { display: block; font-size: 10px; color: #71717a; margin: 8px 0 3px; }
+    input, textarea, select { width: 100%; box-sizing: border-box; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; padding: 7px; color: #f4f4f5; font-size: 12px; font-family: ui-monospace, monospace; }
+    .row { display: flex; gap: 8px; }
+    .row > * { flex: 1; }
+    pre { background: #08080b; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 12px; font-size: 11px; white-space: pre-wrap; word-break: break-word; max-height: 320px; overflow: auto; margin-top: 16px; }
+    .ok { color: #22c55e; } .bad { color: #ef4444; }
+    #shot { max-width: 100%; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; margin-top: 12px; display: none; }
+  </style>
+</head>
+<body>
+  <h1>PaneTera Operator Test Harness</h1>
+  <div class="sub">Development surface for Phase 1 validation. Sends <code>{ type: 'operator', op, params }</code> to the background worker.</div>
+
+  <div class="mode-bar">
+    <strong>Mode:</strong> <span id="modeState">…</span>
+    <button id="btnToggle" class="sec">Toggle governance</button>
+    <span class="sub" style="margin:0">Acting ops are blocked while governed. Screenshots/JS/input need ungoverned.</span>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h3>Navigation & tabs</h3>
+      <label>URL</label>
+      <input id="navUrl" value="https://example.com">
+      <div class="row" style="margin-top:8px">
+        <button data-op="navigate" data-from="navUrl">navigate</button>
+        <button data-op="open_tab" data-from="navUrl">open_tab</button>
+        <button data-op="list_tabs">list_tabs</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Vision</h3>
+      <div class="row">
+        <button data-op="screenshot">screenshot</button>
+        <button data-op="screenshot" data-full="1">full-page shot</button>
+      </div>
+      <label>click x, y</label>
+      <div class="row">
+        <input id="clickX" value="100"><input id="clickY" value="100">
+        <button data-op="click" data-xy="1">click</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Scripting</h3>
+      <label>expression</label>
+      <textarea id="evalExpr" rows="2">document.title</textarea>
+      <div class="row" style="margin-top:8px">
+        <button data-op="evaluate" data-from="evalExpr" data-key="expression">evaluate</button>
+        <button data-op="read_page_text">read_page_text</button>
+      </div>
+      <label>type text</label>
+      <div class="row">
+        <input id="typeText" value="hello">
+        <button data-op="type" data-from="typeText" data-key="text">type</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Diagnostics</h3>
+      <div class="row">
+        <button data-op="diagnostics_start" data-activetab="1">start</button>
+        <button data-op="diagnostics_get" data-activetab="1">get</button>
+        <button data-op="diagnostics_stop" data-activetab="1">stop</button>
+      </div>
+      <div class="sub" style="margin-top:8px">Start, reload the target tab, then get.</div>
+    </div>
+  </div>
+
+  <pre id="out">Ready. Load a normal http/https tab as the active tab, then run an op.</pre>
+  <img id="shot" alt="screenshot result">
+
+  <script src="test-operator.js" type="module"></script>
+</body>
+</html>

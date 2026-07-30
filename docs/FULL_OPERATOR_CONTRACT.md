@@ -99,8 +99,13 @@ When ungoverned:
 
 Mitigations present: default-governed, explicit persisted opt-in, a visible
 warning, Chrome's debugger banner, scheme guards on navigation
-(`javascript:`, `data:`, `file:`, `chrome:` refused), and an audit hook on every
-dispatch.
+(`javascript:`, `data:`, `file:`, `chrome:` refused), an audit hook on every
+dispatch, and a thin safety floor (`operator/guards.js`) that applies even in
+ungoverned mode: a page-acting op (`click`, `type`, `press_key`, `evaluate`)
+against a money-movement origin requires an explicit `{ confirmed: true }`. The
+floor is deliberately broad on host matching and fails open on unresolved URLs;
+it stops the obvious "a page told it to pay" case, it is not a substitute for
+the governed lane.
 
 ## Known follow-ups
 
