@@ -27,6 +27,8 @@ import { createRigCapabilities, mergeCapabilities } from './agent/rigCapabilitie
 import { createBrowserActionCapabilities } from './agent/browserActionCapabilities';
 import type { AgentCapability } from './agent/types';
 import { capabilityToGeminiTool, capabilityToOpenAITool, dispatchCapability, indexCapabilities } from './operatorCapabilities';
+import { headroomStore } from './headroom/routes';
+import { headroomContextBlock } from './operatorContext';
 import { browserRouter } from './browserGateway';
 import { mcpRouter } from './mcp/browserMcpRoute';
 import { probeWebPreview } from './workbench/webPreviewProbe';
@@ -2204,6 +2206,14 @@ app.post('/api/chat', async (req, res) => {
       augmentedQuery = query + '\n\n[RECALLED CONTEXT from previous sessions]\n' + recalled.join('\n');
     }
   } catch { /* memory bridge unavailable — proceed without context */ }
+
+  // Inject durable Headroom context (active capsule: objective, decisions,
+  // assumptions, open questions) so the operator works from compiled context,
+  // not just raw history.
+  try {
+    const headroomBlock = headroomContextBlock(headroomStore.listCapsules());
+    if (headroomBlock) augmentedQuery = augmentedQuery + '\n\n' + headroomBlock;
+  } catch { /* Headroom unavailable — proceed without it */ }
 
   // Helper: auto-save key interactions to memory after a successful response
   const autoRemember = (result: { uiComponent?: any }) => {
