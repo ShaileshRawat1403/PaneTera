@@ -19,6 +19,8 @@ import { authenticatePortalRequest, operatorPrincipalForRequest } from './operat
 import * as fs from 'fs';
 import { FEATURES } from './features';
 import { handleOrchestratorQuery } from './orchestrator';
+import { runToolLoop } from './agentLoop';
+import type { AgentToolCall, ModelTurn, ToolExecution } from './agentLoop';
 import { browserRouter } from './browserGateway';
 import { mcpRouter } from './mcp/browserMcpRoute';
 import { probeWebPreview } from './workbench/webPreviewProbe';
@@ -932,14 +934,48 @@ app.get('/api/desktop/apps', (req, res) => {
 // not a stub to grow into.
 
 // Gemini Q&A execution handler
+// Shared operator tool executor. Both the Gemini and OpenAI adapters normalise
+// their model's tool call into an AgentToolCall and dispatch here, so the tools
+// behave identically regardless of the underlying model.
+async function executeOperatorTool(call: AgentToolCall): Promise<ToolExecution> {
+  const name = call.name;
+  const args: any = call.args || {};
+  try {
+    if (name === 'listWorkspaces') {
+      const workspaces = await listWorkspaces();
+      return { output: workspaces, uiComponent: { type: 'WorkspaceList', data: workspaces } };
+    }
+    if (name === 'listFilesInWorkspace') {
+      const files = await listFilesInWorkspace(args.workspaceName);
+      return { output: { workspace: args.workspaceName, files }, uiComponent: { type: 'FileList', data: { workspace: args.workspaceName, files } } };
+    }
+    if (name === 'readFileSafe') {
+      const fileContent = await readFileSafe(args.workspaceName, args.relPath);
+      return { output: { content: fileContent }, uiComponent: { type: 'CodePreview', data: { workspace: args.workspaceName, path: args.relPath, content: fileContent } } };
+    }
+    if (name === 'searchFilesInWorkspace') {
+      const results = await searchFilesInWorkspace(args.workspaceName, args.keyword);
+      return { output: { results }, uiComponent: { type: 'SearchResults', data: { workspace: args.workspaceName, keyword: args.keyword, results } } };
+    }
+    if (name === 'proposeExecution') {
+      return { output: { proposed: true, workspaceName: args.workspaceName, command: args.command }, uiComponent: { type: 'ProposedAction', data: buildProposedActionData(args.workspaceName, args.command, args.reason || '') } };
+    }
+    if (name === 'fetchWebPage') {
+      const outcome = await probeWebPreview(args.url);
+      return { output: { url: args.url, outcome }, uiComponent: { type: 'WebPreview', data: { url: args.url, name: new URL(args.url).hostname.replace(/^www\./, ''), outcome } } };
+    }
+    throw new Error(`Unknown function: ${name}`);
+  } catch (err: any) {
+    return { output: { error: err.message } };
+  }
+}
+
 async function askGemini(query: string, history: any[] = [], modelId?: string): Promise<{ reply: string; uiComponent?: any }> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw new Error('GEMINI_API_KEY environment variable is missing.');
   }
 
-  // Key travels in a header, never in the URL — URLs leak into logs,
-  // error traces, and proxies.
   const geminiModel = modelId || process.env.GEMINI_MODEL;
   const url = geminiGenerateContentUrl(geminiModel);
 
@@ -950,217 +986,51 @@ async function askGemini(query: string, history: any[] = [], modelId?: string): 
       parts: [{ text: h.parts?.[0]?.text || '' }]
     });
   }
+  contentsPayload.push({ role: 'user', parts: [{ text: query }] });
 
-  contentsPayload.push({
-    role: 'user',
-    parts: [{ text: query }]
-  });
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-    body: JSON.stringify({
-      contents: contentsPayload,
-      systemInstruction: {
-        parts: [{
-          text: PANETERA_ASSISTANT_INSTRUCTION + '\n' +
-                'You must use the provided tools to fetch actual workspace data. Do not make up file paths or contents.\n' +
-                'If the user asks to build, test, lint, or check status/diff for a workspace, call proposeExecution — ' +
-                'never claim to have run or changed anything yourself. Execution only happens after the user explicitly ' +
-                'approves the proposal card, and only for the fixed set of safe commands proposeExecution allows.\n' +
-                'Always answer in natural language, be friendly and helpful, and do NOT use emojis in your response.'
-        }]
-      },
-      tools: [
-        {
-          functionDeclarations: [
-            {
-              name: 'listWorkspaces',
-              description: 'Lists the allowed workspaces configured in the portal.'
-            },
-            {
-              name: 'listFilesInWorkspace',
-              description: 'Lists all safe files recursively within the specified workspace.',
-              parameters: {
-                type: 'OBJECT',
-                properties: {
-                  workspaceName: { type: 'STRING', description: 'The name of the workspace to list files from.' }
-                },
-                required: ['workspaceName']
-              }
-            },
-            {
-              name: 'readFileSafe',
-              description: 'Reads the contents of a file within a workspace. Enforces file size limits and extension allowlist.',
-              parameters: {
-                type: 'OBJECT',
-                properties: {
-                  workspaceName: { type: 'STRING', description: 'The name of the workspace.' },
-                  relPath: { type: 'STRING', description: 'The relative path to the file inside the workspace.' }
-                },
-                required: ['workspaceName', 'relPath']
-              }
-            },
-            {
-              name: 'searchFilesInWorkspace',
-              description: 'Searches for a keyword inside safe files in a workspace, returning matching lines.',
-              parameters: {
-                type: 'OBJECT',
-                properties: {
-                  workspaceName: { type: 'STRING', description: 'The name of the workspace.' },
-                  keyword: { type: 'STRING', description: 'The keyword or string to search for.' }
-                },
-                required: ['workspaceName', 'keyword']
-              }
-            },
-            {
-              name: 'proposeExecution',
-              description: 'Propose running a safe, allowlisted command in a workspace. This never executes anything directly — it only creates a card the user must explicitly approve before anything runs. Use this whenever the user asks to build, test, lint, or check status/diff for a workspace.',
-              parameters: {
-                type: 'OBJECT',
-                properties: {
-                  workspaceName: { type: 'STRING', description: 'The name of the workspace to run the command in.' },
-                  command: {
-                    type: 'STRING',
-                    enum: ['npm run test', 'npm test', 'npm run build', 'npm run lint', 'npm run verify', 'cargo check', 'cargo test', 'git diff', 'git status'],
-                    description: 'The exact allowlisted command to propose. Prefer "npm run verify" over "npm run test" for workspaces (like flowright) that only define a verify script and no test script.'
-                  },
-                  reason: { type: 'STRING', description: 'A short, plain-language reason this command answers the request.' }
-                },
-                required: ['workspaceName', 'command']
-              }
-            },
-            {
-              name: 'fetchWebPage',
-              description: 'Inspects a public website URL, probes its framing headers, and opens a public web preview on the canvas. If asked for web search or current information, pass https://html.duckduckgo.com/html/?q=<encoded_query>.',
-              parameters: {
-                type: 'OBJECT',
-                properties: {
-                  url: { type: 'STRING', description: 'The absolute http/https public web URL to inspect.' }
-                },
-                required: ['url']
-              }
-            }
-          ]
-        }
+  const geminiSystemInstruction = { parts: [{ text: PANETERA_ASSISTANT_INSTRUCTION }] };
+  const geminiTools = [
+    {
+      functionDeclarations: [
+        { name: 'listWorkspaces', description: 'Lists the allowed workspaces configured in the portal.' },
+        { name: 'listFilesInWorkspace', description: 'Lists all safe files recursively within the specified workspace.', parameters: { type: 'OBJECT', properties: { workspaceName: { type: 'STRING', description: 'The name of the workspace to list files from.' } }, required: ['workspaceName'] } },
+        { name: 'readFileSafe', description: 'Reads the contents of a file within a workspace. Enforces file size limits and extension allowlist.', parameters: { type: 'OBJECT', properties: { workspaceName: { type: 'STRING', description: 'The name of the workspace.' }, relPath: { type: 'STRING', description: 'The relative path to the file inside the workspace.' } }, required: ['workspaceName', 'relPath'] } },
+        { name: 'searchFilesInWorkspace', description: 'Searches for a keyword inside safe files in a workspace, returning matching lines.', parameters: { type: 'OBJECT', properties: { workspaceName: { type: 'STRING', description: 'The name of the workspace.' }, keyword: { type: 'STRING', description: 'The keyword or string to search for.' } }, required: ['workspaceName', 'keyword'] } },
+        { name: 'proposeExecution', description: 'Propose running a safe, allowlisted command in a workspace. This never executes anything directly, it only creates a card the user must explicitly approve before anything runs. Use this whenever the user asks to build, test, lint, or check status/diff for a workspace.', parameters: { type: 'OBJECT', properties: { workspaceName: { type: 'STRING', description: 'The name of the workspace to run the command in.' }, command: { type: 'STRING', enum: ['npm run test', 'npm test', 'npm run build', 'npm run lint', 'npm run verify', 'cargo check', 'cargo test', 'git diff', 'git status'], description: 'The exact allowlisted command to propose. Prefer "npm run verify" over "npm run test" for workspaces (like flowright) that only define a verify script and no test script.' }, reason: { type: 'STRING', description: 'A short, plain-language reason this command answers the request.' } }, required: ['workspaceName', 'command'] } },
+        { name: 'fetchWebPage', description: 'Inspects a public website URL, probes its framing headers, and opens a public web preview on the canvas. If asked for web search or current information, pass https://html.duckduckgo.com/html/?q=<encoded_query>.', parameters: { type: 'OBJECT', properties: { url: { type: 'STRING', description: 'The absolute http/https public web URL to inspect.' } }, required: ['url'] } }
       ]
-    })
-  });
-
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Gemini API error: ${response.status} - ${errText}`);
-  }
-
-  const data = await response.json();
-  const candidate = data.candidates?.[0];
-  const content = candidate?.content;
-
-  if (content) {
-    const part = content.parts?.[0];
-    if (part?.text) {
-      const rawText = part.text;
-      const cleanText = rawText.replace(/[\u{1F300}-\u{1F9FF}]|[\u{1F600}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu, '');
-      return { reply: cleanText.trim() };
     }
-  }
+  ];
 
-  let uiComponent: any = null;
-  const contents = [...contentsPayload];
+  const stripEmoji = (s: string) => s.replace(/[\u{1F300}-\u{1F9FF}]|[\u{1F600}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu, '');
 
-  for (let turn = 0; turn < 5; turn++) {
-    const message = candidate?.content || content;
-    if (!message) break;
-    contents.push(message);
-
-    const part = message.parts?.[0];
-    if (part?.functionCall) {
-      const { name, args } = part.functionCall;
-      let toolResult: any;
-
-      try {
-        if (name === 'listWorkspaces') {
-          const workspaces = await listWorkspaces();
-          toolResult = workspaces;
-          uiComponent = { type: 'WorkspaceList', data: workspaces };
-        } else if (name === 'listFilesInWorkspace') {
-          const files = await listFilesInWorkspace(args.workspaceName);
-          toolResult = { workspace: args.workspaceName, files };
-          uiComponent = { type: 'FileList', data: { workspace: args.workspaceName, files } };
-        } else if (name === 'readFileSafe') {
-          const content = await readFileSafe(args.workspaceName, args.relPath);
-          toolResult = { content };
-          uiComponent = { type: 'CodePreview', data: { workspace: args.workspaceName, path: args.relPath, content } };
-        } else if (name === 'searchFilesInWorkspace') {
-          const results = await searchFilesInWorkspace(args.workspaceName, args.keyword);
-          toolResult = { results };
-          uiComponent = { type: 'SearchResults', data: { workspace: args.workspaceName, keyword: args.keyword, results } };
-        } else if (name === 'proposeExecution') {
-          // Never executes — only produces a card the user must explicitly
-          // approve. The actual run still passes through /api/execute's
-          // own server-side allowlist regardless of what's proposed here.
-          toolResult = { proposed: true, workspaceName: args.workspaceName, command: args.command };
-          uiComponent = {
-            type: 'ProposedAction',
-            data: buildProposedActionData(args.workspaceName, args.command, args.reason || '')
-          };
-        } else if (name === 'fetchWebPage') {
-          const outcome = await probeWebPreview(args.url);
-          toolResult = { url: args.url, outcome };
-          uiComponent = {
-            type: 'WebPreview',
-            data: {
-              url: args.url,
-              name: new URL(args.url).hostname.replace(/^www\./, ''),
-              outcome
-            }
-          };
-        } else {
-          throw new Error(`Unknown function: ${name}`);
-        }
-      } catch (err: any) {
-        toolResult = { error: err.message };
-      }
-
-      contents.push({
-        role: 'function',
-        parts: [
-          {
-            functionResponse: {
-              name,
-              response: { output: toolResult }
-            }
-          }
-        ]
-      });
-
-      const nextResp = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-        body: JSON.stringify({ contents })
-      });
-
-      if (!nextResp.ok) {
-        const nextErr = await nextResp.text();
-        throw new Error(`Gemini function chaining error: ${nextResp.status} - ${nextErr}`);
-      }
-
-      const nextData = await nextResp.json();
-      const nextCandidate = nextData.candidates?.[0];
-      const nextPart = nextCandidate?.content?.parts?.[0];
-      
-      if (nextPart?.text) {
-        const rawText = nextPart.text;
-        const cleanText = rawText.replace(/[\u{1F300}-\u{1F9FF}]|[\u{1F600}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu, '');
-        return {
-          reply: cleanText.trim(),
-          uiComponent
-        };
-      }
+  const callGemini = async (): Promise<ModelTurn> => {
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+      body: JSON.stringify({ contents: contentsPayload, systemInstruction: geminiSystemInstruction, tools: geminiTools })
+    });
+    if (!resp.ok) {
+      throw new Error(`Gemini API error: ${resp.status} - ${await resp.text()}`);
     }
-  }
+    const data = await resp.json();
+    const content = data.candidates?.[0]?.content;
+    if (content) contentsPayload.push(content);
+    let text = '';
+    const toolCalls: AgentToolCall[] = [];
+    for (const part of (content?.parts ?? [])) {
+      if (part.text) text += part.text;
+      if (part.functionCall) toolCalls.push({ name: part.functionCall.name, args: part.functionCall.args || {} });
+    }
+    return { text: stripEmoji(text), toolCalls };
+  };
 
-  throw new Error('Too many function calls');
+  const recordToolResult = (call: AgentToolCall, execution: ToolExecution) => {
+    contentsPayload.push({ role: 'function', parts: [{ functionResponse: { name: call.name, response: { output: execution.output } } }] });
+  };
+
+  const loopResult = await runToolLoop({ callModel: callGemini, executeTool: executeOperatorTool, recordToolResult });
+  return { reply: loopResult.reply, uiComponent: loopResult.uiComponent as any };
 }
 
 // OpenAI Q&A execution handler
@@ -1288,104 +1158,42 @@ async function askOpenAI(query: string, history: any[] = [], modelId?: string): 
     }
   ];
 
-  let uiComponent: any = null;
+  const stripEmoji = (s: string) => s.replace(/[\u{1F300}-\u{1F9FF}]|[\u{1F600}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu, '');
 
-  for (let turn = 0; turn < 5; turn++) {
+  const callOpenAI = async (): Promise<ModelTurn> => {
     const response = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: resolvedModel,
-        messages: messagesPayload,
-        tools,
-        tool_choice: 'auto'
-      })
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({ model: resolvedModel, messages: messagesPayload, tools, tool_choice: 'auto' })
     });
-
     if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`OpenAI API error: ${response.status} - ${errText}`);
+      throw new Error(`OpenAI API error: ${response.status} - ${await response.text()}`);
     }
-
     const data = await response.json();
-    const choice = data.choices?.[0];
-    const assistantMessage = choice?.message;
+    const assistantMessage = data.choices?.[0]?.message;
     if (!assistantMessage) {
       throw new Error('Invalid response received from OpenAI API');
     }
-
     messagesPayload.push(assistantMessage);
+    const toolCalls: AgentToolCall[] = (assistantMessage.tool_calls || []).map((tc: any) => ({
+      id: tc.id,
+      name: tc.function?.name,
+      args: tc.function?.arguments ? JSON.parse(tc.function.arguments) : {}
+    }));
+    return { text: stripEmoji(assistantMessage.content || ''), toolCalls };
+  };
 
-    if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
-      const toolCall = assistantMessage.tool_calls[0];
-      const { name, arguments: argsString } = toolCall.function;
-      const args = argsString ? JSON.parse(argsString) : {};
-      let toolResult: any;
+  const recordToolResult = (call: AgentToolCall, execution: ToolExecution) => {
+    messagesPayload.push({
+      role: 'tool',
+      tool_call_id: call.id,
+      name: call.name,
+      content: JSON.stringify(execution.output)
+    });
+  };
 
-      try {
-        if (name === 'listWorkspaces') {
-          const workspaces = await listWorkspaces();
-          toolResult = workspaces;
-          uiComponent = { type: 'WorkspaceList', data: workspaces };
-        } else if (name === 'listFilesInWorkspace') {
-          const files = await listFilesInWorkspace(args.workspaceName);
-          toolResult = { workspace: args.workspaceName, files };
-          uiComponent = { type: 'FileList', data: { workspace: args.workspaceName, files } };
-        } else if (name === 'readFileSafe') {
-          const content = await readFileSafe(args.workspaceName, args.relPath);
-          toolResult = { content };
-          uiComponent = { type: 'CodePreview', data: { workspace: args.workspaceName, path: args.relPath, content } };
-        } else if (name === 'searchFilesInWorkspace') {
-          const results = await searchFilesInWorkspace(args.workspaceName, args.keyword);
-          toolResult = { results };
-          uiComponent = { type: 'SearchResults', data: { workspace: args.workspaceName, keyword: args.keyword, results } };
-        } else if (name === 'proposeExecution') {
-          // Never executes — only produces a card the user must explicitly
-          // approve. The actual run still passes through /api/execute's
-          // own server-side allowlist regardless of what's proposed here.
-          toolResult = { proposed: true, workspaceName: args.workspaceName, command: args.command };
-          uiComponent = {
-            type: 'ProposedAction',
-            data: buildProposedActionData(args.workspaceName, args.command, args.reason || '')
-          };
-        } else if (name === 'fetchWebPage') {
-          const outcome = await probeWebPreview(args.url);
-          toolResult = { url: args.url, outcome };
-          uiComponent = {
-            type: 'WebPreview',
-            data: {
-              url: args.url,
-              name: new URL(args.url).hostname.replace(/^www\./, ''),
-              outcome
-            }
-          };
-        } else {
-          throw new Error(`Unknown function: ${name}`);
-        }
-      } catch (err: any) {
-        toolResult = { error: err.message };
-      }
-
-      messagesPayload.push({
-        role: 'tool',
-        tool_call_id: toolCall.id,
-        name,
-        content: JSON.stringify(toolResult)
-      });
-    } else {
-      const rawText = assistantMessage.content || 'No response';
-      const cleanText = rawText.replace(/[\u{1F300}-\u{1F9FF}]|[\u{1F600}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu, '');
-      return {
-        reply: cleanText.trim(),
-        uiComponent
-      };
-    }
-  }
-
-  throw new Error('Too many tool execution loops in OpenAI call');
+  const loopResult = await runToolLoop({ callModel: callOpenAI, executeTool: executeOperatorTool, recordToolResult });
+  return { reply: loopResult.reply, uiComponent: loopResult.uiComponent as any };
 }
 
 // Local Ollama Q&A offline execution fallback handler
