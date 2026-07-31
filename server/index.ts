@@ -21,6 +21,11 @@ import { FEATURES } from './features';
 import { handleOrchestratorQuery } from './orchestrator';
 import { runToolLoop } from './agentLoop';
 import type { AgentToolCall, ModelTurn, ToolExecution } from './agentLoop';
+import { rigRegistry, rigRuntime } from './rig/routes';
+import { RigToolAdapter } from './rig/adapter';
+import { createRigCapabilities } from './agent/rigCapabilities';
+import type { AgentCapability } from './agent/types';
+import { capabilityToGeminiTool, capabilityToOpenAITool, dispatchCapability, indexCapabilities } from './operatorCapabilities';
 import { browserRouter } from './browserGateway';
 import { mcpRouter } from './mcp/browserMcpRoute';
 import { probeWebPreview } from './workbench/webPreviewProbe';
@@ -937,7 +942,7 @@ app.get('/api/desktop/apps', (req, res) => {
 // Shared operator tool executor. Both the Gemini and OpenAI adapters normalise
 // their model's tool call into an AgentToolCall and dispatch here, so the tools
 // behave identically regardless of the underlying model.
-async function executeOperatorTool(call: AgentToolCall): Promise<ToolExecution> {
+async function tryBuiltinTool(call: AgentToolCall): Promise<ToolExecution | null> {
   const name = call.name;
   const args: any = call.args || {};
   try {
@@ -964,10 +969,36 @@ async function executeOperatorTool(call: AgentToolCall): Promise<ToolExecution> 
       const outcome = await probeWebPreview(args.url);
       return { output: { url: args.url, outcome }, uiComponent: { type: 'WebPreview', data: { url: args.url, name: new URL(args.url).hostname.replace(/^www\./, ''), outcome } } };
     }
-    throw new Error(`Unknown function: ${name}`);
+    return null; // not a built-in tool; the caller falls through to capabilities
   } catch (err: any) {
     return { output: { error: err.message } };
   }
+}
+
+// Assemble the operator's dynamic capabilities from the shared, live Rig
+// registry so the operator sees the user's actual enabled MCP tools.
+function getOperatorCapabilities(): AgentCapability[] {
+  const adapter = new RigToolAdapter(rigRegistry, rigRuntime);
+  return createRigCapabilities(adapter, rigRuntime);
+}
+
+// Compose the built-in tools with the dynamic capabilities into one executor
+// for the tool loop. Built-ins win on name; capabilities are dispatched under
+// their risk policy (observe executes, propose returns an approval card).
+function makeOperatorExecuteTool(capIndex: Map<string, AgentCapability>) {
+  return async (call: AgentToolCall): Promise<ToolExecution> => {
+    const builtin = await tryBuiltinTool(call);
+    if (builtin) return builtin;
+    const capability = capIndex.get(call.name);
+    if (capability) {
+      try {
+        return await dispatchCapability(capability, call.args || {});
+      } catch (err: any) {
+        return { output: { error: err.message } };
+      }
+    }
+    return { output: { error: `Unknown tool: ${call.name}` } };
+  };
 }
 
 async function askGemini(query: string, history: any[] = [], modelId?: string): Promise<{ reply: string; uiComponent?: any }> {
@@ -1029,7 +1060,10 @@ async function askGemini(query: string, history: any[] = [], modelId?: string): 
     contentsPayload.push({ role: 'function', parts: [{ functionResponse: { name: call.name, response: { output: execution.output } } }] });
   };
 
-  const loopResult = await runToolLoop({ callModel: callGemini, executeTool: executeOperatorTool, recordToolResult });
+  const operatorCapabilities = getOperatorCapabilities();
+  const capIndex = indexCapabilities(operatorCapabilities);
+  (geminiTools[0].functionDeclarations as any[]).push(...operatorCapabilities.map(capabilityToGeminiTool));
+  const loopResult = await runToolLoop({ callModel: callGemini, executeTool: makeOperatorExecuteTool(capIndex), recordToolResult });
   return { reply: loopResult.reply, uiComponent: loopResult.uiComponent as any };
 }
 
@@ -1192,7 +1226,10 @@ async function askOpenAI(query: string, history: any[] = [], modelId?: string): 
     });
   };
 
-  const loopResult = await runToolLoop({ callModel: callOpenAI, executeTool: executeOperatorTool, recordToolResult });
+  const operatorCapabilities = getOperatorCapabilities();
+  const capIndex = indexCapabilities(operatorCapabilities);
+  (tools as any[]).push(...operatorCapabilities.map(capabilityToOpenAITool));
+  const loopResult = await runToolLoop({ callModel: callOpenAI, executeTool: makeOperatorExecuteTool(capIndex), recordToolResult });
   return { reply: loopResult.reply, uiComponent: loopResult.uiComponent as any };
 }
 
