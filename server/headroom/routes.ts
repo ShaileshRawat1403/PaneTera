@@ -6,6 +6,9 @@ import { HeadroomStore } from './store';
 export const headroomRouter = express.Router();
 const store = new HeadroomStore();
 
+// The chat operator reads durable context from this exact live store.
+export { store as headroomStore };
+
 headroomRouter.post('/envelopes', async (req, res) => {
   try {
     const envelope = await store.createEnvelope(req.body);
