@@ -12,6 +12,26 @@ The extension ships a dev harness page, `test-operator.html`, that triggers
 every op and shows the JSON result, so each check below is one click. The
 harness is excluded from the packaged zip.
 
+## Validation record (2026-07-31, passed live)
+
+Validated in real Chrome on macOS, extension v0.2.0
+(id `ehoeojllalaehbfgflbaikojbmkemfic`), driven through the harness against a
+live target tab. All results observed directly, not self-reported:
+
+- governed mode blocked `screenshot` with the toggle hint; `list_tabs` allowed;
+- ungoverned `screenshot` returned a real base64 PNG (CDP `Page.captureScreenshot`);
+- `read_page_text` returned rendered text (CDP `Runtime.evaluate`);
+- `navigate` moved the tab and returned the final url/title/status;
+- `click` at coordinates returned ok (CDP `Input.dispatchMouseEvent`);
+- `diagnostics_start`/`stop` captured real console and network entries
+  (CDP `Network`/`Runtime`/`Log`);
+- Chrome's "started debugging this browser" banner appeared during CDP ops;
+- safety floor: `navigate` to `paypal.com` allowed, `click` on it returned
+  `ok: false, blocked: true, reason: "sensitive-origin"` while ungoverned.
+
+No CDP defects were found. The checklist below remains for re-validation after
+changes.
+
 ## Setup
 
 1. Load the extension: open `chrome://extensions`, enable Developer mode, click
