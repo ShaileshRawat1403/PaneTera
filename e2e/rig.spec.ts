@@ -19,14 +19,6 @@ test.describe('rig governed MCP flow', () => {
     // Spawning a subprocess, discovering, and a gated invocation take a while.
     test.setTimeout(90_000);
 
-    // Diagnostic: surface the exact server reason if a Rig request is rejected.
-    page.on('response', async (resp) => {
-      if (resp.url().includes('/api/rig/') && resp.status() >= 400) {
-        // eslint-disable-next-line no-console
-        console.log(`\n[RIG ${resp.status()}] ${resp.request().method()} ${resp.url()}\n  ${await resp.text().catch(() => '')}\n`);
-      }
-    });
-
     await startUnlocked(page);
     await page.goto('/');
 
