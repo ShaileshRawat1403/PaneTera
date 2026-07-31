@@ -4,3 +4,5 @@ dist/
 chrome-extension/
 *.config.*
 *.bak
+e2e/
+playwright.config.ts

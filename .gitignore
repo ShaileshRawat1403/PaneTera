@@ -29,3 +29,8 @@ scratch/
 # Runtime configuration — mutated by endpoints, lives in app-data directory
 portal.yaml
 server/myai-workspaces.json
+
+# Playwright
+/test-results/
+/playwright-report/
+/playwright/.cache/
