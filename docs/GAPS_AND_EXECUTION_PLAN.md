@@ -351,3 +351,53 @@ the default `test` remains red by design until the 4 quarantined are fixed.
 Sprint 2 opens P0 release blockers (Tier 1 gaps): mutable runtime state in
 tracked files, threat-model table + negative auth tests, E2E journeys. The
 quarantined tests are Sprint 2 targets for fix or formal skip.
+
+## 7. Sprint 2 Progress — Threat Model (S2.2)
+
+- `docs/THREAT_MODEL.md` — canonical route inventory and classification for the
+  whole server surface, grouped by trust layer: Layer A (browser / MCP facade /
+  workbench, mounted before the global token gate, own auth), Layer B (app-level
+  routes behind the gate), Layer C (rig / headroom / native-grants / tessera /
+  agent / models / schemas behind the gate). Special-attention surfaces
+  (pairing exchange/refresh, EventSource query token, workbench metadata,
+  redirects) are pinned down explicitly. A reserved slot is staked for the
+  Phase 2 operator drive-path queue endpoint.
+- `test/authNegativeIntegration.test.ts` — boots the real composed app
+  (`server/index.ts`) and proves every protected route (111 routes across all
+  three layers) refuses a missing credential with 401, that wrong credentials
+  are refused per layer, that the query token is honored only on `/api/events`,
+  and that documented-open surfaces keep their classified behavior. Passes
+  standalone (6/6) and inside `test:core` (1109/1109, 0 fail).
+
+### 7.1 Findings opened by the threat model
+
+| ID | Finding | Risk | Disposition |
+|----|---------|------|-------------|
+| FINDING-001 | `POST /api/workbench/audit` accepts unauthenticated audit writes (spoofable evidence, loopback-bound) | medium | **TRACKED** — require the portal token on the write path; client sends `Authorization` on this call |
+| FINDING-002 | `apiLimiter` imported but never mounted; only `agentRunLimiter` is applied | low | **TRACKED** — mount behind the token gate or drop the dead import |
+| FINDING-003 | `GET /api/browser/health` and `POST /api/browser/pairing/exchange` credential-free (loopback-bound, by design) | low | **ACCEPTED** — documented, not a defect |
+| FINDING-004 | Master token accepted in query string for `/api/events` (SSE cannot set headers) | low | **ACCEPTED** — exception stays scoped to exactly that path |
+| FINDING-005 | `express.json` parses up to 2 mb before the token gate | low | **TRACKED** — optional reorder behind the gate |
+
+### 7.2 Reviewer verification (2026-07-31, S2.2 gate passed)
+
+Verified independently, not on report. The negative test imports the real
+`{ app }` from `server/index.ts` (not a mock), boots it on an ephemeral port
+with isolated temp app-data, and passes 6/6 standalone. It carries positive
+controls (authenticated `/api/workspaces` must return 200; `/api/events` accepts
+the query token) so a blanket-401 false pass is ruled out. FINDING-001 was
+confirmed real in code: `workbenchRouter` mounts at `index.ts:73` above the
+token gate, and `/audit` validates only the event type with no principal, so
+unauthenticated writes succeed; the test pins this as a finding rather than
+hiding it. THREAT_MODEL.md classifies the full surface across the three layers
+with principal/auth/mutation/audit columns and reserves the Phase 2 operator
+drive-path slot.
+
+Carry-forward: FINDING-001 is a genuine audit-integrity exposure and should be
+fixed before any release, since a spoofable audit ledger directly contradicts
+the product's provenance thesis. The fix is small (require the portal token on
+the `/audit` write path). It does not block the S2.2 gate, which is about
+producing the model and the enforcement proof, but it should be closed in S2.3
+or a fast follow-up, not left as permanent debt.
+
+S2.3 (E2E journeys) is next.
