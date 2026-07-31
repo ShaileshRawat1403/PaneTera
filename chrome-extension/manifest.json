@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "name": "PaneTera Browser Operator",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "minimum_chrome_version": "116",
-  "description": "Browser operator extension for PaneTera Workbench.",
+  "description": "Browser operator extension for PaneTera Workbench. Governed capture and action by default, with an opt-in full-operator mode for direct navigation, scripting, vision, and diagnostics.",
   "icons": {
     "16": "icon16.png",
     "48": "icon48.png",
@@ -15,7 +15,10 @@
     "storage",
     "sidePanel",
     "contextMenus",
-    "notifications"
+    "notifications",
+    "tabs",
+    "webNavigation",
+    "debugger"
   ],
   "host_permissions": [
     "http://127.0.0.1/*",
@@ -23,7 +26,6 @@
     "<all_urls>"
   ],
   "optional_permissions": [
-    "tabs",
     "tabGroups"
   ],
   "background": {

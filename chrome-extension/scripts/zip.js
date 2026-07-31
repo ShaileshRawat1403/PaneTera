@@ -32,6 +32,14 @@ const ALLOWED_RUNTIME_FILES = [
   'shared/contracts.js',
   'shared/validation.js',
   'shared/redactor.js',
+  'operator/mode.js',
+  'operator/guards.js',
+  'operator/cdp.js',
+  'operator/navigation.js',
+  'operator/script.js',
+  'operator/vision.js',
+  'operator/debugging.js',
+  'operator/dispatch.js',
   'dist/capture.bundle.js'
 ];
 

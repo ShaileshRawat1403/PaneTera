@@ -12,6 +12,41 @@ document.addEventListener('DOMContentLoaded', () => {
   const pendingPanel = document.getElementById('pendingPanel');
   const btnApprovePairing = document.getElementById('btnApprovePairing');
   const btnDismissPairing = document.getElementById('btnDismissPairing');
+  const modeToggle = document.getElementById('modeToggle');
+  const modeHint = document.getElementById('modeHint');
+  const ungovernedWarn = document.getElementById('ungovernedWarn');
+
+  function renderMode(mode) {
+    const ungoverned = mode === 'ungoverned';
+    if (modeToggle) modeToggle.checked = ungoverned;
+    if (modeHint) {
+      modeHint.textContent = ungoverned
+        ? 'Ungoverned. Actions run directly.'
+        : 'Governed. Actions require approval.';
+    }
+    if (ungovernedWarn) ungovernedWarn.style.display = ungoverned ? 'block' : 'none';
+  }
+
+  function refreshMode() {
+    chrome.runtime.sendMessage({ type: 'get-operator-mode' }, (response) => {
+      if (chrome.runtime.lastError || !response?.success) return;
+      renderMode(response.mode);
+    });
+  }
+
+  if (modeToggle) {
+    modeToggle.addEventListener('change', () => {
+      const mode = modeToggle.checked ? 'ungoverned' : 'governed';
+      chrome.runtime.sendMessage({ type: 'set-operator-mode', mode }, (response) => {
+        if (chrome.runtime.lastError || !response?.success) {
+          // Revert the visual toggle if the write did not take.
+          refreshMode();
+          return;
+        }
+        renderMode(response.mode);
+      });
+    });
+  }
 
   // Format code input automatic dash (XXXX-XXXX)
   pairingCodeInput.addEventListener('input', (e) => {
@@ -38,6 +73,7 @@ document.addEventListener('DOMContentLoaded', () => {
         setupPanel.style.display = 'none';
         pendingPanel.style.display = 'none';
         actionPanel.style.display = 'block';
+        refreshMode();
       } else {
         statusBadge.textContent = 'Disconnected';
         statusBadge.className = 'status-badge status-disconnected';

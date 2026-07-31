@@ -1,5 +1,7 @@
 // chrome-extension/messageRouting.js
 import { redactText, sanitizeUrl } from './shared/redactor.js';
+import { dispatchOperator } from './operator/dispatch.js';
+import { getMode, setMode } from './operator/mode.js';
 
 const LOCAL_PANETERA_ORIGIN = /^http:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?$/;
 
@@ -131,6 +133,34 @@ export async function handleExtensionMessage(message, adapters, sendResponse, se
         await storage.clearTokens();
         await clearPairingAttention(storage, chromeApi);
         sendResponse({ success: true });
+        break;
+      }
+
+      case 'get-operator-mode': {
+        sendResponse({ success: true, mode: await getMode(chromeApi) });
+        break;
+      }
+
+      case 'set-operator-mode': {
+        try {
+          const mode = await setMode(chromeApi, message.mode);
+          sendResponse({ success: true, mode });
+        } catch (err) {
+          sendResponse({ success: false, error: err.message });
+        }
+        break;
+      }
+
+      case 'operator': {
+        // Full-operator surface. dispatchOperator consults the governance
+        // toggle and refuses page-authority ops when governed. The audit sink
+        // keeps the ungoverned lane inspectable without gating it.
+        const result = await dispatchOperator(
+          chromeApi,
+          { op: message.op, params: message.params },
+          { onAudit: (event) => { try { console.debug('[operator]', event); } catch {} } },
+        );
+        sendResponse(result);
         break;
       }
 
