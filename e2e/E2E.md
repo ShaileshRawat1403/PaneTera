@@ -33,6 +33,17 @@ Use `npm run test:e2e:ui` to watch the journeys run and debug selectors.
   gateway reports unreachable rather than faking connected, and it recovers on
   reload. Note: the health check is one-shot per load, not polled, so gateway
   recovery needs a reload.
+- `rig.spec.ts` — the full governed MCP flow against the stub server
+  `test/fixtures/rigMcpServer.mjs`: add a stdio connection, review and approve
+  the exact spec, discover capabilities, enable the echo tool, review the
+  invocation, approve and run, and confirm the untrusted, provenance-tracked
+  result echoes the input. Runs on isolated app-data (see below).
+
+## Isolation
+
+E2E runs point the app at a dedicated `TESSERA_APP_DATA` (`.e2e-appdata`), wiped
+by `globalSetup` before each run, so tests never touch your real Rig
+connections, Headroom, or catalog and always start from a clean state.
 
 ## Author's note (first run will refine)
 
@@ -48,8 +59,6 @@ rather than loosening assertions.
 - Project registration and inspection through the native picker (needs the OS
   dialog; belongs to the signed macOS job, or a test hook that bypasses the
   picker).
-- Rig approve → discover → invoke against a stub MCP server (needs a fixture MCP
-  endpoint so the journey is deterministic).
 - Headroom capsule resume across a reload.
 
 ## CI

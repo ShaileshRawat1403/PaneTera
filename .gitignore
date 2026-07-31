@@ -37,3 +37,6 @@ server/myai-workspaces.json
 
 # Generated SBOM (produced in CI)
 sbom.cyclonedx.json
+
+# E2E isolated app-data (wiped each run)
+.e2e-appdata/
