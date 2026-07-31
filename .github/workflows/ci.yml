@@ -39,6 +39,30 @@ jobs:
       - name: Build
         run: npm run build
 
+      # Software bill of materials for release provenance and vuln tracking.
+      - name: Generate SBOM (CycloneDX)
+        run: npm sbom --sbom-format cyclonedx > sbom.cyclonedx.json
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-cyclonedx
+          path: sbom.cyclonedx.json
+          retention-days: 30
+
+  # Secret scanning on every push/PR. Gitleaks is free for public repositories.
+  secret-scan:
+    name: secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   # Separate job so a browser flake never blocks the unit/lint/build signal.
   e2e:
     name: e2e (playwright)
