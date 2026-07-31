@@ -12,12 +12,14 @@ import { buildRepoSetupProposal } from './repoSetup';
 import { parseLiveAppIntent, buildLiveAppWorkbench } from './liveApp';
 import { parseWorkflowIntent } from './workflowIntents';
 import { getWorkspaceAdapter, stopWorkspaceAdapter, stopAllWorkspaceAdapters } from './mcpAdapter';
-import { getWorkspaceCatalogPath } from './appData';
+import { getWorkspaceCatalogPath, getPortalYamlPath } from './appData';
 import { fingerprint, normalizeAuditRecord } from './auditRecord';
 import { auditOperatorAction } from './operatorAudit';
 import { authenticatePortalRequest, operatorPrincipalForRequest } from './operatorPrincipal';
 import * as fs from 'fs';
+import * as yaml from 'js-yaml';
 import { getTesseraAppDataDir } from './appData';
+import { validateWorkspaceCatalog, validatePortalCatalog } from './configValidation';
 import { FEATURES } from './features';
 import { handleOrchestratorQuery } from './orchestrator';
 import { runToolLoop } from './agentLoop';
@@ -70,6 +72,27 @@ app.use(metricsMiddleware);
 if (TOKEN === 'changeme-12345' || !TOKEN) {
   console.error('\n[ERROR] PORTAL_TOKEN is still the default placeholder. Please set a strong token in .env before starting.\n');
   process.exit(1);
+}
+
+// Validate runtime configuration and surface actionable errors at startup rather
+// than failing cryptically inside a later request. Reading through the getters
+// seeds valid defaults for a fresh install, so this only flags a corrupted
+// config. Deliberately non-fatal: it warns and proceeds so a single bad field
+// cannot take the whole workstation down.
+try {
+  const configErrors = [
+    ...validateWorkspaceCatalog(JSON.parse(fs.readFileSync(getWorkspaceCatalogPath(), 'utf8'))),
+    ...validatePortalCatalog(yaml.load(fs.readFileSync(getPortalYamlPath(), 'utf8'))),
+  ];
+  if (configErrors.length > 0) {
+    console.warn(
+      '\n[CONFIG] Configuration issues detected:\n'
+      + configErrors.map((e) => `  - ${e}`).join('\n')
+      + '\n  Fix these files and restart. Proceeding with the valid portions.\n',
+    );
+  }
+} catch (err: any) {
+  console.warn(`\n[CONFIG] Could not parse a configuration file: ${err?.message ?? err}. Proceeding; fix the file and restart.\n`);
 }
 
 app.use(express.json({ limit: '2mb' }));
