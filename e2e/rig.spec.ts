@@ -47,15 +47,23 @@ test.describe('rig governed MCP flow', () => {
     await expect(card.getByText(/discovered/)).toBeVisible({ timeout: 30_000 });
     await card.getByRole('button', { name: /^Inspect/ }).click();
 
-    // Enable the echo tool, set arguments, review, and run under approval.
-    await page.getByLabel(/^Enable .*echo/i).check();
-    await page.getByLabel('Arguments (JSON)', { exact: true }).fill('{"text":"hello"}');
-    await page.getByRole('button', { name: 'Review invocation' }).click();
-    await page.getByRole('button', { name: 'Approve and run' }).click();
+    // The echo capability is labeled per connection: "Enable <name>.echo".
+    // Enable it, then scope the invocation to this exact tool card so a
+    // same-named tool on another connection can't shadow the controls.
+    const enableEcho = page.getByLabel(`Enable ${connectionName}.echo`);
+    await enableEcho.check();
+    const echoTool = page.locator('div')
+      .filter({ has: enableEcho })
+      .filter({ has: page.getByRole('button', { name: 'Review invocation' }) })
+      .last();
+
+    await echoTool.getByLabel('Arguments (JSON)', { exact: true }).fill('{"text":"hello"}');
+    await echoTool.getByRole('button', { name: 'Review invocation' }).click();
+    await echoTool.getByRole('button', { name: 'Approve and run' }).click();
 
     // The result is labeled untrusted and echoes the input.
-    await expect(page.getByText('Untrusted MCP result')).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByText(/"text":\s*"hello"/)).toBeVisible();
+    await expect(echoTool.getByText('Untrusted MCP result')).toBeVisible({ timeout: 20_000 });
+    await expect(echoTool.getByText(/"text":\s*"hello"/)).toBeVisible();
 
     // Clean up only this connection so re-runs start fresh.
     await card.getByRole('button', { name: 'Remove' }).click();
