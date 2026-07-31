@@ -16,6 +16,9 @@ test.describe('rig governed MCP flow', () => {
   const fixtureArgs = JSON.stringify([path.resolve('test/fixtures/rigMcpServer.mjs')]);
 
   test('approve → discover → invoke the echo tool on a stdio MCP server', async ({ page }) => {
+    // Spawning a subprocess, discovering, and a gated invocation take a while.
+    test.setTimeout(90_000);
+
     await startUnlocked(page);
     await page.goto('/');
 
@@ -29,12 +32,20 @@ test.describe('rig governed MCP flow', () => {
     await page.getByLabel('Arguments (JSON array)').fill(fixtureArgs);
     await page.getByRole('button', { name: 'Record for review' }).click();
 
-    // Governance gate: approve the exact reviewed connection.
+    // Scope to this connection's card so a pre-existing connection can't be
+    // confused with it: the card is the div holding both this name and a Remove.
+    const card = page.locator('div')
+      .filter({ has: page.getByRole('heading', { name: connectionName, exact: true }) })
+      .filter({ has: page.getByRole('button', { name: 'Remove' }) })
+      .last();
+
+    // It lands as "Approval required"; open its review, then approve in the dialog.
+    await card.getByRole('button', { name: 'Review and connect', exact: true }).click();
     await page.getByRole('button', { name: 'Approve connection' }).click();
 
-    // The server starts and discovers its capabilities.
-    await expect(page.getByText(/discovered/).first()).toBeVisible({ timeout: 20_000 });
-    await page.getByRole('button', { name: /^Inspect/ }).click();
+    // The server starts and discovers its capabilities on this card.
+    await expect(card.getByText(/discovered/)).toBeVisible({ timeout: 30_000 });
+    await card.getByRole('button', { name: /^Inspect/ }).click();
 
     // Enable the echo tool, set arguments, review, and run under approval.
     await page.getByLabel(/^Enable .*echo/i).check();
@@ -46,7 +57,7 @@ test.describe('rig governed MCP flow', () => {
     await expect(page.getByText('Untrusted MCP result')).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText(/"text":\s*"hello"/)).toBeVisible();
 
-    // Clean up so re-runs start from a fresh state.
-    await page.getByRole('button', { name: 'Remove' }).first().click();
+    // Clean up only this connection so re-runs start fresh.
+    await card.getByRole('button', { name: 'Remove' }).click();
   });
 });
