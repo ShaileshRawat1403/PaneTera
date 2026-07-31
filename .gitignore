@@ -34,3 +34,6 @@ server/myai-workspaces.json
 /test-results/
 /playwright-report/
 /playwright/.cache/
+
+# Generated SBOM (produced in CI)
+sbom.cyclonedx.json
