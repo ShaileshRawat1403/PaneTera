@@ -69,9 +69,12 @@ test.describe('rig governed MCP flow', () => {
     await page.getByRole('button', { name: 'Review invocation' }).click();
     await page.getByRole('button', { name: 'Approve and run' }).click();
 
-    // The result is labeled untrusted and echoes the input.
-    await expect(page.getByText('Untrusted MCP result')).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByText(/"text":\s*"hello"/)).toBeVisible();
+    // The result is labeled untrusted and echoes the input. Assert against the
+    // result element (aria-label "Untrusted MCP result"), since the same text
+    // also appears in the arguments box that was typed.
+    const result = page.getByLabel('Untrusted MCP result');
+    await expect(result).toBeVisible({ timeout: 20_000 });
+    await expect(result).toContainText(/"text":\s*"hello"/);
 
     // Clean up this connection.
     await card.getByRole('button', { name: 'Remove' }).click();
