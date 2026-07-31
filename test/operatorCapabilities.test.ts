@@ -97,18 +97,29 @@ describe('risk-aware dispatch', () => {
     assert.deepStrictEqual(r.uiComponent, { type: 'Card' });
   });
 
-  it('does NOT execute propose-risk capabilities; returns an approval card', async () => {
+  it('executes propose-risk capabilities (they self-gate) and surfaces the approval', async () => {
+    // Per the runtime contract, a propose-risk capability's execute() does not
+    // perform the side effect; it safely records a proposal and returns
+    // requiresApproval + an approval record. Dispatch must run it and surface
+    // that, not short-circuit into an inert generic card.
     let called = false;
     const c = cap({
-      name: 'writeThing', risk: 'propose',
-      execute: async () => { called = true; return { output: 'should not run' }; },
+      name: 'proposeThing', risk: 'propose',
+      execute: async () => {
+        called = true;
+        return {
+          output: { proposed: true },
+          uiComponent: { type: 'BrowserActionProposal', data: {} },
+          requiresApproval: true,
+          approval: { approvalId: 'a1', kind: 'browser-action' },
+        } as any;
+      },
     });
     const r = await dispatchCapability(c, { path: '/x' }) as any;
-    assert.strictEqual(called, false, 'propose capability must not execute');
-    assert.strictEqual(r.output.proposed, true);
-    assert.strictEqual(r.uiComponent.type, 'ProposedAction');
-    assert.strictEqual(r.uiComponent.data.requiresApproval, true);
-    assert.strictEqual(r.uiComponent.data.capability, 'writeThing');
+    assert.strictEqual(called, true, 'propose capability executes to create its proposal');
+    assert.strictEqual(r.requiresApproval, true);
+    assert.deepStrictEqual(r.approval, { approvalId: 'a1', kind: 'browser-action' });
+    assert.strictEqual(r.uiComponent.type, 'BrowserActionProposal');
   });
 });
 
