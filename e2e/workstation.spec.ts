@@ -34,9 +34,12 @@ test.describe('workstation surfaces', () => {
   });
 
   test('the project switcher opens', async ({ page }) => {
-    await page.getByLabel('Switch project').click();
-    // A popover/list appears; opening it must not error.
-    await expect(page.getByRole('dialog').or(page.getByRole('listbox')).first()).toBeVisible();
+    // "Switch project" opens a MUI popover and toggles aria-expanded; assert the
+    // expanded state rather than the popover's internal role.
+    const button = page.getByLabel('Switch project');
+    await expect(button).toHaveAttribute('aria-expanded', 'false');
+    await button.click();
+    await expect(button).toHaveAttribute('aria-expanded', 'true');
   });
 
   test('the gateway status indicator renders a definite state', async ({ page }) => {
