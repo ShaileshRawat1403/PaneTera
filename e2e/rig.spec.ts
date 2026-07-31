@@ -50,8 +50,10 @@ test.describe('rig governed MCP flow', () => {
     // The echo capability is labeled per connection: "Enable <name>.echo".
     // Enable it, then scope the invocation to this exact tool card so a
     // same-named tool on another connection can't shadow the controls.
+    // The label is on MUI's checkbox wrapper span, not a native input, so click
+    // to toggle it on (it starts unchecked for a freshly discovered tool).
     const enableEcho = page.getByLabel(`Enable ${connectionName}.echo`);
-    await enableEcho.check();
+    await enableEcho.click();
     const echoTool = page.locator('div')
       .filter({ has: enableEcho })
       .filter({ has: page.getByRole('button', { name: 'Review invocation' }) })
