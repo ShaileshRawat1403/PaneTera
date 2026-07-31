@@ -21,6 +21,8 @@
 export interface AgentToolCall {
   name: string;
   args: Record<string, unknown>;
+  /** Provider correlation id (e.g. OpenAI tool_call_id). Optional; Gemini has none. */
+  id?: string;
 }
 
 export interface ModelTurn {
