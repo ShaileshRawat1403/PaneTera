@@ -245,6 +245,10 @@ connections, so it must never be mounted with the public routers above it.
   lockout, refresh token bound to `installationId`. Negative tests verify
   validation (400) and rate limit (429) paths, not master-token 401.
 - **Audit ingestion** (`POST /api/workbench/audit`): see FINDING-001.
+- **Health probes** (`GET /livez`, `GET /readyz`): unauthenticated by design,
+  mounted ahead of the token gate for process managers. They expose no sensitive
+  data: `/livez` returns `{status:'ok'}`; `/readyz` returns readiness plus a
+  boolean `appDataWritable` check and a 503 when not ready. Loopback-bound.
 - **Public workbench metadata** (`GET /api/workbench/apps`,
   `GET /api/workbench/apps/:id/status`): open by design — the browser UI has
   no login and must render live-app tabs. Compensating control: loopback

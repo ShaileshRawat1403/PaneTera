@@ -17,6 +17,7 @@ import { fingerprint, normalizeAuditRecord } from './auditRecord';
 import { auditOperatorAction } from './operatorAudit';
 import { authenticatePortalRequest, operatorPrincipalForRequest } from './operatorPrincipal';
 import * as fs from 'fs';
+import { getTesseraAppDataDir } from './appData';
 import { FEATURES } from './features';
 import { handleOrchestratorQuery } from './orchestrator';
 import { runToolLoop } from './agentLoop';
@@ -81,6 +82,27 @@ app.use('/mcp/browser', mcpRouter);
 
 // Mount Workbench APIs
 app.use('/api/workbench', workbenchRouter);
+
+// Unauthenticated liveness/readiness probes for process managers and
+// orchestrators. They sit ahead of the token gate and expose no sensitive
+// data: liveness proves the process serves, readiness proves the app-data
+// directory is writable so state operations can proceed.
+app.get('/livez', (_req: Request, res: Response) => {
+  res.json({ status: 'ok' });
+});
+app.get('/readyz', (_req: Request, res: Response) => {
+  const checks: Record<string, boolean> = {};
+  let ready = true;
+  try {
+    fs.accessSync(getTesseraAppDataDir(), fs.constants.W_OK);
+    checks.appDataWritable = true;
+  } catch {
+    checks.appDataWritable = false;
+    ready = false;
+  }
+  res.status(ready ? 200 : 503).json({ status: ready ? 'ready' : 'not-ready', checks });
+});
+
 // Token authentication middleware (supports Authorization header and query parameter token for EventSource)
 app.use((req: Request, res: Response, next: NextFunction) => {
   if (!authenticatePortalRequest(req, TOKEN, { allowQueryToken: req.path === '/api/events' })) {
