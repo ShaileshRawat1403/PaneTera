@@ -60,22 +60,20 @@ test.describe('rig governed MCP flow', () => {
     // same-named tool on another connection can't shadow the controls.
     // The label is on MUI's checkbox wrapper span, not a native input, so click
     // to toggle it on (it starts unchecked for a freshly discovered tool).
-    const enableEcho = page.getByLabel(`Enable ${connectionName}.echo`);
-    await enableEcho.click();
-    const echoTool = page.locator('div')
-      .filter({ has: enableEcho })
-      .filter({ has: page.getByRole('button', { name: 'Review invocation' }) })
-      .last();
-
-    await echoTool.getByLabel('Arguments (JSON)', { exact: true }).fill('{"text":"hello"}');
-    await echoTool.getByRole('button', { name: 'Review invocation' }).click();
-    await echoTool.getByRole('button', { name: 'Approve and run' }).click();
+    // The wiped E2E app-data means this is the only connection, so the tool
+    // controls are unambiguous at page level after enabling the echo tool.
+    // (Review invocation is replaced by the approve prompt when clicked, so it
+    // can't be part of a stable scope.)
+    await page.getByLabel(`Enable ${connectionName}.echo`).click();
+    await page.getByLabel('Arguments (JSON)', { exact: true }).fill('{"text":"hello"}');
+    await page.getByRole('button', { name: 'Review invocation' }).click();
+    await page.getByRole('button', { name: 'Approve and run' }).click();
 
     // The result is labeled untrusted and echoes the input.
-    await expect(echoTool.getByText('Untrusted MCP result')).toBeVisible({ timeout: 20_000 });
-    await expect(echoTool.getByText(/"text":\s*"hello"/)).toBeVisible();
+    await expect(page.getByText('Untrusted MCP result')).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(/"text":\s*"hello"/)).toBeVisible();
 
-    // Clean up only this connection so re-runs start fresh.
+    // Clean up this connection.
     await card.getByRole('button', { name: 'Remove' }).click();
   });
 });
