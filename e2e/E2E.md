@@ -29,6 +29,10 @@ Use `npm run test:e2e:ui` to watch the journeys run and debug selectors.
 - `workstation.spec.ts` — one authoritative canvas loads; the Rig, Headroom,
   audit, and project-switcher surfaces open; the gateway indicator reports a
   definite connected/unreachable state.
+- `degraded.spec.ts` — with every API call failing (route interception), the
+  gateway reports unreachable rather than faking connected, and it recovers on
+  reload. Note: the health check is one-shot per load, not polled, so gateway
+  recovery needs a reload.
 
 ## Author's note (first run will refine)
 
@@ -47,8 +51,6 @@ rather than loosening assertions.
 - Rig approve → discover → invoke against a stub MCP server (needs a fixture MCP
   endpoint so the journey is deterministic).
 - Headroom capsule resume across a reload.
-- Full degraded-backend recovery (kill the API mid-session and assert the app
-  degrades honestly rather than showing stale state).
 
 ## CI
 
