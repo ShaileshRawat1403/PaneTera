@@ -93,7 +93,7 @@ bind to `installationId`.
 | --- | --- | --- | --- | --- | --- |
 | GET | `/apps` | any loopback client | none | none (read) | — |
 | GET | `/apps/:appId/status` | any loopback client | none | probes a loopback app (read-only, redirects bounded to loopback) | yes (`workbench.app.probe`) |
-| POST | `/audit` | any loopback client | **none** | writes audit records | the write itself — see FINDING-001 |
+| POST | `/audit` | portal operator | `requirePortalToken` | writes audit records | yes (FINDING-001 fixed) |
 
 ### Layer B — app-level routes behind the global master token
 
@@ -262,7 +262,7 @@ connections, so it must never be mounted with the public routers above it.
 
 | ID | Finding | Risk | Recommended fix |
 | --- | --- | --- | --- |
-| FINDING-001 | `POST /api/workbench/audit` accepts unauthenticated audit writes from any loopback client. An audit ledger that anyone on the machine can append to is spoofable evidence. | medium (loopback-only, single-operator POC) | Require the master token on the write path (`requirePortalToken`); the browser UI can send `Authorization` on this one call. Move `/audit` to Layer B semantics. |
+| FINDING-001 (FIXED) | `POST /api/workbench/audit` previously accepted unauthenticated audit writes from any loopback client, a spoofable audit ledger. | medium (loopback-only, single-operator POC) | Fixed: `requirePortalToken` now guards the write path and the negative auth test asserts 401. No active caller existed, so the fix broke nothing. |
 | FINDING-002 | `apiLimiter` and `strictLimiter` are defined in `middleware/rateLimiter.ts` and `apiLimiter` is imported in `index.ts`, but no global `app.use(apiLimiter)` exists. Only `agentRunLimiter` is mounted (`/api/agent/run`). There is no general request-rate limit. | low (master token already gates Layer B/C) | Decide whether to mount a global limiter behind the token gate, or remove the dead import. |
 | FINDING-003 | `GET /api/browser/health` and `POST /api/browser/pairing/exchange` are reachable without any credential (loopback-bound). `health` is harmless; `exchange` is code-gated by design. | low | Documented, not a defect. Revisit if the server ever binds beyond loopback. |
 | FINDING-004 | `GET /api/events` accepts the master token in the query string. Token-in-URL risks are accepted for SSE; revisit if an SSE-with-headers transport becomes available. | low | Keep the exception scoped to exactly this one path. |

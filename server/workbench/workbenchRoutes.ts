@@ -2,6 +2,7 @@ import express, { Request, Response } from 'express';
 import { localAppRegistry } from './localAppRegistry';
 import { localAppProbe, type ProbeResult, type ProbeStatus } from './localAppProbe';
 import { logTypedAudit, systemActor, unknownActor, type TypedAuditRecord } from '../auditRecord';
+import { requirePortalToken } from '../operatorPrincipal';
 
 export const workbenchRouter = express.Router();
 
@@ -92,7 +93,7 @@ workbenchRouter.get('/apps/:appId/status', async (req: Request, res: Response) =
   return res.json(finalStatus);
 });
 
-workbenchRouter.post('/audit', async (req: Request, res: Response) => {
+workbenchRouter.post('/audit', requirePortalToken, async (req: Request, res: Response) => {
   const body = req.body || {};
 
   const { event, appId, operation, resultStatus, transactionId } = body;
