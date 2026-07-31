@@ -23,7 +23,8 @@ import { runToolLoop } from './agentLoop';
 import type { AgentToolCall, ModelTurn, ToolExecution } from './agentLoop';
 import { rigRegistry, rigRuntime } from './rig/routes';
 import { RigToolAdapter } from './rig/adapter';
-import { createRigCapabilities } from './agent/rigCapabilities';
+import { createRigCapabilities, mergeCapabilities } from './agent/rigCapabilities';
+import { createBrowserActionCapabilities } from './agent/browserActionCapabilities';
 import type { AgentCapability } from './agent/types';
 import { capabilityToGeminiTool, capabilityToOpenAITool, dispatchCapability, indexCapabilities } from './operatorCapabilities';
 import { browserRouter } from './browserGateway';
@@ -979,7 +980,12 @@ async function tryBuiltinTool(call: AgentToolCall): Promise<ToolExecution | null
 // registry so the operator sees the user's actual enabled MCP tools.
 function getOperatorCapabilities(): AgentCapability[] {
   const adapter = new RigToolAdapter(rigRegistry, rigRuntime);
-  return createRigCapabilities(adapter, rigRuntime);
+  const rig = createRigCapabilities(adapter, rigRuntime);
+  const browser = createBrowserActionCapabilities();
+  // Browser action capabilities are governed (propose-risk actions self-gate
+  // and return approval records). Listed first so a name collision resolves to
+  // them over a same-named Rig tool.
+  return mergeCapabilities(browser, rig);
 }
 
 // Compose the built-in tools with the dynamic capabilities into one executor

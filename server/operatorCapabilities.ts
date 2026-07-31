@@ -18,6 +18,8 @@ import type { AgentCapability } from './agent/types';
 export interface OperatorToolExecution {
   output: unknown;
   uiComponent?: unknown;
+  requiresApproval?: boolean;
+  approval?: unknown;
 }
 
 const JSON_TO_GEMINI_TYPE: Record<string, string> = {
@@ -92,23 +94,19 @@ export async function dispatchCapability(
   cap: AgentCapability,
   args: Record<string, unknown>,
 ): Promise<OperatorToolExecution> {
-  if (cap.risk === 'propose') {
-    return {
-      output: { proposed: true, capability: cap.name, arguments: args },
-      uiComponent: {
-        type: 'ProposedAction',
-        data: {
-          capability: cap.name,
-          arguments: args,
-          reason: `Approve calling "${cap.name}" before it runs.`,
-          requiresApproval: true,
-        },
-      },
-    };
-  }
-
+  // Execute every capability, exactly as the agent runtime does. Observe-risk
+  // capabilities read. Propose-risk capabilities do NOT perform their side
+  // effect here: their execute() safely records a proposal (with its own audit
+  // trail) and returns requiresApproval plus an approval record. The operator
+  // surfaces that approval rather than short-circuiting it, so a governed action
+  // still reaches a real, approvable proposal instead of an inert generic card.
   const result = await cap.execute(args);
-  return { output: result.output, uiComponent: result.uiComponent };
+  return {
+    output: result.output,
+    uiComponent: result.uiComponent,
+    requiresApproval: result.requiresApproval,
+    approval: result.approval,
+  };
 }
 
 /**
