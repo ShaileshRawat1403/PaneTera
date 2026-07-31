@@ -1,11 +1,18 @@
 import { defineConfig, devices } from '@playwright/test';
+import path from 'node:path';
 
 // The token the E2E server boots with and the specs unlock against. Override
 // with PORTAL_TOKEN in the environment; the default is fine for local runs.
 export const E2E_PORTAL_TOKEN = process.env.PORTAL_TOKEN || 'e2e-local-token';
 
+// Dedicated app-data directory so E2E runs never touch your real Rig
+// connections, Headroom, or catalog, and start from a clean, wiped state
+// (globalSetup removes it before each run).
+export const E2E_APP_DATA = path.resolve('.e2e-appdata');
+
 export default defineConfig({
   testDir: './e2e',
+  globalSetup: './e2e/globalSetup.ts',
   timeout: 30_000,
   expect: { timeout: 10_000 },
   // Journeys share one local server and touch persistent state, so run serially.
@@ -32,6 +39,7 @@ export default defineConfig({
     env: {
       PORTAL_TOKEN: E2E_PORTAL_TOKEN,
       PORT: '4000',
+      TESSERA_APP_DATA: E2E_APP_DATA,
     },
   },
 });
