@@ -1009,6 +1009,28 @@ function makeOperatorExecuteTool(capIndex: Map<string, AgentCapability>) {
   };
 }
 
+// One shared operator-loop spine. A provider path supplies only its model
+// adapter (callModel) and how it records a tool result; capability assembly,
+// dispatch, the loop, and the return shape are shared here so the paths do not
+// drift apart.
+function operatorToolset(): { capabilities: AgentCapability[]; capIndex: Map<string, AgentCapability> } {
+  const capabilities = getOperatorCapabilities();
+  return { capabilities, capIndex: indexCapabilities(capabilities) };
+}
+
+async function runOperatorLoop(opts: {
+  callModel: () => Promise<ModelTurn>;
+  recordToolResult: (call: AgentToolCall, execution: ToolExecution) => void;
+  capIndex: Map<string, AgentCapability>;
+}): Promise<{ reply: string; uiComponent?: any }> {
+  const result = await runToolLoop({
+    callModel: opts.callModel,
+    executeTool: makeOperatorExecuteTool(opts.capIndex),
+    recordToolResult: opts.recordToolResult,
+  });
+  return { reply: result.reply, uiComponent: result.uiComponent as any };
+}
+
 async function askGemini(query: string, history: any[] = [], modelId?: string): Promise<{ reply: string; uiComponent?: any }> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
@@ -1068,11 +1090,9 @@ async function askGemini(query: string, history: any[] = [], modelId?: string): 
     contentsPayload.push({ role: 'function', parts: [{ functionResponse: { name: call.name, response: { output: execution.output } } }] });
   };
 
-  const operatorCapabilities = getOperatorCapabilities();
-  const capIndex = indexCapabilities(operatorCapabilities);
-  (geminiTools[0].functionDeclarations as any[]).push(...operatorCapabilities.map(capabilityToGeminiTool));
-  const loopResult = await runToolLoop({ callModel: callGemini, executeTool: makeOperatorExecuteTool(capIndex), recordToolResult });
-  return { reply: loopResult.reply, uiComponent: loopResult.uiComponent as any };
+  const { capabilities, capIndex } = operatorToolset();
+  (geminiTools[0].functionDeclarations as any[]).push(...capabilities.map(capabilityToGeminiTool));
+  return runOperatorLoop({ callModel: callGemini, recordToolResult, capIndex });
 }
 
 // OpenAI Q&A execution handler
@@ -1234,11 +1254,9 @@ async function askOpenAI(query: string, history: any[] = [], modelId?: string): 
     });
   };
 
-  const operatorCapabilities = getOperatorCapabilities();
-  const capIndex = indexCapabilities(operatorCapabilities);
-  (tools as any[]).push(...operatorCapabilities.map(capabilityToOpenAITool));
-  const loopResult = await runToolLoop({ callModel: callOpenAI, executeTool: makeOperatorExecuteTool(capIndex), recordToolResult });
-  return { reply: loopResult.reply, uiComponent: loopResult.uiComponent as any };
+  const { capabilities, capIndex } = operatorToolset();
+  (tools as any[]).push(...capabilities.map(capabilityToOpenAITool));
+  return runOperatorLoop({ callModel: callOpenAI, recordToolResult, capIndex });
 }
 
 // Local Ollama Q&A offline execution fallback handler
