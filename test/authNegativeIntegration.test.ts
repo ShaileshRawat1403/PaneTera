@@ -272,14 +272,15 @@ describe('Negative auth integration against the real composed app', () => {
     const status = await probe('GET', '/api/workbench/apps/not-an-app/status');
     assert.strictEqual(status.status, 200, 'workbench probe is public by design (loopback-bound)');
 
-    // FINDING-001: workbench audit ingestion is open today. Pinned so a fix
-    // that moves it into the 401 sweep is visible when it lands.
+    // FINDING-001 (fixed): the workbench audit write now requires the master
+    // token, so an unauthenticated write is refused. A spoofable audit ledger
+    // contradicts the provenance thesis, so this is enforced, not just tracked.
     const audit = await fetch(`${baseUrl}/api/workbench/audit`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ event: 'workbench.layout.change' }),
     });
-    assert.strictEqual(audit.status, 200, 'FINDING-001: unauthenticated workbench audit write succeeds');
+    assert.strictEqual(audit.status, 401, 'FINDING-001 fixed: unauthenticated workbench audit write is refused');
 
     const exchange = await fetch(`${baseUrl}/api/browser/pairing/exchange`, {
       method: 'POST',

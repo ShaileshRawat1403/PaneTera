@@ -373,7 +373,7 @@ quarantined tests are Sprint 2 targets for fix or formal skip.
 
 | ID | Finding | Risk | Disposition |
 |----|---------|------|-------------|
-| FINDING-001 | `POST /api/workbench/audit` accepts unauthenticated audit writes (spoofable evidence, loopback-bound) | medium | **TRACKED** — require the portal token on the write path; client sends `Authorization` on this call |
+| FINDING-001 | `POST /api/workbench/audit` accepts unauthenticated audit writes (spoofable evidence, loopback-bound) | medium | **FIXED** — `requirePortalToken` middleware now guards the write path; the negative auth test asserts 401 (no active caller existed, so zero breakage) |
 | FINDING-002 | `apiLimiter` imported but never mounted; only `agentRunLimiter` is applied | low | **TRACKED** — mount behind the token gate or drop the dead import |
 | FINDING-003 | `GET /api/browser/health` and `POST /api/browser/pairing/exchange` credential-free (loopback-bound, by design) | low | **ACCEPTED** — documented, not a defect |
 | FINDING-004 | Master token accepted in query string for `/api/events` (SSE cannot set headers) | low | **ACCEPTED** — exception stays scoped to exactly that path |

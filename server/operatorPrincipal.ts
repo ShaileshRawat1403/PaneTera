@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import type { Request } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 
 /** A server-minted identity for an authenticated, configured local operator. */
 export interface OperatorPrincipal {
@@ -51,6 +51,21 @@ export function authenticatePortalRequest(
 
 export function operatorPrincipalForRequest(req: Request): OperatorPrincipal | undefined {
   return REQUEST_PRINCIPALS.get(req);
+}
+
+/**
+ * Route-level guard for endpoints mounted before the global master-token gate
+ * that still must require the master token (e.g. the workbench audit write,
+ * FINDING-001). Reads the configured PORTAL_TOKEN and 401s on a missing or
+ * wrong credential.
+ */
+export function requirePortalToken(req: Request, res: Response, next: NextFunction): void {
+  const token = process.env.PORTAL_TOKEN || '';
+  if (!authenticatePortalRequest(req, token)) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+  next();
 }
 
 export function isAuthoritativeOperatorPrincipal(value: unknown): value is OperatorPrincipal {
