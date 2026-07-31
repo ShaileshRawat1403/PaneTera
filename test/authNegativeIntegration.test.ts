@@ -272,6 +272,13 @@ describe('Negative auth integration against the real composed app', () => {
     const status = await probe('GET', '/api/workbench/apps/not-an-app/status');
     assert.strictEqual(status.status, 200, 'workbench probe is public by design (loopback-bound)');
 
+    // Liveness/readiness probes are unauthenticated by design and expose no
+    // sensitive data, so a process manager can check health without a token.
+    const livez = await probe('GET', '/livez');
+    assert.strictEqual(livez.status, 200, '/livez is an unauthenticated liveness probe');
+    const readyz = await probe('GET', '/readyz');
+    assert.ok([200, 503].includes(readyz.status), '/readyz is an unauthenticated readiness probe');
+
     // FINDING-001 (fixed): the workbench audit write now requires the master
     // token, so an unauthenticated write is refused. A spoofable audit ledger
     // contradicts the provenance thesis, so this is enforced, not just tracked.
