@@ -34,7 +34,8 @@ export function getPortalYamlPath(): string {
   const newPath = path.join(appDir, 'portal.yaml');
   if (fs.existsSync(newPath)) return newPath;
 
-  const legacyPath = path.join(process.cwd(), 'portal.yaml');
+  const legacyBase = process.env.TESSERA_LEGACY_DIR || process.cwd();
+  const legacyPath = path.join(legacyBase, 'portal.yaml');
   if (fs.existsSync(legacyPath)) {
     fs.cpSync(legacyPath, newPath);
     console.log(`Migrated portal.yaml → ${newPath}`);
@@ -51,7 +52,8 @@ export function getWorkspaceCatalogPath(): string {
   const newPath = path.join(appDir, 'myai-workspaces.json');
   if (fs.existsSync(newPath)) return newPath;
 
-  const legacyPath = path.join(__dirname, 'myai-workspaces.json');
+  const legacyBase = process.env.TESSERA_LEGACY_DIR || __dirname;
+  const legacyPath = path.join(legacyBase, 'myai-workspaces.json');
   if (fs.existsSync(legacyPath)) {
     fs.cpSync(legacyPath, newPath);
     console.log(`Migrated myai-workspaces.json → ${newPath}`);
