@@ -12,7 +12,9 @@
     "test": "node --import tsx --test --test-concurrency=1 --test-timeout=30000 'test/**/*.test.ts' 'test/**/*.test.tsx'",
     "test:core": "node --import tsx --test --test-concurrency=1 --test-timeout=30000 $(find test -name '*.test.ts' -o -name '*.test.tsx' | grep -v -E '(canvasHeader|transcriptDrawerPolish|/mcpV0\\.test\\.ts$|mcpV0OfficialClient)')",
     "test:quarantined": "node --import tsx --test --test-concurrency=1 --test-timeout=15000 test/canvasHeader.test.tsx test/transcriptDrawerPolish.test.tsx test/mcpV0.test.ts test/mcpV0OfficialClient.test.ts",
-    "test:coverage": "node --import tsx --experimental-test-coverage --test --test-concurrency=1 --test-timeout=30000 'test/**/*.test.ts' 'test/**/*.test.tsx'"
+    "test:coverage": "node --import tsx --experimental-test-coverage --test --test-concurrency=1 --test-timeout=30000 'test/**/*.test.ts' 'test/**/*.test.tsx'",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
     "@emotion/react": "^11.11.4",
@@ -31,6 +33,7 @@
     "uuid": "^14.0.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@types/express": "^4.17.21",
     "@types/js-yaml": "^4.0.9",
     "@types/jsdom": "^28.0.3",

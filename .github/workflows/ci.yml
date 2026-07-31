@@ -38,3 +38,38 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  # Separate job so a browser flake never blocks the unit/lint/build signal.
+  e2e:
+    name: e2e (playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install
+        run: npm ci
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      # The config's webServer boots `npm run dev` with this token and waits for
+      # the client. A dummy model key keeps startup happy without live calls.
+      - name: Run E2E journeys
+        run: npm run test:e2e
+        env:
+          PORTAL_TOKEN: e2e-local-token
+          GEMINI_API_KEY: e2e-not-used
+
+      - name: Upload report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
