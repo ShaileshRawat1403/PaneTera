@@ -8,6 +8,13 @@ import type {
   AgentToolResult,
 } from './types';
 import { AgentRunStore } from './runStore';
+import { StoreEventSink, type OperatorEventSink } from './operatorSink';
+import {
+  runToolLoop,
+  type ModelTurn,
+  type ToolExecution,
+  type AgentToolCall as LoopToolCall,
+} from '../agentLoop';
 
 const MAX_MODEL_TURNS = 8;
 
@@ -38,93 +45,95 @@ export class AgentRuntime {
     });
     const controller = new AbortController();
     this.active.set(run.runId, controller);
+    const sink: OperatorEventSink = new StoreEventSink(this.store, run.runId);
     let uiComponent: unknown;
-    let continuationId: string | undefined;
-    let toolOutputs: Array<{ callId: string; output: unknown }> | undefined;
     let finalText = '';
     let awaitingApproval = false;
     let pendingApproval: AgentPendingApproval | undefined;
-    let reachedFinalResponse = false;
 
     try {
-      await this.store.transition(run.runId, 'planning', { currentStep: 'Compile bounded context' });
-      await this.store.append(run.runId, 'run.started', 'PaneTera started the task.');
-      await this.store.append(run.runId, 'context.compiled', 'Bounded context compiled.', {
+      await sink.transition('planning', { currentStep: 'Compile bounded context' });
+      await sink.emit('run.started', 'PaneTera started the task.');
+      await sink.emit('context.compiled', 'Bounded context compiled.', {
         contextItems: request.context?.length || 0,
         rawMaterialPersisted: false,
       });
-      await this.store.append(run.runId, 'plan.created', 'Inspect with governed tools, act only through policy, then report evidence.', {
+      await sink.emit('plan.created', 'Inspect with governed tools, act only through policy, then report evidence.', {
         availableCapabilities: [...this.capabilities.keys()],
       });
 
-      for (let turn = 0; turn < MAX_MODEL_TURNS; turn += 1) {
+      // The shared operator spine (runToolLoop) drives the turns. These closures
+      // are the only runtime-specific parts: they thread the provider's
+      // continuation state, emit the run's events through the sink, and capture
+      // the approval/final-text outcome the post-loop logic needs. The loop
+      // itself is provider- and store-agnostic, identical to the chat path.
+      const toolDefinitions = [...this.capabilities.values()].map(({ execute: _execute, ...definition }) => definition);
+      let continuationId: string | undefined;
+      let pendingToolOutputs: Array<{ callId: string; output: unknown }> | undefined;
+      let turn = 0;
+
+      const callModel = async (): Promise<ModelTurn> => {
         this.assertActive(run.runId, controller.signal);
-        await this.store.transition(run.runId, 'running', { currentStep: 'Reason and select the next governed action' });
-        await this.store.append(run.runId, 'model.started', 'Reasoning engine started.', {
+        turn += 1;
+        await sink.transition('running', { currentStep: 'Reason and select the next governed action' });
+        await sink.emit('model.started', 'Reasoning engine started.', {
           provider: this.provider.providerId,
           model: this.provider.modelId,
-          turn: turn + 1,
+          turn,
         });
-
+        const toolOutputs = pendingToolOutputs;
+        pendingToolOutputs = undefined;
         const response = await this.provider.generate({
           instruction: PANETERA_ASSISTANT_INSTRUCTION,
           objective,
           history: request.history || [],
-          tools: [...this.capabilities.values()].map(({ execute: _execute, ...definition }) => definition),
+          tools: toolDefinitions,
           previousResponseId: continuationId,
           toolOutputs,
           signal: controller.signal,
         });
         continuationId = response.continuationId;
-        await this.store.append(run.runId, 'model.completed', 'Reasoning engine returned an operational decision.', {
+        await sink.emit('model.completed', 'Reasoning engine returned an operational decision.', {
           toolCallCount: response.toolCalls.length,
           hasResponseText: Boolean(response.text),
         });
-
-        if (response.toolCalls.length === 0) {
-          finalText = response.text || finalText;
-          reachedFinalResponse = true;
-          break;
-        }
-
-        toolOutputs = [];
-        for (const call of response.toolCalls) {
-          this.assertActive(run.runId, controller.signal);
-          const capability = this.capabilities.get(call.name);
-          if (!capability) {
-            const output = { error: `Capability is not present in the active Rig: ${call.name}` };
-            toolOutputs.push({ callId: call.callId, output });
-            await this.store.append(run.runId, 'tool.failed', `Unavailable capability: ${call.name}`, {
-              capability: call.name,
-            });
-            continue;
-          }
-
-          await this.store.append(run.runId, 'tool.started', `Using ${call.name}.`, {
-            capability: call.name,
-            risk: capability.risk,
-          });
-          try {
-            const result = await capability.execute(call.arguments);
-            toolOutputs.push({ callId: call.callId, output: result.output });
-            if (result.uiComponent) uiComponent = result.uiComponent;
-            await this.recordToolResult(run.runId, call.name, result);
-            if (result.requiresApproval) {
-              awaitingApproval = true;
-              pendingApproval = result.approval;
-            }
-          } catch (error: unknown) {
-            const message = error instanceof Error ? error.message : String(error);
-            toolOutputs.push({ callId: call.callId, output: { error: message } });
-            await this.store.append(run.runId, 'tool.failed', `${call.name} failed.`, {
-              capability: call.name,
-            });
-          }
-        }
         if (response.text) finalText = response.text;
-      }
+        return {
+          text: response.text,
+          toolCalls: response.toolCalls.map((call) => ({ name: call.name, args: call.arguments, id: call.callId })),
+        };
+      };
 
-      if (!reachedFinalResponse) {
+      const executeTool = async (call: LoopToolCall): Promise<ToolExecution> => {
+        this.assertActive(run.runId, controller.signal);
+        const capability = this.capabilities.get(call.name);
+        if (!capability) {
+          await sink.emit('tool.failed', `Unavailable capability: ${call.name}`, { capability: call.name });
+          return { output: { error: `Capability is not present in the active Rig: ${call.name}` } };
+        }
+        await sink.emit('tool.started', `Using ${call.name}.`, { capability: call.name, risk: capability.risk });
+        try {
+          const result = await capability.execute(call.args);
+          if (result.uiComponent) uiComponent = result.uiComponent;
+          await this.recordToolResult(sink, call.name, result);
+          if (result.requiresApproval) {
+            awaitingApproval = true;
+            pendingApproval = result.approval;
+          }
+          return { output: result.output, uiComponent: result.uiComponent };
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : String(error);
+          await sink.emit('tool.failed', `${call.name} failed.`, { capability: call.name });
+          return { output: { error: message } };
+        }
+      };
+
+      const recordToolResult = (call: LoopToolCall, execution: ToolExecution): void => {
+        (pendingToolOutputs ??= []).push({ callId: call.id ?? call.name, output: execution.output });
+      };
+
+      const loopResult = await runToolLoop({ callModel, executeTool, recordToolResult, maxTurns: MAX_MODEL_TURNS });
+      if (loopResult.stopReason === 'budget') {
         throw new Error(`Agent exceeded the ${MAX_MODEL_TURNS}-turn tool limit without reaching a final response.`);
       }
       this.assertActive(run.runId, controller.signal);
@@ -146,16 +155,16 @@ export class AgentRuntime {
           component.data = { ...(component.data as Record<string, unknown>), runId: run.runId };
         }
       }
-      await this.store.append(run.runId, 'response.completed', 'Response prepared.', {
+      await sink.emit('response.completed', 'Response prepared.', {
         awaitingApproval,
       });
-      await this.store.transition(run.runId, status, {
+      await sink.transition(status, {
         currentStep: awaitingApproval ? 'Waiting for exact user approval' : null,
         reply,
         uiComponent,
         pendingApproval,
       });
-      if (!awaitingApproval) await this.store.append(run.runId, 'run.completed', 'Task completed.');
+      if (!awaitingApproval) await sink.emit('run.completed', 'Task completed.');
 
       return {
         runId: run.runId,
@@ -205,14 +214,14 @@ export class AgentRuntime {
     if (signal.aborted || this.store.isCanceled(runId)) throw new Error('Agent run canceled.');
   }
 
-  private async recordToolResult(runId: string, capability: string, result: AgentToolResult): Promise<void> {
-    await this.store.append(runId, 'tool.completed', `${capability} returned observed output.`, {
+  private async recordToolResult(sink: OperatorEventSink, capability: string, result: AgentToolResult): Promise<void> {
+    await sink.emit('tool.completed', `${capability} returned observed output.`, {
       capability,
       evidence: result.evidence || {},
       requiresApproval: Boolean(result.requiresApproval),
     });
     if (result.requiresApproval) {
-      await this.store.append(runId, 'approval.required', 'Exact user approval is required before execution.', {
+      await sink.emit('approval.required', 'Exact user approval is required before execution.', {
         capability,
       });
     }
