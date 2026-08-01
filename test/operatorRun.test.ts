@@ -85,12 +85,55 @@ async function toolProposalReachesWaitingApproval(root: string) {
   assert.strictEqual(store.get(result.runId)?.status, 'waiting-approval');
 }
 
+async function runIdIsAvailableBeforeCompletion(root: string) {
+  const store = new AgentRunStore(root);
+  let runIdAtCreation: string | undefined;
+  const result = await runOperatorAsRun({
+    store,
+    provider: 'openai',
+    model: 'test-model',
+    objective: 'Say hi.',
+    onRunCreated: (id) => { runIdAtCreation = id; },
+    handlers: {
+      callModel: async (): Promise<ModelTurn> => ({ text: 'hi', toolCalls: [] }),
+      executeTool: async (): Promise<OperatorToolOutcome> => ({ output: {} }),
+      recordToolResult: () => undefined,
+    },
+  });
+  assert.strictEqual(runIdAtCreation, result.runId, 'onRunCreated fires with the run id before completion');
+}
+
+async function modelFailureRecordsFailedRun(root: string) {
+  const store = new AgentRunStore(root);
+  let runId: string | undefined;
+  await assert.rejects(
+    runOperatorAsRun({
+      store,
+      provider: 'openai',
+      model: 'test-model',
+      objective: 'Trigger a provider error.',
+      onRunCreated: (id) => { runId = id; },
+      handlers: {
+        callModel: async (): Promise<ModelTurn> => { throw new Error('OpenAI API error: 500'); },
+        executeTool: async (): Promise<OperatorToolOutcome> => ({ output: {} }),
+        recordToolResult: () => undefined,
+      },
+    }),
+    /OpenAI API error/,
+  );
+  assert.ok(runId, 'the run was created before the failure');
+  assert.strictEqual(store.get(runId!)?.status, 'failed', 'a background failure is recorded on the run');
+  assert.ok(store.listEvents(runId!).some((e) => e.type === 'run.failed'), 'run.failed is emitted for SSE consumers');
+}
+
 async function main() {
   console.log('Running operator-run (H3b chat-as-a-run) tests...');
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'panetera-operator-run-'));
   try {
     await plainAnswerReachesCompleted(root);
     await toolProposalReachesWaitingApproval(root);
+    await runIdIsAvailableBeforeCompletion(root);
+    await modelFailureRecordsFailedRun(root);
     console.log('Operator-run tests passed.');
   } finally {
     fs.rmSync(root, { recursive: true, force: true });

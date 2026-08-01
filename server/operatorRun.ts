@@ -42,7 +42,7 @@ export interface OperatorRunHandlers {
 
 export interface OperatorRunResult {
   runId: string;
-  status: 'completed' | 'waiting-approval';
+  status: 'completed' | 'waiting-approval' | 'canceled';
   reply: string;
   uiComponent?: unknown;
 }
@@ -60,12 +60,20 @@ export async function runOperatorAsRun(opts: {
   recordedObjective?: string;
   handlers: OperatorRunHandlers;
   maxTurns?: number;
+  /**
+   * Fired once, right after the run is created, before any model work. The
+   * streaming endpoint uses this to return the runId immediately and let the
+   * loop continue in the background, so the client can subscribe to the run's
+   * SSE and watch events arrive live rather than after completion.
+   */
+  onRunCreated?: (runId: string) => void;
 }): Promise<OperatorRunResult> {
   const run = await opts.store.create({
     objective: (opts.recordedObjective || opts.objective).trim(),
     provider: opts.provider,
     model: opts.model,
   });
+  opts.onRunCreated?.(run.runId);
   const sink = new StoreEventSink(opts.store, run.runId);
 
   let uiComponent: unknown;
@@ -73,6 +81,7 @@ export async function runOperatorAsRun(opts: {
   let pendingApproval: AgentPendingApproval | undefined;
   let turn = 0;
 
+  try {
   await sink.transition('planning', { currentStep: 'Compile bounded context' });
   await sink.emit('run.started', 'PaneTera started the task.');
   await sink.emit('plan.created', 'Answer with governed tools, act only through policy, then report evidence.');
@@ -146,4 +155,17 @@ export async function runOperatorAsRun(opts: {
   if (!awaitingApproval) await sink.emit('run.completed', 'Task completed.');
 
   return { runId: run.runId, status, reply, uiComponent };
+  } catch (error: unknown) {
+    // Record failure onto the run so a background (already-responded) run still
+    // surfaces the failure to the client over SSE, then rethrow for any awaiting
+    // caller. The detailed error is not persisted verbatim.
+    if (opts.store.isCanceled(run.runId)) {
+      const canceled = opts.store.get(run.runId);
+      return { runId: run.runId, status: 'canceled', reply: canceled?.reply || 'Task canceled.' };
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    await sink.transition('failed', { currentStep: null, error: 'The reasoning or capability loop failed.' });
+    await sink.emit('run.failed', 'Task failed.', { errorType: error instanceof Error ? error.name : 'UnknownError' });
+    throw Object.assign(new Error(message), { runId: run.runId });
+  }
 }
