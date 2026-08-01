@@ -2619,18 +2619,25 @@ app.get('/api/evidence', (_req, res) => {
   }
 });
 
-if (process.env.NODE_ENV !== 'test') {
-  app.listen(PORT, '127.0.0.1', () => {
-    console.log(`🚀 PaneTera backend listening on http://127.0.0.1:${PORT}`);
-  });
+const httpServer = process.env.NODE_ENV !== 'test'
+  ? app.listen(PORT, '127.0.0.1', () => {
+      console.log(`🚀 PaneTera backend listening on http://127.0.0.1:${PORT}`);
+    })
+  : null;
+
+// Fast, idempotent shutdown so `tsx watch` restarts and Ctrl+C exit promptly
+// rather than being force-killed after a 5s timeout. Every cleanup step is
+// best-effort and wrapped, so a throwing adapter can never prevent the exit,
+// and a repeated signal is ignored. The unref'd fallback guarantees the process
+// leaves even if a future cleanup step blocks.
+let shuttingDown = false;
+function shutdown(): void {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  setTimeout(() => process.exit(0), 300).unref();
+  try { stopAllWorkspaceAdapters(); } catch { /* best effort on shutdown */ }
+  try { httpServer?.close(); } catch { /* best effort on shutdown */ }
+  process.exit(0);
 }
-
-process.on('SIGINT', () => {
-  stopAllWorkspaceAdapters();
-  process.exit(0);
-});
-
-process.on('SIGTERM', () => {
-  stopAllWorkspaceAdapters();
-  process.exit(0);
-});
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);

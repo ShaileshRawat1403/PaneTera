@@ -152,13 +152,15 @@ export class McpWorkspaceAdapter {
       try {
         const proc = this.childProcess;
         proc.kill('SIGTERM');
+        // Escalate to SIGKILL if it lingers, but unref the timer so it never
+        // keeps this process (or a tsx watch restart) alive on its own.
         setTimeout(() => {
           try {
             if (proc.pid && proc.exitCode === null) {
               proc.kill('SIGKILL');
             }
           } catch {}
-        }, 1000);
+        }, 1000).unref();
       } catch {}
       this.childProcess = null;
     }
