@@ -1215,7 +1215,10 @@ const App: React.FC = () => {
       setLoading(true);
 
       const useWorkspaceOrchestrator = plan.endpoint === 'orchestrator';
-      const endpoint = useWorkspaceOrchestrator ? '/api/orchestrator/chat' : '/api/chat';
+      // H3b: the standard chat path runs as a streaming governed run. The
+      // endpoint returns a runId (or a gateway card); the run renders on the
+      // canvas and streams its governed steps. The orchestrator path is unchanged.
+      const endpoint = useWorkspaceOrchestrator ? '/api/orchestrator/chat' : '/api/chat/stream';
       // plan.message carries the attached material and references. Sending
       // `text` here instead would drop everything the user attached, which is
       // what the chips promise to include.
@@ -1311,6 +1314,38 @@ const App: React.FC = () => {
 
       try {
         const data = await apiPromise;
+
+        // H3b: a streaming run answered with a runId. Show it on the canvas,
+        // where it streams the governed steps live (planning, tool use, approval),
+        // then land the final reply in the transcript once it reaches a terminal
+        // state. A no-tool turn simply ends as a clean reply (the A collapse).
+        if (!useWorkspaceOrchestrator && data.runId) {
+          setActiveComponent({ type: 'AgentRun', data: { runId: data.runId } });
+          setWebPreview(null);
+          setActiveQuery(plan.rawInput);
+          const terminal = ['completed', 'failed', 'canceled', 'waiting-approval', 'interrupted'];
+          let run: any = null;
+          let events: any[] = [];
+          for (let i = 0; i < 600 && !run; i += 1) {
+            const poll = await fetch(`/api/agent/run/${data.runId}`, { headers: { Authorization: `Bearer ${token}` } });
+            if (poll.ok) {
+              const body = await poll.json();
+              if (body?.run && terminal.includes(body.run.status)) { run = body.run; events = body.events || []; break; }
+            }
+            await new Promise((resolve) => setTimeout(resolve, 500));
+          }
+          addMessage({
+            role: 'assistant',
+            content: run?.reply || 'The run ended without a textual reply.',
+            intent: 'run',
+            model: activeModel?.name || activeModel?.id || undefined,
+            toolsUsed: events
+              .filter((e: any) => e.type === 'tool.completed')
+              .map((e: any) => ({ tool: e.data?.capability || 'unknown', status: 'success' as const })),
+          });
+          setActiveReply(run?.reply || null);
+          return;
+        }
 
         const answer = useWorkspaceOrchestrator ? data.answer : data.reply;
         if (data.uiComponent) {
