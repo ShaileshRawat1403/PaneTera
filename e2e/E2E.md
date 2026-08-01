@@ -38,6 +38,11 @@ Use `npm run test:e2e:ui` to watch the journeys run and debug selectors.
   the exact spec, discover capabilities, enable the echo tool, review the
   invocation, approve and run, and confirm the untrusted, provenance-tracked
   result echoes the input. Runs on isolated app-data (see below).
+- `headroom.spec.ts` — a durable Headroom capsule survives a reload and can be
+  resumed: author a capsule from the panel form (title, objective, a decision),
+  reload the app, confirm the capsule is still listed, select and resume it, and
+  confirm the objective flows back and the resume is disclosed. Then delete it.
+  No live model call; the capsule is created straight through the store's API.
 
 ## Isolation
 
@@ -59,7 +64,6 @@ rather than loosening assertions.
 - Project registration and inspection through the native picker (needs the OS
   dialog; belongs to the signed macOS job, or a test hook that bypasses the
   picker).
-- Headroom capsule resume across a reload.
 
 ## CI
 
