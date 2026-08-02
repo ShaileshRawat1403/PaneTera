@@ -2281,6 +2281,33 @@ app.post('/api/orchestrator/chat', async (req: Request, res: Response) => {
     return res.status(500).json({ error: gatewayErr.message || 'Error processing gateway card.' });
   }
 
+  // No project selected: PaneTera answers as a personal operator rather than
+  // demanding one. This is the server-side guarantee behind the client routing
+  // fix — even if a general question reaches this endpoint without a workspace,
+  // it gets a real answer (with recalled memory), never a 'needs project' bounce.
+  if (!workspaceId) {
+    try {
+      const recalled = await memoryBridge.retrieve('workspace').catch(() => [] as string[]);
+      const augmented = recalled.length > 0
+        ? `${message}\n\n[RECALLED CONTEXT from previous sessions]\n${recalled.join('\n')}`
+        : message;
+      const result = await askOpenAI(augmented, [], modelId);
+      return res.json({
+        answer: result.reply,
+        uiComponent: result.uiComponent,
+        mode: 'read-only-orchestrator',
+        intent: 'converse',
+        toolsUsed: [],
+        filesInspected: [],
+        citations: [],
+        suggestedActions: [],
+        warnings: [],
+      });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message || 'Error answering without a workspace.' });
+    }
+  }
+
   const resolveWorkspacePath = async (wId: string) => {
     const catalogPath = getWorkspaceCatalogPath();
     const catalog = JSON.parse(fs.readFileSync(catalogPath, 'utf8')) as { workspaces: any[] };
