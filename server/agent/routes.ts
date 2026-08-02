@@ -150,59 +150,59 @@ function handleRunEvents(req: any, res: any): void {
   res.setHeader('X-Accel-Buffering', 'no');
   res.flushHeaders();
 
-  // Send current state immediately
   const sendEvent = (event: string, data: unknown) => {
     res.write(`event: ${event}\n`);
     res.write(`data: ${JSON.stringify(data)}\n\n`);
   };
 
+  const terminalStatuses = ['completed', 'failed', 'canceled', 'interrupted', 'expired'];
   sendEvent('run', run);
 
-  // If run is already terminal, close immediately
-  const terminalStatuses = ['completed', 'failed', 'canceled', 'interrupted', 'expired'];
+  // If already terminal, deliver the final state and close.
   if (terminalStatuses.includes(run.status)) {
-    sendEvent('done', { status: run.status });
+    sendEvent('done', { status: run.status, reply: run.reply });
     res.end();
     return;
   }
 
-  // Poll for changes and send as SSE
-  let lastEventCount = (store.listEvents(runId) || []).length;
+  // Catch up on anything already recorded, then push each new event the instant
+  // it is appended (or emitted transiently, e.g. model.delta tokens) via the
+  // store's subscription. This replaces 500ms polling, so token text streams
+  // per-fragment instead of in batches, with no disk read per tick.
+  const existing = store.listEvents(runId);
+  if (existing.length > 0) sendEvent('events', existing);
+
   let lastStatus = run.status;
-  const interval = setInterval(() => {
-    const currentRun = store.get(runId);
-    if (!currentRun) {
-      sendEvent('error', { message: 'Run disappeared' });
-      clearInterval(interval);
-      res.end();
-      return;
-    }
+  let closed = false;
+  const keepAlive = setInterval(() => { if (!closed) res.write(': keepalive\n\n'); }, 15_000);
 
-    // Send status change
-    if (currentRun.status !== lastStatus) {
-      lastStatus = currentRun.status;
-      sendEvent('status', { status: currentRun.status, reply: currentRun.reply });
-    }
+  const finish = (status?: string, reply?: string | null) => {
+    if (closed) return;
+    closed = true;
+    if (status) sendEvent('done', { status, reply });
+    clearInterval(keepAlive);
+    unsubscribe();
+    res.end();
+  };
 
-    // Send new events
-    const currentEvents = store.listEvents(runId) || [];
-    if (currentEvents.length > lastEventCount) {
-      const newEvents = currentEvents.slice(lastEventCount);
-      lastEventCount = currentEvents.length;
-      sendEvent('events', newEvents);
+  const unsubscribe = store.subscribe((event) => {
+    if (closed || event.runId !== runId) return;
+    sendEvent('events', [event]);
+    const current = store.get(runId);
+    if (current && current.status !== lastStatus) {
+      lastStatus = current.status;
+      sendEvent('status', { status: current.status, reply: current.reply });
     }
-
-    // Close on terminal status
-    if (terminalStatuses.includes(currentRun.status)) {
-      sendEvent('done', { status: currentRun.status, reply: currentRun.reply });
-      clearInterval(interval);
-      res.end();
+    if (current && terminalStatuses.includes(current.status)) {
+      finish(current.status, current.reply);
     }
-  }, 500);
+  });
 
-  // Clean up on client disconnect
   req.on('close', () => {
-    clearInterval(interval);
+    if (closed) return;
+    closed = true;
+    clearInterval(keepAlive);
+    unsubscribe();
   });
 }
 

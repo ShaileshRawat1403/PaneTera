@@ -67,6 +67,13 @@ export async function runOperatorAsRun(opts: {
    * SSE and watch events arrive live rather than after completion.
    */
   onRunCreated?: (runId: string) => void;
+  /**
+   * H3d token mode: called once with a sink-bound emitter the provider can call
+   * per text fragment. Each call appends a `model.delta` event, so token text
+   * streams over the same sink and SSE as every other run event. Absent in event
+   * mode, where the reply simply lands when the run completes.
+   */
+  onDelta?: (emit: (text: string) => void) => void;
 }): Promise<OperatorRunResult> {
   const run = await opts.store.create({
     objective: (opts.recordedObjective || opts.objective).trim(),
@@ -75,6 +82,7 @@ export async function runOperatorAsRun(opts: {
   });
   opts.onRunCreated?.(run.runId);
   const sink = new StoreEventSink(opts.store, run.runId);
+  opts.onDelta?.((text: string) => { void sink.emit('model.delta', 'Token.', { text }); });
 
   let uiComponent: unknown;
   let awaitingApproval = false;

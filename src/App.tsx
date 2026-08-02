@@ -123,6 +123,10 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [headroomObjective, setHeadroomObjective] = useState<string>('');
   const [activeHeadroomCapsule, setActiveHeadroomCapsule] = useState<HeadroomCapsuleView | null>(null);
+  // H3d: streaming mode preference (event vs token), persisted across sessions.
+  const [tokenStream, setTokenStream] = useState<boolean>(() => {
+    try { return localStorage.getItem('panetera-token-stream') === '1'; } catch { return false; }
+  });
   const [rigRequestKey, setRigRequestKey] = useState(0);
   const [headroomRequestKey, setHeadroomRequestKey] = useState(0);
   const [showEvidenceCanvas, setShowEvidenceCanvas] = useState(false);
@@ -1292,6 +1296,7 @@ const App: React.FC = () => {
             })),
             attachedContext: plan.context,
             modelId: activeModel?.id,
+            tokenStream,
           };
 
       const apiPromise = fetch(endpoint, {
@@ -1320,36 +1325,24 @@ const App: React.FC = () => {
         // then land the final reply in the transcript once it reaches a terminal
         // state. A no-tool turn simply ends as a clean reply (the A collapse).
         if (!useWorkspaceOrchestrator && data.runId) {
-          // Seed a complete, active run shape so the card renders safely and the
-          // polling hook (gated on an active status) starts streaming. A bare
-          // { runId } would leave status/events undefined and crash the card.
+          // Left: one live streaming assistant turn that pulls its text from the
+          // run (token deltas while active, the final reply when done). Right: the
+          // run's events panel. The answer lives in exactly one place, so there is
+          // no left/right duplication. The turn streams itself via the run's SSE,
+          // so no polling here.
           setActiveComponent({
             type: 'AgentRun',
             data: { runId: data.runId, status: 'running', reply: '', events: [], provider: 'openai', model: activeModel?.id || '' },
           });
           setWebPreview(null);
           setActiveQuery(plan.rawInput);
-          const terminal = ['completed', 'failed', 'canceled', 'waiting-approval', 'interrupted'];
-          let run: any = null;
-          let events: any[] = [];
-          for (let i = 0; i < 600 && !run; i += 1) {
-            const poll = await fetch(`/api/agent/run/${data.runId}`, { headers: { Authorization: `Bearer ${token}` } });
-            if (poll.ok) {
-              const body = await poll.json();
-              if (body?.run && terminal.includes(body.run.status)) { run = body.run; events = body.events || []; break; }
-            }
-            await new Promise((resolve) => setTimeout(resolve, 500));
-          }
           addMessage({
             role: 'assistant',
-            content: run?.reply || 'The run ended without a textual reply.',
+            content: '',
             intent: 'run',
             model: activeModel?.name || activeModel?.id || undefined,
-            toolsUsed: events
-              .filter((e: any) => e.type === 'tool.completed')
-              .map((e: any) => ({ tool: e.data?.capability || 'unknown', status: 'success' as const })),
+            streamingRunId: data.runId,
           });
-          setActiveReply(run?.reply || null);
           return;
         }
 
@@ -1840,6 +1833,7 @@ const App: React.FC = () => {
                   message={msg}
                   onSelectFile={handleSelectFile}
                   onSuggestedAction={handleSend}
+                  token={token}
                 />
               ))}
             </Box>
@@ -2213,6 +2207,14 @@ const App: React.FC = () => {
                     </Box>
                     {' · '}{guidance.text}
                   </Typography>
+                  <Button
+                    size="small"
+                    onClick={() => setTokenStream((v) => { const next = !v; try { localStorage.setItem('panetera-token-stream', next ? '1' : '0'); } catch { /* ignore */ } return next; })}
+                    aria-label={`Streaming mode: ${tokenStream ? 'token' : 'event'}. Click to toggle.`}
+                    sx={{ flexShrink: 0, minHeight: 30, px: 1.1, textTransform: 'none', borderRadius: `${radius.sm}px`, fontSize: '0.72rem', color: tokenStream ? accent.violet : ink.secondary, border: `1px solid ${tokenStream ? accent.violet : surface.border}`, '&:hover': { backgroundColor: surface.sunken } }}
+                  >
+                    {tokenStream ? 'Token stream' : 'Event stream'}
+                  </Button>
                   <Button
                     size="small"
                     startIcon={<AutoAwesomeIcon sx={{ fontSize: '14px !important' }} />}

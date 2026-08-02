@@ -31,6 +31,12 @@ export class StoreEventSink implements OperatorEventSink {
   constructor(private readonly store: AgentRunStore, private readonly runId: string) {}
 
   async emit(type: AgentEventType, summary: string, data?: Record<string, unknown>): Promise<void> {
+    // Token fragments stream to live subscribers but are never persisted: one
+    // disk write per token would be O(n^2) and would bloat the durable log.
+    if (type === 'model.delta') {
+      this.store.emitTransient(this.runId, type, summary, data);
+      return;
+    }
     await this.store.append(this.runId, type, summary, data);
   }
 

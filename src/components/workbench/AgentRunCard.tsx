@@ -188,9 +188,11 @@ export function AgentRunCard({ result, onCancel, onApprove }: AgentRunCardProps)
         )}
       </Stack>
 
-      {/* Objective */}
-      <Typography variant="body2" sx={{ color: ink.primary, fontWeight: 600, mb: 1, fontSize: '0.875rem' }}>
-        {result.reply || 'Working on your request...'}
+      {/* This card is the run's events/steps panel. The answer itself streams in
+          the conversation on the left, so we show a short status line here rather
+          than repeating the reply. */}
+      <Typography variant="body2" sx={{ color: ink.secondary, fontWeight: 600, mb: 1, fontSize: '0.8125rem' }}>
+        {hasApproval ? 'Awaiting your approval — review the proposal in the conversation.' : isActive ? 'Working on your request…' : 'Run complete. See the answer in the conversation.'}
       </Typography>
 
       {/* Approval CTA */}

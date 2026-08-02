@@ -15,6 +15,7 @@ export type AgentEventType =
   | 'context.compiled'
   | 'plan.created'
   | 'model.started'
+  | 'model.delta'
   | 'model.completed'
   | 'tool.started'
   | 'tool.completed'

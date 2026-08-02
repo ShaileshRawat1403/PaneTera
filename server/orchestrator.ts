@@ -35,6 +35,12 @@ export interface OrchestratorResponse {
   warnings: string[];
 }
 
+// H3c: an optional event sink so a workspace query can run as a governed run.
+// Each deterministic adapter call emits one event; the caller maps these onto
+// the AgentRunStore so the workspace path gains a runId, history, and audit like
+// the operator path, without changing what the orchestrator returns.
+export type OrchestratorEmit = (type: string, summary: string, data?: Record<string, unknown>) => void;
+
 // Intent Router
 export function classifyIntent(message: string, selectedFile: string | null): string {
   const q = message.toLowerCase().trim();
@@ -170,7 +176,8 @@ export async function handleOrchestratorQuery(
   persona: 'engineer' | 'pm' | 'ba' | 'qa' | 'exec',
   workspacePathResolver: (id: string) => Promise<{ name: string; path: string }>,
   captureId?: string,
-  modelId?: string
+  modelId?: string,
+  emit?: OrchestratorEmit,
 ): Promise<OrchestratorResponse> {
   
   if (!workspaceId) {
@@ -211,14 +218,17 @@ export async function handleOrchestratorQuery(
   }
 
   const runTool = async (toolName: string, args: any = {}): Promise<any> => {
+    emit?.('tool.started', `Using ${toolName}.`, { capability: toolName });
     try {
       const res = await adapter.call(toolName, args);
       toolsUsed.push({ tool: toolName, status: 'success' });
+      emit?.('tool.completed', `${toolName} returned observed output.`, { capability: toolName });
       return res;
     } catch (err: any) {
       const isDenied = err.message?.toLowerCase().includes('denied') || err.message?.toLowerCase().includes('policy');
       const status = isDenied ? 'denied' : 'failed';
       toolsUsed.push({ tool: toolName, status, reason: err.message });
+      emit?.('tool.failed', `${toolName} failed.`, { capability: toolName });
       if (isDenied) {
         warnings.push(`Policy block: Access to tool '${toolName}' with arguments ${JSON.stringify(args)} was denied.`);
       }

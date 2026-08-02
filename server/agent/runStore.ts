@@ -130,6 +130,24 @@ export class AgentRunStore {
     return () => this.listeners.delete(listener);
   }
 
+  // Deliver an event to live subscribers (the SSE stream) without persisting it
+  // or adding it to the durable event log. Used for high-frequency, ephemeral
+  // events like model.delta tokens: persisting each would rewrite runs.json per
+  // token (O(n^2) I/O) and bloat the record. The durable reply still lands via
+  // the terminal transition; only the live token fragments are transient.
+  emitTransient(runId: string, type: AgentEventType, summary: string, data?: Record<string, unknown>): void {
+    const event: AgentEvent = {
+      eventId: randomUUID(),
+      runId,
+      sequence: -1,
+      type,
+      timestamp: new Date().toISOString(),
+      summary: summary.slice(0, 500),
+      ...(data ? { data: sanitiseEventData(data) } : {}),
+    };
+    this.emit(event);
+  }
+
   async cancel(runId: string): Promise<AgentRun> {
     const run = this.requireRun(runId);
     if (TERMINAL.has(run.status)) return structuredClone(run);
