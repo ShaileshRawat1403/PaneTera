@@ -52,57 +52,63 @@ const STATUS_CONFIG: Record<string, { icon: React.ReactNode; color: string; labe
   queued: { icon: <HourglassEmptyIcon sx={{ fontSize: 18 }} />, color: ink.muted, label: 'Queued' },
 };
 
+// The Provenance Ledger: the run's governed steps as a connected vertical spine.
+// Each node carries an icon (color-coded by kind), a mono timestamp, and its
+// summary; the hairline spine threads them. Token deltas are streaming ephemera,
+// never nodes, so they are filtered out.
 function EventTimeline({ events }: { events: AgentEvent[] }) {
   const [expanded, setExpanded] = useState(false);
-  const visibleEvents = expanded ? events : events.slice(-6);
-
-  if (events.length === 0) return null;
+  const nodes = (events || []).filter((event) => event && event.type !== 'model.delta');
+  if (nodes.length === 0) return null;
+  const visible = expanded ? nodes : nodes.slice(-6);
+  const hidden = nodes.length - visible.length;
 
   return (
-    <Box sx={{ mt: 1.5 }}>
-      <Button
-        size="small"
-        onClick={() => setExpanded(!expanded)}
-        sx={{
-          textTransform: 'none',
-          color: ink.muted,
-          fontSize: '0.6875rem',
-          p: 0,
-          minWidth: 0,
-          '&:hover': { color: ink.secondary, backgroundColor: 'transparent' },
-        }}
-      >
-        {expanded ? 'Show less' : `Show ${events.length} events`}
-      </Button>
-      <Stack spacing={0.5} sx={{ mt: 0.5 }}>
-        {visibleEvents.map((event) => (
-          <Box
-            key={event.eventId}
-            sx={{
-              display: 'flex',
-              alignItems: 'flex-start',
-              gap: 1,
-              py: 0.5,
-              px: 1,
-              borderRadius: `${radius.sm}px`,
-              '&:hover': { backgroundColor: surface.sunken },
-            }}
-          >
-            <EventIcon type={event.type} />
-            <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Typography variant="caption" sx={{ color: ink.secondary, fontSize: '0.6875rem', lineHeight: 1.4 }}>
-                {event.summary}
-              </Typography>
+    <Box sx={{ mt: 1.75 }}>
+      <Typography sx={{ color: ink.muted, fontFamily: typography.mono, fontSize: '0.625rem', letterSpacing: '0.04em', mb: 1 }}>
+        GOVERNED STEPS
+      </Typography>
+      {!expanded && hidden > 0 && (
+        <Button
+          size="small"
+          onClick={() => setExpanded(true)}
+          sx={{ textTransform: 'none', color: ink.muted, fontSize: '0.6875rem', p: 0, minWidth: 0, mb: 0.75, '&:hover': { color: ink.secondary, backgroundColor: 'transparent' } }}
+        >
+          {`Show ${hidden} earlier ${hidden === 1 ? 'step' : 'steps'}`}
+        </Button>
+      )}
+      <Box>
+        {visible.map((event, index) => {
+          const isLast = index === visible.length - 1;
+          return (
+            <Box key={event.eventId} sx={{ display: 'flex', gap: 1.25 }}>
+              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 18, flexShrink: 0 }}>
+                <Box sx={{ width: 18, height: 18, borderRadius: '50%', backgroundColor: surface.canvas, border: `1px solid ${surface.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <EventIcon type={event.type} />
+                </Box>
+                {!isLast && <Box sx={{ width: '1px', flex: 1, minHeight: 10, backgroundColor: surface.border, mt: 0.25 }} />}
+              </Box>
+              <Box sx={{ minWidth: 0, pb: isLast ? 0 : 1.25 }}>
+                <Typography sx={{ color: ink.muted, fontFamily: typography.mono, fontSize: '0.625rem', lineHeight: 1.4 }}>
+                  {formatTime(event.timestamp)}
+                </Typography>
+                <Typography sx={{ color: ink.secondary, fontSize: '0.75rem', lineHeight: 1.5 }}>
+                  {event.summary}
+                </Typography>
+              </Box>
             </Box>
-            <Typography
-              variant="caption"
-              sx={{ color: ink.muted, fontFamily: typography.mono, fontSize: '0.625rem', flexShrink: 0 }}
-            >
-              {formatTime(event.timestamp)}
-            </Typography>
-          </Box>
-        ))}
-      </Stack>
+          );
+        })}
+      </Box>
+      {expanded && nodes.length > 6 && (
+        <Button
+          size="small"
+          onClick={() => setExpanded(false)}
+          sx={{ textTransform: 'none', color: ink.muted, fontSize: '0.6875rem', p: 0, minWidth: 0, mt: 0.5, '&:hover': { color: ink.secondary, backgroundColor: 'transparent' } }}
+        >
+          Show less
+        </Button>
+      )}
     </Box>
   );
 }
@@ -120,7 +126,7 @@ function EventIcon({ type }: { type: string }) {
     'run.failed': <ErrorIcon sx={{ fontSize: 14, color: status.danger }} />,
     'run.canceled': <CancelIcon sx={{ fontSize: 14, color: ink.muted }} />,
   };
-  return <Box sx={{ display: 'flex', mt: 0.125 }}>{iconMap[type] || <Box sx={{ width: 14, height: 14 }} />}</Box>;
+  return <Box sx={{ display: 'flex' }}>{iconMap[type] || <Box sx={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: ink.muted }} />}</Box>;
 }
 
 function formatTime(iso: string): string {
