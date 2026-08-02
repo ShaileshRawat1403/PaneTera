@@ -53,9 +53,14 @@ function StreamingReply({ runId, token }: { runId: string; token: string }): Rea
   const finalReply = typeof run.reply === 'string' ? run.reply : '';
   const text = finalReply || deltaText;
   const streaming = Boolean(run.status && ACTIVE_RUN_STATUSES.has(run.status));
+  const terminal = Boolean(run.status && !ACTIVE_RUN_STATUSES.has(run.status));
 
   if (!text) {
-    return <Typography variant="body2" sx={{ color: ink.secondary, fontSize: '0.875rem' }}>Working on your request…</Typography>;
+    return (
+      <Typography variant="body2" sx={{ color: ink.secondary, fontSize: '0.875rem' }}>
+        {run.status === 'failed' ? 'The run failed before producing a reply.' : terminal ? 'The run ended without a reply.' : 'Working on your request…'}
+      </Typography>
+    );
   }
   return (
     <Box>
