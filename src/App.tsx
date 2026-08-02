@@ -1320,7 +1320,13 @@ const App: React.FC = () => {
         // then land the final reply in the transcript once it reaches a terminal
         // state. A no-tool turn simply ends as a clean reply (the A collapse).
         if (!useWorkspaceOrchestrator && data.runId) {
-          setActiveComponent({ type: 'AgentRun', data: { runId: data.runId } });
+          // Seed a complete, active run shape so the card renders safely and the
+          // polling hook (gated on an active status) starts streaming. A bare
+          // { runId } would leave status/events undefined and crash the card.
+          setActiveComponent({
+            type: 'AgentRun',
+            data: { runId: data.runId, status: 'running', reply: '', events: [], provider: 'openai', model: activeModel?.id || '' },
+          });
           setWebPreview(null);
           setActiveQuery(plan.rawInput);
           const terminal = ['completed', 'failed', 'canceled', 'waiting-approval', 'interrupted'];
