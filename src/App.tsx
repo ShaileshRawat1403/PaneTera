@@ -1332,7 +1332,16 @@ const App: React.FC = () => {
           // so no polling here.
           setActiveComponent({
             type: 'AgentRun',
-            data: { runId: data.runId, status: 'running', reply: '', events: [], provider: 'openai', model: activeModel?.id || '' },
+            data: {
+              runId: data.runId, status: 'running', reply: '', events: [], provider: 'openai', model: activeModel?.id || '',
+              // The run readout: what the operator was working from this turn. The
+              // client knows this at send time; the card shows it as the receipt.
+              readout: {
+                project: activeWorkspace?.name || null,
+                headroom: Boolean(activeHeadroomCapsule),
+                attachments: Array.isArray(plan.context) ? plan.context.length : 0,
+              },
+            },
           });
           setWebPreview(null);
           setActiveQuery(plan.rawInput);

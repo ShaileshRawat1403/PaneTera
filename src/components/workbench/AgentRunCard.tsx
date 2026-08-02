@@ -35,6 +35,7 @@ interface AgentRunResult {
   model: string;
   events: AgentEvent[];
   pendingApproval?: { kind?: string; approvalId?: string; capability?: string; summary?: string };
+  readout?: { project?: string | null; headroom?: boolean; attachments?: number };
 }
 
 interface AgentRunCardProps {
@@ -143,6 +144,35 @@ export function AgentRunCard({ result, onCancel, onApprove }: AgentRunCardProps)
   const statusCfg = STATUS_CONFIG[result.status] || STATUS_CONFIG.queued;
   const isActive = result.status === 'running' || result.status === 'planning' || result.status === 'queued';
   const hasApproval = result.status === 'waiting-approval';
+  const [copied, setCopied] = useState(false);
+
+  // Run facts, derived from the governed events. Duration ticks live while active.
+  const nodes = (result.events || []).filter((event) => event && event.type !== 'model.delta');
+  const times = nodes.map((event) => Date.parse(event.timestamp)).filter((n) => !Number.isNaN(n));
+  const startedAt = times.length ? Math.min(...times) : 0;
+  const endedAt = isActive ? Date.now() : (times.length ? Math.max(...times) : 0);
+  const durationMs = startedAt && endedAt ? Math.max(0, endedAt - startedAt) : 0;
+  const durationLabel = durationMs < 1000 ? `${durationMs}ms` : `${(durationMs / 1000).toFixed(1)}s`;
+  const modelTurns = nodes.filter((event) => event.type === 'model.started').length;
+  const toolCount = nodes.filter((event) => event.type === 'tool.completed').length;
+  const showLedger = toolCount > 0 || hasApproval;
+
+  const contextParts: string[] = [];
+  if (result.readout) {
+    contextParts.push(result.readout.project ? `Project: ${result.readout.project}` : 'No project attached');
+    if (result.readout.headroom) contextParts.push('Headroom active');
+    if (result.readout.attachments && result.readout.attachments > 0) {
+      contextParts.push(`${result.readout.attachments} attachment${result.readout.attachments === 1 ? '' : 's'}`);
+    }
+  }
+
+  const copyAnswer = () => {
+    try {
+      void navigator.clipboard.writeText(result.reply || '');
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch { /* clipboard unavailable */ }
+  };
 
   return (
     <Box
@@ -195,9 +225,36 @@ export function AgentRunCard({ result, onCancel, onApprove }: AgentRunCardProps)
         )}
       </Stack>
 
-      {/* This card is the run's events/steps panel. The answer itself streams in
-          the conversation on the left, so we show a short status line here rather
-          than repeating the reply. */}
+      {/* Run readout: the receipt for how the answer was made — timing, grounding,
+          and the context it worked from. Never the answer itself, so the two
+          planes never duplicate. */}
+      <Typography sx={{ color: ink.muted, fontFamily: typography.mono, fontSize: '0.6875rem', mb: 0.75 }}>
+        {durationLabel} · {nodes.length} {nodes.length === 1 ? 'step' : 'steps'}{modelTurns > 1 ? ` · ${modelTurns} model turns` : ''}
+      </Typography>
+      <Stack direction="row" alignItems="center" spacing={0.75} sx={{ mb: contextParts.length ? 0.5 : 0 }}>
+        <Box sx={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: toolCount > 0 ? status.success : ink.muted, flexShrink: 0 }} />
+        <Typography sx={{ color: ink.secondary, fontSize: '0.75rem' }}>
+          {toolCount > 0
+            ? `Grounded in ${toolCount} tool ${toolCount === 1 ? 'result' : 'results'}`
+            : 'Answered from model knowledge, no tools or files'}
+        </Typography>
+      </Stack>
+      {contextParts.length > 0 && (
+        <Typography sx={{ color: ink.muted, fontSize: '0.6875rem' }}>
+          {contextParts.join(' · ')}
+        </Typography>
+      )}
+      {result.reply && !isActive && (
+        <Stack direction="row" spacing={1} sx={{ mt: 1.25 }}>
+          <Button
+            size="small"
+            onClick={copyAnswer}
+            sx={{ textTransform: 'none', color: ink.secondary, fontSize: '0.6875rem', minHeight: 26, borderRadius: `${radius.sm}px`, border: `1px solid ${surface.border}`, px: 1, '&:hover': { backgroundColor: surface.sunken } }}
+          >
+            {copied ? 'Copied' : 'Copy answer'}
+          </Button>
+        </Stack>
+      )}
 
       {/* Approval ceremony: the one place the run slows down on purpose. The
           exact proposed action and its risk are shown deliberately, with a
@@ -242,8 +299,10 @@ export function AgentRunCard({ result, onCancel, onApprove }: AgentRunCardProps)
         </Box>
       )}
 
-      {/* Event Timeline */}
-      <EventTimeline events={result.events} />
+      {/* The ledger appears only when the turn did something governed worth
+          inspecting — a tool call or an approval. A plain answer stays a clean
+          readout with no boilerplate step list. */}
+      {showLedger && <EventTimeline events={result.events} />}
 
       {/* ID footer */}
       <Typography
