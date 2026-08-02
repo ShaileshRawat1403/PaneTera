@@ -9,12 +9,33 @@
 // The assembly is a pure accumulator so it is unit-tested without any network:
 // feed it the JSON of each `data:` line, then call finish().
 
+import type { TokenUsage } from './agentLoop';
+
 export interface StreamedTurn {
   content: string;
   toolCalls: Array<{ id: string; name: string; args: Record<string, unknown> }>;
   // Shaped exactly like the non-stream assistant message so it can be pushed to
   // the conversation and the next turn sees the same history.
   assistantMessage: Record<string, unknown>;
+  // Token usage, present when the request asked for it (stream_options:
+  // include_usage). Null on the non-usage or malformed path.
+  usage: TokenUsage | null;
+}
+
+// Maps OpenAI's raw usage object ({ prompt_tokens, completion_tokens,
+// total_tokens }) to the readout's shape. Shared by the stream and non-stream
+// paths so token accounting is identical either way. Returns null for anything
+// that is not a well-formed usage object.
+export function normalizeUsage(raw: unknown): TokenUsage | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const u = raw as Record<string, unknown>;
+  const prompt = typeof u.prompt_tokens === 'number' ? u.prompt_tokens : undefined;
+  const completion = typeof u.completion_tokens === 'number' ? u.completion_tokens : undefined;
+  const total = typeof u.total_tokens === 'number' ? u.total_tokens : undefined;
+  if (prompt === undefined && completion === undefined && total === undefined) return null;
+  const p = prompt ?? 0;
+  const c = completion ?? 0;
+  return { prompt: p, completion: c, total: total ?? p + c };
 }
 
 function safeJsonObject(value: string): Record<string, unknown> {
@@ -33,12 +54,20 @@ function safeJsonObject(value: string): Record<string, unknown> {
 export class ChatStreamAccumulator {
   private content = '';
   private readonly tools = new Map<number, { id: string; name: string; args: string }>();
+  private usage: TokenUsage | null = null;
 
   push(dataLine: string, onDelta?: (fragment: string) => void): void {
     const line = dataLine.trim();
     if (!line || line === '[DONE]') return;
     let json: any;
     try { json = JSON.parse(line); } catch { return; }
+    // With stream_options.include_usage, OpenAI sends a final chunk whose
+    // `choices` is empty and which carries `usage`. Capture it before the delta
+    // guard below returns early on that very chunk.
+    if (json?.usage) {
+      const normalized = normalizeUsage(json.usage);
+      if (normalized) this.usage = normalized;
+    }
     const delta = json?.choices?.[0]?.delta;
     if (!delta) return;
 
@@ -69,7 +98,7 @@ export class ChatStreamAccumulator {
         function: { name: tool.name, arguments: tool.args },
       }));
     }
-    return { content: this.content, toolCalls, assistantMessage };
+    return { content: this.content, toolCalls, assistantMessage, usage: this.usage };
   }
 }
 

@@ -13,6 +13,7 @@ import { accent, elevation, ink, radius, status, surface, typography } from '../
 import { enterStyles, transition } from '../../theme/motion';
 import { MarkdownText } from '../MarkdownText';
 import { useAgentRunPolling } from '../../hooks/useAgentRunPolling';
+import { useSmoothStream } from '../../hooks/useSmoothStream';
 
 export interface TranscriptMessage {
   role: 'user' | 'assistant';
@@ -55,6 +56,14 @@ function StreamingReply({ runId, token }: { runId: string; token: string }): Rea
   const streaming = Boolean(run.status && ACTIVE_RUN_STATUSES.has(run.status));
   const terminal = Boolean(run.status && !ACTIVE_RUN_STATUSES.has(run.status));
 
+  // Pace the reveal so bursty SSE arrivals paint as smooth per-token text. Once
+  // the durable reply is in (or the run reached a terminal state), show it whole
+  // so the answer never lags behind. Event mode has no deltas, so `text` only
+  // becomes non-empty at the end and lands whole, exactly as before.
+  const done = Boolean(finalReply) || terminal;
+  const revealed = useSmoothStream(text, done);
+  const displayText = done ? text : revealed;
+
   if (!text) {
     return (
       <Typography variant="body2" sx={{ color: ink.secondary, fontSize: '0.875rem' }}>
@@ -64,7 +73,7 @@ function StreamingReply({ runId, token }: { runId: string; token: string }): Rea
   }
   return (
     <Box>
-      <MarkdownText content={text} />
+      <MarkdownText content={displayText} />
       {streaming && (
         <Typography component="span" sx={{ color: accent.violet, fontSize: '0.875rem', ml: 0.25 }}>▍</Typography>
       )}

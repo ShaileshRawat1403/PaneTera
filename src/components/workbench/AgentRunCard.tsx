@@ -157,6 +157,22 @@ export function AgentRunCard({ result, onCancel, onApprove }: AgentRunCardProps)
   const toolCount = nodes.filter((event) => event.type === 'tool.completed').length;
   const showLedger = toolCount > 0 || hasApproval;
 
+  // Token accounting, summed across the run's model turns. Present only when the
+  // provider reported usage; a run with no usage simply omits the line.
+  const usageTotals = nodes.reduce(
+    (acc, event) => {
+      const usage = event.data?.usage as { prompt?: number; completion?: number; total?: number } | undefined;
+      if (usage) {
+        acc.prompt += usage.prompt || 0;
+        acc.completion += usage.completion || 0;
+        acc.total += usage.total || 0;
+        acc.seen = true;
+      }
+      return acc;
+    },
+    { prompt: 0, completion: 0, total: 0, seen: false },
+  );
+
   const contextParts: string[] = [];
   if (result.readout) {
     contextParts.push(result.readout.project ? `Project: ${result.readout.project}` : 'No project attached');
@@ -228,8 +244,11 @@ export function AgentRunCard({ result, onCancel, onApprove }: AgentRunCardProps)
       {/* Run readout: the receipt for how the answer was made — timing, grounding,
           and the context it worked from. Never the answer itself, so the two
           planes never duplicate. */}
-      <Typography sx={{ color: ink.muted, fontFamily: typography.mono, fontSize: '0.6875rem', mb: 0.75 }}>
-        {durationLabel} · {nodes.length} {nodes.length === 1 ? 'step' : 'steps'}{modelTurns > 1 ? ` · ${modelTurns} model turns` : ''}
+      <Typography
+        sx={{ color: ink.muted, fontFamily: typography.mono, fontSize: '0.6875rem', mb: 0.75 }}
+        title={usageTotals.seen ? `${usageTotals.prompt.toLocaleString()} prompt · ${usageTotals.completion.toLocaleString()} completion` : undefined}
+      >
+        {durationLabel} · {nodes.length} {nodes.length === 1 ? 'step' : 'steps'}{modelTurns > 1 ? ` · ${modelTurns} model turns` : ''}{usageTotals.seen ? ` · ${usageTotals.total.toLocaleString()} tokens` : ''}
       </Typography>
       <Stack direction="row" alignItems="center" spacing={0.75} sx={{ mb: contextParts.length ? 0.5 : 0 }}>
         <Box sx={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: toolCount > 0 ? status.success : ink.muted, flexShrink: 0 }} />
