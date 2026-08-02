@@ -123,6 +123,10 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [headroomObjective, setHeadroomObjective] = useState<string>('');
   const [activeHeadroomCapsule, setActiveHeadroomCapsule] = useState<HeadroomCapsuleView | null>(null);
+  // H3d: streaming mode preference (event vs token), persisted across sessions.
+  const [tokenStream, setTokenStream] = useState<boolean>(() => {
+    try { return localStorage.getItem('panetera-token-stream') === '1'; } catch { return false; }
+  });
   const [rigRequestKey, setRigRequestKey] = useState(0);
   const [headroomRequestKey, setHeadroomRequestKey] = useState(0);
   const [showEvidenceCanvas, setShowEvidenceCanvas] = useState(false);
@@ -1292,6 +1296,7 @@ const App: React.FC = () => {
             })),
             attachedContext: plan.context,
             modelId: activeModel?.id,
+            tokenStream,
           };
 
       const apiPromise = fetch(endpoint, {
@@ -2213,6 +2218,14 @@ const App: React.FC = () => {
                     </Box>
                     {' · '}{guidance.text}
                   </Typography>
+                  <Button
+                    size="small"
+                    onClick={() => setTokenStream((v) => { const next = !v; try { localStorage.setItem('panetera-token-stream', next ? '1' : '0'); } catch { /* ignore */ } return next; })}
+                    aria-label={`Streaming mode: ${tokenStream ? 'token' : 'event'}. Click to toggle.`}
+                    sx={{ flexShrink: 0, minHeight: 30, px: 1.1, textTransform: 'none', borderRadius: `${radius.sm}px`, fontSize: '0.72rem', color: tokenStream ? accent.violet : ink.secondary, border: `1px solid ${tokenStream ? accent.violet : surface.border}`, '&:hover': { backgroundColor: surface.sunken } }}
+                  >
+                    {tokenStream ? 'Token stream' : 'Event stream'}
+                  </Button>
                   <Button
                     size="small"
                     startIcon={<AutoAwesomeIcon sx={{ fontSize: '14px !important' }} />}

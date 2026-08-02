@@ -944,7 +944,20 @@ export const InteractiveComponent: React.FC<ComponentProps> = ({ uiComponent, on
     const runId = data?.runId || data?.run?.runId || null;
     const isActive = ['queued', 'planning', 'running', 'waiting-approval', 'verifying'].includes(data?.status || data?.run?.status || '');
     const { data: polledData } = useAgentRunPolling(isActive ? runId : null, token);
-    const displayData = polledData?.run ? { ...data, ...polledData.run, events: polledData.run.events || data.events } : data;
+    const merged = polledData?.run ? { ...data, ...polledData.run, events: polledData.run.events || data.events } : data;
+    // H3d token mode: fold model.delta fragments into a live reply, and keep the
+    // (potentially hundreds of) delta events out of the visible timeline. All
+    // guarded so a malformed event can never crash the card.
+    const mergedEvents: any[] = Array.isArray(merged.events) ? merged.events : [];
+    const deltaText = mergedEvents
+      .filter((e: any) => e?.type === 'model.delta')
+      .map((e: any) => (typeof e?.data?.text === 'string' ? e.data.text : ''))
+      .join('');
+    const displayData = {
+      ...merged,
+      reply: (typeof merged.reply === 'string' && merged.reply.length > 0) ? merged.reply : deltaText,
+      events: mergedEvents.filter((e: any) => e?.type !== 'model.delta'),
+    };
     return (
       <AgentRunCard
         result={displayData}

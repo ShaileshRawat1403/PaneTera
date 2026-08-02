@@ -44,6 +44,7 @@ import { agentRouter, getAgentRunStore } from './agent/routes';
 import { AgentRunStore } from './agent/runStore';
 import { StoreEventSink } from './agent/operatorSink';
 import { runOperatorAsRun, type OperatorRunResult } from './operatorRun';
+import { readOpenAIStream } from './openaiStream';
 import { modelRouter } from './modelRoutes';
 import { schemaRouter } from './schema/routes';
 import { registerItOpsDomain } from './domains/itops/tools';
@@ -1148,7 +1149,12 @@ async function askGemini(query: string, history: any[] = [], modelId?: string): 
 // (askOpenAI) and the streaming run path (askOpenAIAsRun) drive the exact same
 // model adapter, tool set, and result recording. Nothing about the operator's
 // behavior changes between the two; only the surrounding run/stream differs.
-function buildOpenAIOperator(query: string, history: any[] = [], modelId?: string): {
+function buildOpenAIOperator(
+  query: string,
+  history: any[] = [],
+  modelId?: string,
+  streamOpts?: { stream?: boolean; onDelta?: (fragment: string) => void },
+): {
   callModel: () => Promise<ModelTurn>;
   recordToolResult: (call: AgentToolCall, execution: ToolExecution) => void;
   capIndex: Map<string, AgentCapability>;
@@ -1278,14 +1284,23 @@ function buildOpenAIOperator(query: string, history: any[] = [], modelId?: strin
 
   const stripEmoji = (s: string) => s.replace(/[\u{1F300}-\u{1F9FF}]|[\u{1F600}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu, '');
 
+  const useStream = Boolean(streamOpts?.stream);
   const callOpenAI = async (): Promise<ModelTurn> => {
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({ model: resolvedModel, messages: messagesPayload, tools, tool_choice: 'auto' })
+      body: JSON.stringify({ model: resolvedModel, messages: messagesPayload, tools, tool_choice: 'auto', ...(useStream ? { stream: true } : {}) })
     });
     if (!response.ok) {
       throw new Error(`OpenAI API error: ${response.status} - ${await response.text()}`);
+    }
+    // Token mode: consume the SSE stream, surface each fragment via onDelta, and
+    // reassemble the same assistant message + tool calls the non-stream path builds.
+    if (useStream) {
+      const turn = await readOpenAIStream(response as { body: ReadableStream<Uint8Array> | null }, streamOpts?.onDelta);
+      messagesPayload.push(turn.assistantMessage);
+      const toolCalls: AgentToolCall[] = turn.toolCalls.map((tc) => ({ id: tc.id, name: tc.name, args: tc.args }));
+      return { text: stripEmoji(turn.content || ''), toolCalls };
     }
     const data = await response.json();
     const assistantMessage = data.choices?.[0]?.message;
@@ -1331,8 +1346,16 @@ async function askOpenAIAsRun(
   store: AgentRunStore,
   onRunCreated: (runId: string) => void,
   recordedObjective?: string,
+  tokenStream = false,
 ): Promise<OperatorRunResult> {
-  const { callModel, recordToolResult, capIndex } = buildOpenAIOperator(query, history, modelId);
+  // The provider's onDelta needs the run's sink, which does not exist until the
+  // run is created inside runOperatorAsRun. This holder bridges the two: the run
+  // hands us a sink-bound emitter, and the provider calls it per fragment.
+  let emitDelta: ((text: string) => void) | undefined;
+  const { callModel, recordToolResult, capIndex } = buildOpenAIOperator(query, history, modelId, {
+    stream: tokenStream,
+    onDelta: tokenStream ? (fragment) => emitDelta?.(fragment) : undefined,
+  });
   return runOperatorAsRun({
     store,
     provider: 'openai',
@@ -1341,6 +1364,7 @@ async function askOpenAIAsRun(
     recordedObjective,
     handlers: { callModel, executeTool: makeOperatorExecuteTool(capIndex), recordToolResult },
     onRunCreated,
+    onDelta: tokenStream ? (emit) => { emitDelta = emit; } : undefined,
   });
 }
 
@@ -2320,7 +2344,7 @@ app.post('/api/orchestrator/chat', async (req: Request, res: Response) => {
 // lets the loop stream in the background. The client subscribes to the run's
 // SSE (/api/agent/run/:runId/events) to watch the governed steps arrive live.
 app.post('/api/chat/stream', async (req, res) => {
-  const { query, history, modelId } = req.body as { query: string; history?: any[]; modelId?: string };
+  const { query, history, modelId, tokenStream } = req.body as { query: string; history?: any[]; modelId?: string; tokenStream?: boolean };
   if (!query || !query.trim()) {
     return res.status(400).json({ error: 'query missing' });
   }
@@ -2349,7 +2373,7 @@ app.post('/api/chat/stream', async (req, res) => {
 
   try {
     const runId = await new Promise<string>((resolve, reject) => {
-      askOpenAIAsRun(augmentedQuery, history || [], modelId, store, resolve, query).catch(reject);
+      askOpenAIAsRun(augmentedQuery, history || [], modelId, store, resolve, query, Boolean(tokenStream)).catch(reject);
     });
     return res.status(202).json({ runId });
   } catch (err: any) {
