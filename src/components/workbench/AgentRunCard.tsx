@@ -198,11 +198,6 @@ export function AgentRunCard({ result, onCancel, onApprove }: AgentRunCardProps)
       {/* This card is the run's events/steps panel. The answer itself streams in
           the conversation on the left, so we show a short status line here rather
           than repeating the reply. */}
-      {!hasApproval && (
-        <Typography variant="body2" sx={{ color: ink.secondary, fontWeight: 600, mb: 1, fontSize: '0.8125rem' }}>
-          {isActive ? 'Working on your request…' : 'Run complete. See the answer in the conversation.'}
-        </Typography>
-      )}
 
       {/* Approval ceremony: the one place the run slows down on purpose. The
           exact proposed action and its risk are shown deliberately, with a

@@ -135,7 +135,7 @@ export const TranscriptTurn: React.FC<Props> = ({ message, onSelectFile, onSugge
             letterSpacing: '0.02em',
           }}
         >
-          {isUser ? '👤 You' : '⚡ PaneTera'}
+          {isUser ? 'You' : 'PaneTera'}
         </Typography>
         {!isUser && message.model && (
           <Typography
