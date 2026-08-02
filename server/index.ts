@@ -42,6 +42,7 @@ import { nativeRouter } from './native/routes';
 import { tesseraRouter } from './tessera/routes';
 import { agentRouter, getAgentRunStore } from './agent/routes';
 import { AgentRunStore } from './agent/runStore';
+import { StoreEventSink } from './agent/operatorSink';
 import { runOperatorAsRun, type OperatorRunResult } from './operatorRun';
 import { modelRouter } from './modelRoutes';
 import { schemaRouter } from './schema/routes';
@@ -2264,6 +2265,26 @@ app.post('/api/orchestrator/chat', async (req: Request, res: Response) => {
     return { name: found.name, path: found.path };
   };
 
+  // H3c: run the workspace query as a governed run so it gains a runId, an event
+  // log (one event per adapter tool call), history, and audit like the operator
+  // path, and surfaces in Activity. The client contract is unchanged: the full
+  // response is still returned synchronously, now with a runId alongside it.
+  const store = getAgentRunStore();
+  let sink: StoreEventSink | null = null;
+  let runId: string | null = null;
+  if (store && workspaceId) {
+    try {
+      const run = await store.create({ objective: message.slice(0, 8_000), provider: 'orchestrator', model: modelId || 'workspace' });
+      runId = run.runId;
+      sink = new StoreEventSink(store, runId);
+      await sink.transition('running', { currentStep: 'Inspecting the workspace' });
+      await sink.emit('run.started', 'PaneTera started the workspace task.');
+    } catch { sink = null; runId = null; /* governance is best-effort; never block the answer */ }
+  }
+  const emit = sink
+    ? (type: string, summary: string, data?: Record<string, unknown>) => { void sink!.emit(type as never, summary, data); }
+    : undefined;
+
   try {
     const response = await handleOrchestratorQuery(
       message,
@@ -2272,10 +2293,22 @@ app.post('/api/orchestrator/chat', async (req: Request, res: Response) => {
       persona || 'engineer',
       resolveWorkspacePath,
       captureId,
-      modelId
+      modelId,
+      emit,
     );
-    res.json(response);
+    if (sink) {
+      await sink.emit('response.completed', 'Response prepared.', { toolCount: response.toolsUsed.length });
+      await sink.transition('completed', { reply: response.answer, currentStep: null });
+      await sink.emit('run.completed', 'Task completed.');
+    }
+    res.json(runId ? { ...response, runId } : response);
   } catch (err: any) {
+    if (sink) {
+      try {
+        await sink.transition('failed', { currentStep: null, error: 'The workspace query failed.' });
+        await sink.emit('run.failed', 'Task failed.');
+      } catch { /* best effort */ }
+    }
     res.status(500).json({ error: err.message || 'Error processing query.' });
   }
 });
