@@ -53,8 +53,12 @@ describe('slash and natural language equivalence', () => {
 
   for (const [family, slashForm, naturalForm] of dualDoorPairs) {
     it(`produces identical decisions for ${family}`, () => {
-      const slash = resolveIntent(slashForm);
-      const natural = resolveIntent(naturalForm);
+      // Inspecting an artifact only routes to the workspace orchestrator when a
+      // project is open; with none, natural language is conversational by design,
+      // so the artifact equivalence is exercised with a workspace present.
+      const ctx = family === 'artifact' ? { ...FULL, hasWorkspace: true } : FULL;
+      const slash = resolveIntent(slashForm, ctx);
+      const natural = resolveIntent(naturalForm, ctx);
 
       assert.strictEqual(slash.family, family);
       assert.deepStrictEqual(
@@ -64,6 +68,13 @@ describe('slash and natural language equivalence', () => {
       );
     });
   }
+
+  it('inspect phrasing with no project is conversational, not a workspace bounce', () => {
+    // Without a project, PaneTera answers as a personal operator rather than
+    // demanding one, so natural-language inspect resolves to converse.
+    const envelope = resolveIntent('inspect App.tsx', { ...FULL, hasWorkspace: false });
+    assert.strictEqual(envelope.family, 'converse');
+  });
 
   it('produces identical decisions for /open <url> and open <url>', () => {
     const slash = resolveIntent('/open https://example.com');
