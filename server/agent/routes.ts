@@ -158,20 +158,22 @@ function handleRunEvents(req: any, res: any): void {
   const terminalStatuses = ['completed', 'failed', 'canceled', 'interrupted', 'expired'];
   sendEvent('run', run);
 
-  // If already terminal, deliver the final state and close.
+  // Deliver the recorded governed steps first, so even a run that already
+  // finished (fast chats complete before the client subscribes) populates the
+  // readout and ledger before we close.
+  const existing = store.listEvents(runId);
+  if (existing.length > 0) sendEvent('events', existing);
+
+  // If already terminal, close after the catch-up.
   if (terminalStatuses.includes(run.status)) {
     sendEvent('done', { status: run.status, reply: run.reply });
     res.end();
     return;
   }
 
-  // Catch up on anything already recorded, then push each new event the instant
-  // it is appended (or emitted transiently, e.g. model.delta tokens) via the
-  // store's subscription. This replaces 500ms polling, so token text streams
-  // per-fragment instead of in batches, with no disk read per tick.
-  const existing = store.listEvents(runId);
-  if (existing.length > 0) sendEvent('events', existing);
-
+  // Then push each new event the instant it is appended (or emitted transiently,
+  // e.g. model.delta tokens) via the store's subscription. This replaces 500ms
+  // polling, so token text streams per-fragment with no disk read per tick.
   let lastStatus = run.status;
   let closed = false;
   const keepAlive = setInterval(() => { if (!closed) res.write(': keepalive\n\n'); }, 15_000);
