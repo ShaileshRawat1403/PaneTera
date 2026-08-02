@@ -18,6 +18,7 @@
 import { AgentRunStore } from './agent/runStore';
 import { StoreEventSink } from './agent/operatorSink';
 import type { AgentPendingApproval } from './agent/types';
+import { deriveProvenanceScaffold } from './provenance';
 import {
   runToolLoop,
   type ModelTurn,
@@ -106,6 +107,9 @@ export async function runOperatorAsRun(opts: {
     await sink.emit('model.completed', 'Reasoning engine returned an operational decision.', {
       toolCallCount: modelTurn.toolCalls.length,
       hasResponseText: Boolean(modelTurn.text),
+      // Per-turn token usage, when the provider reports it. The readout sums
+      // these across turns; absent on providers or paths that omit usage.
+      ...(modelTurn.usage ? { usage: modelTurn.usage } : {}),
     });
     return modelTurn;
   };
@@ -153,12 +157,20 @@ export async function runOperatorAsRun(opts: {
     }
   }
 
+  // Provenance groundwork: only the completed path has a finished reply worth
+  // attributing. Waiting-approval runs continue past this transition into
+  // another turn, so their reply (and any provenance) is not final yet.
+  const provenance = awaitingApproval
+    ? undefined
+    : deriveProvenanceScaffold(run.runId, opts.store.listEvents(run.runId), reply);
+
   await sink.emit('response.completed', 'Response prepared.', { awaitingApproval });
   await sink.transition(status, {
     currentStep: awaitingApproval ? 'Waiting for exact user approval' : null,
     reply,
     uiComponent,
     pendingApproval,
+    ...(provenance ? { provenance } : {}),
   });
   if (!awaitingApproval) await sink.emit('run.completed', 'Task completed.');
 

@@ -1,3 +1,5 @@
+import type { AnswerProvenance } from '../provenance';
+
 export type AgentRunStatus =
   | 'queued'
   | 'planning'
@@ -54,6 +56,9 @@ export interface AgentRun {
   uiComponent?: unknown;
   pendingApproval?: AgentPendingApproval;
   error?: string;
+  /** Claim-to-event attribution scaffold for the reply. Empty attributions
+   * until a model-side pass emits claims; see server/provenance.ts. */
+  provenance?: AnswerProvenance;
 }
 
 export interface AgentPendingApproval {

@@ -108,12 +108,22 @@ export function useAgentRunPolling(runId: string | null, token: string) {
       });
 
       es.addEventListener('done', (e) => {
-        const { status, reply } = JSON.parse(e.data);
+        const { status, reply, uiComponent, provenance } = JSON.parse(e.data);
         setData((prev) => {
           if (!prev) return prev;
           return {
             ...prev,
-            run: { ...prev.run, status, reply: reply || prev.run.reply },
+            run: {
+              ...prev.run,
+              status,
+              reply: reply || prev.run.reply,
+              // A terminal run may carry a canvas artifact (a fetched page). Keep
+              // it so the host can route it to the canvas.
+              ...(uiComponent ? { uiComponent } : {}),
+              // Claim-to-event attribution scaffold; dormant until a future pass
+              // renders it, but captured here so it rides the run record.
+              ...(provenance ? { provenance } : {}),
+            },
           };
         });
         es.close();

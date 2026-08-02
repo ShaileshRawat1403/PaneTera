@@ -164,9 +164,16 @@ function handleRunEvents(req: any, res: any): void {
   const existing = store.listEvents(runId);
   if (existing.length > 0) sendEvent('events', existing);
 
-  // If already terminal, close after the catch-up.
+  // If already terminal, close after the catch-up. Carry the run's uiComponent so
+  // a canvas artifact (e.g. a page fetched by fetchWebPage) still reaches the
+  // client even when the run finished before it subscribed.
   if (terminalStatuses.includes(run.status)) {
-    sendEvent('done', { status: run.status, reply: run.reply });
+    sendEvent('done', {
+      status: run.status,
+      reply: run.reply,
+      uiComponent: run.uiComponent ?? null,
+      provenance: run.provenance ?? null,
+    });
     res.end();
     return;
   }
@@ -181,7 +188,17 @@ function handleRunEvents(req: any, res: any): void {
   const finish = (status?: string, reply?: string | null) => {
     if (closed) return;
     closed = true;
-    if (status) sendEvent('done', { status, reply });
+    if (status) {
+      // Include the terminal run's uiComponent so a fetched-page artifact can be
+      // routed to the canvas rather than trapped inside the run card.
+      const terminalRun = store.get(runId);
+      sendEvent('done', {
+        status,
+        reply,
+        uiComponent: terminalRun?.uiComponent ?? null,
+        provenance: terminalRun?.provenance ?? null,
+      });
+    }
     clearInterval(keepAlive);
     unsubscribe();
     res.end();

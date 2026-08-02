@@ -22,7 +22,7 @@ export interface OperatorEventSink {
 }
 
 export type OperatorTransitionPatch = Partial<
-  Pick<AgentRun, 'currentStep' | 'reply' | 'uiComponent' | 'pendingApproval' | 'error'>
+  Pick<AgentRun, 'currentStep' | 'reply' | 'uiComponent' | 'pendingApproval' | 'error' | 'provenance'>
 >;
 
 // Records the loop's lifecycle against one run in the store. This is the exact
