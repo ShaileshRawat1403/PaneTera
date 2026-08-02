@@ -40,7 +40,9 @@ import { rigRouter } from './rig/routes';
 import { headroomRouter } from './headroom/routes';
 import { nativeRouter } from './native/routes';
 import { tesseraRouter } from './tessera/routes';
-import { agentRouter } from './agent/routes';
+import { agentRouter, getAgentRunStore } from './agent/routes';
+import { AgentRunStore } from './agent/runStore';
+import { runOperatorAsRun, type OperatorRunResult } from './operatorRun';
 import { modelRouter } from './modelRoutes';
 import { schemaRouter } from './schema/routes';
 import { registerItOpsDomain } from './domains/itops/tools';
@@ -1141,7 +1143,15 @@ async function askGemini(query: string, history: any[] = [], modelId?: string): 
 }
 
 // OpenAI Q&A execution handler
-async function askOpenAI(query: string, history: any[] = [], modelId?: string): Promise<{ reply: string; uiComponent?: any }> {
+// Build the OpenAI operator handlers once so both the non-streaming path
+// (askOpenAI) and the streaming run path (askOpenAIAsRun) drive the exact same
+// model adapter, tool set, and result recording. Nothing about the operator's
+// behavior changes between the two; only the surrounding run/stream differs.
+function buildOpenAIOperator(query: string, history: any[] = [], modelId?: string): {
+  callModel: () => Promise<ModelTurn>;
+  recordToolResult: (call: AgentToolCall, execution: ToolExecution) => void;
+  capIndex: Map<string, AgentCapability>;
+} {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     throw new Error('OPENAI_API_KEY environment variable is missing.');
@@ -1301,7 +1311,36 @@ async function askOpenAI(query: string, history: any[] = [], modelId?: string): 
 
   const { capabilities, capIndex } = operatorToolset();
   (tools as any[]).push(...capabilities.map(capabilityToOpenAITool));
-  return runOperatorLoop({ callModel: callOpenAI, recordToolResult, capIndex });
+  return { callModel: callOpenAI, recordToolResult, capIndex };
+}
+
+async function askOpenAI(query: string, history: any[] = [], modelId?: string): Promise<{ reply: string; uiComponent?: any }> {
+  const { callModel, recordToolResult, capIndex } = buildOpenAIOperator(query, history, modelId);
+  return runOperatorLoop({ callModel, recordToolResult, capIndex });
+}
+
+// H3b: run the OpenAI operator as a first-class streamable run. Builds the same
+// handlers, then wraps them with a run + event sink so the turn gains a runId,
+// an event log, the existing SSE, cancel, approval, and history. onRunCreated
+// lets the endpoint return the runId immediately while the loop continues.
+async function askOpenAIAsRun(
+  query: string,
+  history: any[],
+  modelId: string | undefined,
+  store: AgentRunStore,
+  onRunCreated: (runId: string) => void,
+  recordedObjective?: string,
+): Promise<OperatorRunResult> {
+  const { callModel, recordToolResult, capIndex } = buildOpenAIOperator(query, history, modelId);
+  return runOperatorAsRun({
+    store,
+    provider: 'openai',
+    model: modelId || 'gpt-4o-mini',
+    objective: query,
+    recordedObjective,
+    handlers: { callModel, executeTool: makeOperatorExecuteTool(capIndex), recordToolResult },
+    onRunCreated,
+  });
 }
 
 // Local Ollama Q&A offline execution fallback handler
@@ -2242,6 +2281,49 @@ app.post('/api/orchestrator/chat', async (req: Request, res: Response) => {
 });
 
 // Post chat endpoint - routes queries to natural language engine
+// H3b: streaming chat as a governed run (OpenAI). A drop-in for /api/chat: it
+// still resolves native gateway cards synchronously (200 with the card), but for
+// an operator turn it creates a run, returns { runId } immediately (202), and
+// lets the loop stream in the background. The client subscribes to the run's
+// SSE (/api/agent/run/:runId/events) to watch the governed steps arrive live.
+app.post('/api/chat/stream', async (req, res) => {
+  const { query, history, modelId } = req.body as { query: string; history?: any[]; modelId?: string };
+  if (!query || !query.trim()) {
+    return res.status(400).json({ error: 'query missing' });
+  }
+
+  const store = getAgentRunStore();
+  if (!store) {
+    return res.status(503).json({ error: 'Streaming runs require the OpenAI-configured runtime (set OPENAI_API_KEY).' });
+  }
+
+  // Native workbench cards are local UI truth, resolved before any provider call,
+  // exactly as /api/chat does. These return a card, not a run.
+  try {
+    const gatewayCard = await resolveGatewayCardLocally(query);
+    if (gatewayCard) return res.json(gatewayCard);
+  } catch (gatewayErr: any) {
+    return res.status(500).json({ error: gatewayErr.message || 'Error processing gateway card.' });
+  }
+
+  // Same recalled-memory augmentation as the non-streaming path. The augmented
+  // text is the ephemeral objective; the durable record keeps the user's query.
+  let augmentedQuery = query;
+  try {
+    const recalled = await memoryBridge.retrieve('workspace');
+    if (recalled.length > 0) augmentedQuery = query + '\n\n[RECALLED CONTEXT from previous sessions]\n' + recalled.join('\n');
+  } catch { /* memory bridge unavailable — proceed without context */ }
+
+  try {
+    const runId = await new Promise<string>((resolve, reject) => {
+      askOpenAIAsRun(augmentedQuery, history || [], modelId, store, resolve, query).catch(reject);
+    });
+    return res.status(202).json({ runId });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Failed to start chat run.' });
+  }
+});
+
 app.post('/api/chat', async (req, res) => {
   const { query, history, modelId } = req.body as { query: string; history?: any[]; modelId?: string };
   if (!query) {
@@ -2537,18 +2619,25 @@ app.get('/api/evidence', (_req, res) => {
   }
 });
 
-if (process.env.NODE_ENV !== 'test') {
-  app.listen(PORT, '127.0.0.1', () => {
-    console.log(`🚀 PaneTera backend listening on http://127.0.0.1:${PORT}`);
-  });
+const httpServer = process.env.NODE_ENV !== 'test'
+  ? app.listen(PORT, '127.0.0.1', () => {
+      console.log(`🚀 PaneTera backend listening on http://127.0.0.1:${PORT}`);
+    })
+  : null;
+
+// Fast, idempotent shutdown so `tsx watch` restarts and Ctrl+C exit promptly
+// rather than being force-killed after a 5s timeout. Every cleanup step is
+// best-effort and wrapped, so a throwing adapter can never prevent the exit,
+// and a repeated signal is ignored. The unref'd fallback guarantees the process
+// leaves even if a future cleanup step blocks.
+let shuttingDown = false;
+function shutdown(): void {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  setTimeout(() => process.exit(0), 300).unref();
+  try { stopAllWorkspaceAdapters(); } catch { /* best effort on shutdown */ }
+  try { httpServer?.close(); } catch { /* best effort on shutdown */ }
+  process.exit(0);
 }
-
-process.on('SIGINT', () => {
-  stopAllWorkspaceAdapters();
-  process.exit(0);
-});
-
-process.on('SIGTERM', () => {
-  stopAllWorkspaceAdapters();
-  process.exit(0);
-});
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);

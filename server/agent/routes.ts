@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { createAgentRuntime } from './agentFactory';
 import type { AgentRuntime } from './runtime';
+import type { AgentRunStore } from './runStore';
 import { approvePendingBrowserAction, rejectPendingBrowserAction } from './browserRunCoordinator';
 import { agentRunLimiter } from '../middleware/rateLimiter';
 
@@ -15,6 +16,13 @@ function getRuntime(): AgentRuntime | null {
 }
 
 export const agentRouter = Router();
+
+// The chat streaming path (H3b) creates its runs in the runtime's own store so
+// they share the SSE endpoint (/api/agent/run/:id/events) and history. Returns
+// null when the runtime is not configured (no OPENAI_API_KEY).
+export function getAgentRunStore(): AgentRunStore | null {
+  return getRuntime()?.getStore() ?? null;
+}
 
 // Agent runs
 agentRouter.post('/run', agentRunLimiter, handleAgentRun);
