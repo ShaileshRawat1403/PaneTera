@@ -1325,36 +1325,24 @@ const App: React.FC = () => {
         // then land the final reply in the transcript once it reaches a terminal
         // state. A no-tool turn simply ends as a clean reply (the A collapse).
         if (!useWorkspaceOrchestrator && data.runId) {
-          // Seed a complete, active run shape so the card renders safely and the
-          // polling hook (gated on an active status) starts streaming. A bare
-          // { runId } would leave status/events undefined and crash the card.
+          // Left: one live streaming assistant turn that pulls its text from the
+          // run (token deltas while active, the final reply when done). Right: the
+          // run's events panel. The answer lives in exactly one place, so there is
+          // no left/right duplication. The turn streams itself via the run's SSE,
+          // so no polling here.
           setActiveComponent({
             type: 'AgentRun',
             data: { runId: data.runId, status: 'running', reply: '', events: [], provider: 'openai', model: activeModel?.id || '' },
           });
           setWebPreview(null);
           setActiveQuery(plan.rawInput);
-          const terminal = ['completed', 'failed', 'canceled', 'waiting-approval', 'interrupted'];
-          let run: any = null;
-          let events: any[] = [];
-          for (let i = 0; i < 600 && !run; i += 1) {
-            const poll = await fetch(`/api/agent/run/${data.runId}`, { headers: { Authorization: `Bearer ${token}` } });
-            if (poll.ok) {
-              const body = await poll.json();
-              if (body?.run && terminal.includes(body.run.status)) { run = body.run; events = body.events || []; break; }
-            }
-            await new Promise((resolve) => setTimeout(resolve, 500));
-          }
           addMessage({
             role: 'assistant',
-            content: run?.reply || 'The run ended without a textual reply.',
+            content: '',
             intent: 'run',
             model: activeModel?.name || activeModel?.id || undefined,
-            toolsUsed: events
-              .filter((e: any) => e.type === 'tool.completed')
-              .map((e: any) => ({ tool: e.data?.capability || 'unknown', status: 'success' as const })),
+            streamingRunId: data.runId,
           });
-          setActiveReply(run?.reply || null);
           return;
         }
 
@@ -1845,6 +1833,7 @@ const App: React.FC = () => {
                   message={msg}
                   onSelectFile={handleSelectFile}
                   onSuggestedAction={handleSend}
+                  token={token}
                 />
               ))}
             </Box>

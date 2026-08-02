@@ -11,6 +11,8 @@ import React from 'react';
 import { Box, Chip, Paper, Stack, Typography } from '@mui/material';
 import { accent, elevation, ink, radius, status, surface, typography } from '../../theme/cssTokens';
 import { enterStyles, transition } from '../../theme/motion';
+import { MarkdownText } from '../MarkdownText';
+import { useAgentRunPolling } from '../../hooks/useAgentRunPolling';
 
 export interface TranscriptMessage {
   role: 'user' | 'assistant';
@@ -22,12 +24,47 @@ export interface TranscriptMessage {
   citations?: { path: string; label: string }[];
   suggestedActions?: { label: string; message: string }[];
   warnings?: string[];
+  // When set, this assistant turn is a live streaming run: its text is pulled
+  // from the run (token fragments while active, the final reply when done) so it
+  // streams in the left transcript while the right panel shows the run's events.
+  streamingRunId?: string;
 }
 
 interface Props {
   message: TranscriptMessage;
   onSelectFile: (path: string) => void;
   onSuggestedAction: (message: string) => void;
+  token?: string;
+}
+
+const ACTIVE_RUN_STATUSES = new Set(['queued', 'planning', 'running', 'waiting-approval', 'verifying']);
+
+// Renders a streaming assistant reply: the run's token deltas accumulate while it
+// is active, then the durable final reply replaces them once it completes. Both
+// render as rich markdown, identical to a non-streaming reply.
+function StreamingReply({ runId, token }: { runId: string; token: string }): React.ReactElement {
+  const { data } = useAgentRunPolling(runId, token);
+  const run = (data?.run ?? {}) as { status?: string; reply?: string; events?: unknown[] };
+  const events: any[] = Array.isArray(data?.events) ? (data!.events as any[]) : (Array.isArray(run.events) ? (run.events as any[]) : []);
+  const deltaText = events
+    .filter((e) => e?.type === 'model.delta')
+    .map((e) => (typeof e?.data?.text === 'string' ? e.data.text : ''))
+    .join('');
+  const finalReply = typeof run.reply === 'string' ? run.reply : '';
+  const text = finalReply || deltaText;
+  const streaming = Boolean(run.status && ACTIVE_RUN_STATUSES.has(run.status));
+
+  if (!text) {
+    return <Typography variant="body2" sx={{ color: ink.secondary, fontSize: '0.875rem' }}>Working on your request…</Typography>;
+  }
+  return (
+    <Box>
+      <MarkdownText content={text} />
+      {streaming && (
+        <Typography component="span" sx={{ color: accent.violet, fontSize: '0.875rem', ml: 0.25 }}>▍</Typography>
+      )}
+    </Box>
+  );
 }
 
 /** Tool outcomes share the product's status vocabulary. */
@@ -52,7 +89,7 @@ const monoDetail = {
   fontSize: '0.75rem', // Enforced 12px floor
 } as const;
 
-export const TranscriptTurn: React.FC<Props> = ({ message, onSelectFile, onSuggestedAction }) => {
+export const TranscriptTurn: React.FC<Props> = ({ message, onSelectFile, onSuggestedAction, token }) => {
   const isUser = message.role === 'user';
 
   return (
@@ -127,12 +164,18 @@ export const TranscriptTurn: React.FC<Props> = ({ message, onSelectFile, onSugge
           boxShadow: elevation.card,
         }}
       >
-        <Typography
-          variant="body2"
-          sx={{ color: ink.primary, lineHeight: 1.6, whiteSpace: 'pre-wrap', fontSize: '0.875rem' }}
-        >
-          {message.content}
-        </Typography>
+        {isUser ? (
+          <Typography
+            variant="body2"
+            sx={{ color: ink.primary, lineHeight: 1.6, whiteSpace: 'pre-wrap', fontSize: '0.875rem' }}
+          >
+            {message.content}
+          </Typography>
+        ) : message.streamingRunId && token ? (
+          <StreamingReply runId={message.streamingRunId} token={token} />
+        ) : (
+          <MarkdownText content={message.content} />
+        )}
 
         {message.filesInspected && message.filesInspected.length > 0 && (
           <Box sx={{ mt: 1.5 }}>
