@@ -34,6 +34,7 @@ interface AgentRunResult {
   provider: string;
   model: string;
   events: AgentEvent[];
+  pendingApproval?: { kind?: string; approvalId?: string; capability?: string; summary?: string };
 }
 
 interface AgentRunCardProps {
@@ -197,46 +198,53 @@ export function AgentRunCard({ result, onCancel, onApprove }: AgentRunCardProps)
       {/* This card is the run's events/steps panel. The answer itself streams in
           the conversation on the left, so we show a short status line here rather
           than repeating the reply. */}
-      <Typography variant="body2" sx={{ color: ink.secondary, fontWeight: 600, mb: 1, fontSize: '0.8125rem' }}>
-        {hasApproval ? 'Awaiting your approval — review the proposal in the conversation.' : isActive ? 'Working on your request…' : 'Run complete. See the answer in the conversation.'}
-      </Typography>
+      {!hasApproval && (
+        <Typography variant="body2" sx={{ color: ink.secondary, fontWeight: 600, mb: 1, fontSize: '0.8125rem' }}>
+          {isActive ? 'Working on your request…' : 'Run complete. See the answer in the conversation.'}
+        </Typography>
+      )}
 
-      {/* Approval CTA */}
-      {hasApproval && onApprove && (
-        <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-          <Button
-            variant="contained"
-            size="small"
-            startIcon={<CheckCircleIcon sx={{ fontSize: 14 }} />}
-            onClick={() => onApprove(result.runId, '')}
-            sx={{
-              textTransform: 'none',
-              backgroundColor: accent.violet,
-              color: ink.onAccent,
-              fontWeight: 600,
-              fontSize: '0.8125rem',
-              '&:hover': { backgroundColor: accent.violetHover },
-            }}
-          >
-            Review & Approve
-          </Button>
-          {onCancel && (
-            <Button
-              variant="outlined"
-              size="small"
-              onClick={() => onCancel(result.runId)}
-              sx={{
-                textTransform: 'none',
-                borderColor: surface.borderStrong,
-                color: ink.secondary,
-                fontWeight: 600,
-                fontSize: '0.8125rem',
-              }}
-            >
-              Reject
-            </Button>
+      {/* Approval ceremony: the one place the run slows down on purpose. The
+          exact proposed action and its risk are shown deliberately, with a
+          brass gate, before anything can run. */}
+      {hasApproval && (
+        <Box sx={{ mt: 1, border: `1px solid ${surface.border}`, borderLeft: `3px solid ${status.brass}`, borderRadius: `0 ${radius.md}px ${radius.md}px 0`, backgroundColor: surface.raised, p: 1.5 }}>
+          <Stack direction="row" alignItems="center" spacing={0.75} sx={{ mb: 0.75 }}>
+            <HourglassEmptyIcon sx={{ fontSize: 15, color: status.brass }} />
+            <Typography sx={{ color: status.brass, fontSize: '0.75rem', fontWeight: 600 }}>Approval required</Typography>
+          </Stack>
+          {result.pendingApproval?.summary && (
+            <Typography sx={{ color: ink.primary, fontFamily: typography.mono, fontSize: '0.75rem', lineHeight: 1.5, mb: 0.25 }}>
+              {result.pendingApproval.summary}
+            </Typography>
           )}
-        </Stack>
+          <Typography sx={{ color: ink.secondary, fontSize: '0.6875rem', mb: 1.25 }}>
+            {result.pendingApproval?.capability ? `${result.pendingApproval.capability} · ` : ''}risk: propose · nothing runs until you approve
+          </Typography>
+          <Stack direction="row" spacing={1}>
+            {onApprove && (
+              <Button
+                variant="contained"
+                size="small"
+                startIcon={<CheckCircleIcon sx={{ fontSize: 14 }} />}
+                onClick={() => onApprove(result.runId, result.pendingApproval?.approvalId || '')}
+                sx={{ textTransform: 'none', backgroundColor: accent.violet, color: ink.onAccent, fontWeight: 600, fontSize: '0.8125rem', '&:hover': { backgroundColor: accent.violetHover } }}
+              >
+                Approve and run
+              </Button>
+            )}
+            {onCancel && (
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => onCancel(result.runId)}
+                sx={{ textTransform: 'none', borderColor: surface.borderStrong, color: ink.secondary, fontWeight: 600, fontSize: '0.8125rem' }}
+              >
+                Reject
+              </Button>
+            )}
+          </Stack>
+        </Box>
       )}
 
       {/* Event Timeline */}
