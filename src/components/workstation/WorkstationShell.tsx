@@ -41,6 +41,7 @@ import {
 import { CanvasSelectionProvider } from './CanvasSelectionProvider';
 import MarkupToolbar from './MarkupToolbar';
 import { QuickSwitcherModal } from '../workbench/QuickSwitcherModal';
+import { CockpitStatusBar, type CockpitSummary } from './CockpitStatusBar';
 
 export interface GovernanceSummary {
   gatewayConnected: boolean;
@@ -69,6 +70,12 @@ export interface WorkstationShellProps {
   /** Bumped to open the project picker from outside the top bar. */
   projectPickerRequestKey?: number;
   governanceStatus: GovernanceSummary;
+  /**
+   * The cockpit strip's live summary. Optional so the shell renders without it
+   * (and existing callers/tests are unaffected); when present, the always-on
+   * status strip appears beneath the top bar.
+   */
+  cockpit?: CockpitSummary;
   onOpenAudit: () => void;
   /**
    * Whether the canvas currently holds something other than the empty state.
@@ -141,6 +148,7 @@ export function WorkstationShell({
   headroomRequestKey = 0,
   projectPickerRequestKey = 0,
   governanceStatus,
+  cockpit,
   onOpenAudit,
   canvasHasContent = false,
   revealConversationKey = 0,
@@ -589,6 +597,11 @@ export function WorkstationShell({
           </Tooltip>
         </Box>
       </Box>
+
+      {/* 1b. Cockpit: an always-on instrument strip. Session, run status,
+          approvals waiting, and Headroom as an ambient gauge. Rendered only when
+          the host supplies a summary, so it never forces itself on callers. */}
+      {cockpit && <CockpitStatusBar summary={cockpit} />}
 
       {/* 2. Two planes. Split side by side at workstation widths; stacked into
           one switched column when the window is too narrow to hold both.

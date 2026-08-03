@@ -158,20 +158,29 @@ function handleRunEvents(req: any, res: any): void {
   const terminalStatuses = ['completed', 'failed', 'canceled', 'interrupted', 'expired'];
   sendEvent('run', run);
 
-  // If already terminal, deliver the final state and close.
+  // Deliver the recorded governed steps first, so even a run that already
+  // finished (fast chats complete before the client subscribes) populates the
+  // readout and ledger before we close.
+  const existing = store.listEvents(runId);
+  if (existing.length > 0) sendEvent('events', existing);
+
+  // If already terminal, close after the catch-up. Carry the run's uiComponent so
+  // a canvas artifact (e.g. a page fetched by fetchWebPage) still reaches the
+  // client even when the run finished before it subscribed.
   if (terminalStatuses.includes(run.status)) {
-    sendEvent('done', { status: run.status, reply: run.reply });
+    sendEvent('done', {
+      status: run.status,
+      reply: run.reply,
+      uiComponent: run.uiComponent ?? null,
+      provenance: run.provenance ?? null,
+    });
     res.end();
     return;
   }
 
-  // Catch up on anything already recorded, then push each new event the instant
-  // it is appended (or emitted transiently, e.g. model.delta tokens) via the
-  // store's subscription. This replaces 500ms polling, so token text streams
-  // per-fragment instead of in batches, with no disk read per tick.
-  const existing = store.listEvents(runId);
-  if (existing.length > 0) sendEvent('events', existing);
-
+  // Then push each new event the instant it is appended (or emitted transiently,
+  // e.g. model.delta tokens) via the store's subscription. This replaces 500ms
+  // polling, so token text streams per-fragment with no disk read per tick.
   let lastStatus = run.status;
   let closed = false;
   const keepAlive = setInterval(() => { if (!closed) res.write(': keepalive\n\n'); }, 15_000);
@@ -179,7 +188,17 @@ function handleRunEvents(req: any, res: any): void {
   const finish = (status?: string, reply?: string | null) => {
     if (closed) return;
     closed = true;
-    if (status) sendEvent('done', { status, reply });
+    if (status) {
+      // Include the terminal run's uiComponent so a fetched-page artifact can be
+      // routed to the canvas rather than trapped inside the run card.
+      const terminalRun = store.get(runId);
+      sendEvent('done', {
+        status,
+        reply,
+        uiComponent: terminalRun?.uiComponent ?? null,
+        provenance: terminalRun?.provenance ?? null,
+      });
+    }
     clearInterval(keepAlive);
     unsubscribe();
     res.end();

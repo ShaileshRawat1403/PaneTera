@@ -17,8 +17,7 @@ import { BrowserObservationView } from './nativeWorkbench/BrowserObservationView
 import { BrowserExtractionView } from './nativeWorkbench/BrowserExtractionView';
 import { WorkspacesCatalog } from './nativeWorkbench/WorkspacesCatalog';
 import { accent, ink, radius, status, surface, typography } from '../theme/cssTokens';
-import { useAgentRunPolling } from '../hooks/useAgentRunPolling';
-import { AgentRunCard } from './workbench/AgentRunCard';
+import { AgentRunLiveCard } from './workbench/AgentRunLiveCard';
 import { SchemaCardRenderer } from './schema/SchemaCardRenderer';
 interface ComponentProps {
   uiComponent: UiComponent;
@@ -28,6 +27,8 @@ interface ComponentProps {
   onApproveBrowserAction?: (runId: string) => void;
   onRejectBrowserAction?: (runId: string) => void;
   onStartContentWorkflow?: (form: any) => void;
+  /** Route a finished run's canvas artifact (e.g. a fetched page) to the host. */
+  onRunArtifact?: (artifact: { type: string; data?: Record<string, unknown> }) => void;
   activeLens?: string;
   variant?: 'feed' | 'main' | 'chat' | 'native-plane' | 'live-plane';
   token?: string;
@@ -46,7 +47,7 @@ function ResolutionNotice({ kind, children }: { kind: 'success' | 'danger'; chil
   );
 }
 
-export const InteractiveComponent: React.FC<ComponentProps> = ({ uiComponent, onAction, onApproveAction, onCancelAction, onApproveBrowserAction, onRejectBrowserAction, onStartContentWorkflow, activeLens, variant = 'main', token = '' }) => {
+export const InteractiveComponent: React.FC<ComponentProps> = ({ uiComponent, onAction, onApproveAction, onCancelAction, onApproveBrowserAction, onRejectBrowserAction, onStartContentWorkflow, onRunArtifact, activeLens, variant = 'main', token = '' }) => {
   const { type, data } = uiComponent;
   // Local only — the message log itself stays append-only/immutable, so
   // "did I already act on this" lives here rather than mutating history.
@@ -941,28 +942,15 @@ export const InteractiveComponent: React.FC<ComponentProps> = ({ uiComponent, on
   }
 
   if (type === 'AgentRun' && data) {
-    const runId = data?.runId || data?.run?.runId || null;
-    const isActive = ['queued', 'planning', 'running', 'waiting-approval', 'verifying'].includes(data?.status || data?.run?.status || '');
-    const { data: polledData } = useAgentRunPolling(isActive ? runId : null, token);
-    const merged = polledData?.run ? { ...data, ...polledData.run, events: polledData.run.events || data.events } : data;
-    // H3d token mode: fold model.delta fragments into a live reply, and keep the
-    // (potentially hundreds of) delta events out of the visible timeline. All
-    // guarded so a malformed event can never crash the card.
-    const mergedEvents: any[] = Array.isArray(merged.events) ? merged.events : [];
-    const deltaText = mergedEvents
-      .filter((e: any) => e?.type === 'model.delta')
-      .map((e: any) => (typeof e?.data?.text === 'string' ? e.data.text : ''))
-      .join('');
-    const displayData = {
-      ...merged,
-      reply: (typeof merged.reply === 'string' && merged.reply.length > 0) ? merged.reply : deltaText,
-      events: mergedEvents.filter((e: any) => e?.type !== 'model.delta'),
-    };
+    // Live subscription, delta folding, and artifact routing all live inside this
+    // component so its hooks sit at a top level, not inside this branch.
     return (
-      <AgentRunCard
-        result={displayData}
-        onApprove={onApproveBrowserAction ? (rid: string, _approvalId: string) => onApproveBrowserAction(rid) : undefined}
-        onCancel={onRejectBrowserAction ? (rid: string) => onRejectBrowserAction(rid) : undefined}
+      <AgentRunLiveCard
+        data={data}
+        token={token}
+        onApproveBrowserAction={onApproveBrowserAction}
+        onRejectBrowserAction={onRejectBrowserAction}
+        onArtifact={onRunArtifact}
       />
     );
   }

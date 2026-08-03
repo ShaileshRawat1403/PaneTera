@@ -95,7 +95,7 @@ export class AgentRunStore {
   async transition(
     runId: string,
     status: AgentRunStatus,
-    patch: Partial<Pick<AgentRun, 'currentStep' | 'reply' | 'uiComponent' | 'pendingApproval' | 'error'>> = {},
+    patch: Partial<Pick<AgentRun, 'currentStep' | 'reply' | 'uiComponent' | 'pendingApproval' | 'error' | 'provenance'>> = {},
   ): Promise<AgentRun> {
     const current = this.requireRun(runId);
     if (TERMINAL.has(current.status) && current.status !== status) {

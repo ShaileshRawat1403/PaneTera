@@ -21,6 +21,7 @@ import { describeResolution, resolveAppName } from './composer/appRegistry';
 import { PreviewPanel, FeedItem } from './components/PreviewPanel';
 import { InteractiveComponent } from './components/InteractiveComponent';
 import { WorkstationShell } from './components/workstation/WorkstationShell';
+import type { CockpitSummary } from './components/workstation/CockpitStatusBar';
 import { CanvasStart } from './components/workstation/CanvasStart';
 import { ContextBriefPanel } from './components/workstation/ContextBriefPanel';
 import { BrowserEvidenceCanvas } from './components/workbench/BrowserEvidenceCanvas';
@@ -1332,7 +1333,16 @@ const App: React.FC = () => {
           // so no polling here.
           setActiveComponent({
             type: 'AgentRun',
-            data: { runId: data.runId, status: 'running', reply: '', events: [], provider: 'openai', model: activeModel?.id || '' },
+            data: {
+              runId: data.runId, status: 'running', reply: '', events: [], provider: 'openai', model: activeModel?.id || '',
+              // The run readout: what the operator was working from this turn. The
+              // client knows this at send time; the card shows it as the receipt.
+              readout: {
+                project: activeWorkspace?.name || null,
+                headroom: Boolean(activeHeadroomCapsule),
+                attachments: Array.isArray(plan.context) ? plan.context.length : 0,
+              },
+            },
           });
           setWebPreview(null);
           setActiveQuery(plan.rawInput);
@@ -1983,6 +1993,17 @@ const App: React.FC = () => {
           onApproveBrowserAction={handleApproveBrowserAction}
           onRejectBrowserAction={handleRejectBrowserAction}
           onStartContentWorkflow={handleStartContentWorkflow}
+          onRunArtifact={(artifact) => {
+            // A run fetched a page: open it on the canvas. The web preview takes
+            // canvas precedence over the run card, so the page shows and the
+            // readout stays reachable once the preview is cleared.
+            const url = (artifact.data as { url?: string } | undefined)?.url;
+            const name = (artifact.data as { name?: string } | undefined)?.name;
+            if (artifact.type === 'WebPreview' && url) {
+              clearWebPreviewInspection();
+              setWebPreview({ url, name: name || url });
+            }
+          }}
           activeLens={activeLens}
           variant={isSoothsayerLivePlaneActive ? 'native-plane' : 'main'}
           token={token}
@@ -2274,6 +2295,29 @@ const App: React.FC = () => {
             currentObjective: headroomObjective.trim() || null,
           };
 
+          // Cockpit strip summary. Session and the Headroom gauge are live; run
+          // status derives from the in-flight turn and, best-effort, the active
+          // run's declared status. A fully live approvals count would require
+          // lifting run state into the shell, which the run cards own today.
+          const cockpitHeadroomItems = activeHeadroomCapsule
+            ? ((activeHeadroomCapsule.decisions?.length || 0)
+              + (activeHeadroomCapsule.assumptions?.length || 0)
+              + (activeHeadroomCapsule.unresolvedQuestions?.length || 0)
+              + (activeHeadroomCapsule.changedUnderstanding?.length || 0))
+            : 0;
+          const cockpitActiveRunStatus = activeComponent?.type === 'AgentRun'
+            ? (activeComponent.data as { status?: string } | undefined)?.status
+            : undefined;
+          const cockpitSummary: CockpitSummary = {
+            sessionLabel: `Session ${headroomSessionId.slice(0, 6)}`,
+            runStatus: cockpitActiveRunStatus === 'waiting-approval'
+              ? 'awaiting-approval'
+              : loading ? 'working' : 'idle',
+            approvalsWaiting: cockpitActiveRunStatus === 'waiting-approval' ? 1 : 0,
+            headroomActive: Boolean(activeHeadroomCapsule),
+            headroomLevel: Math.min(1, cockpitHeadroomItems / 8),
+          };
+
           const contextBrief = buildContextBrief({
             projects: workspacesList.map((w) => ({
               id: w.id,
@@ -2444,6 +2488,7 @@ const App: React.FC = () => {
                   </React.Suspense>
                 )}
                 governanceStatus={governanceSummary}
+                cockpit={cockpitSummary}
                 rigRequestKey={rigRequestKey}
                 headroomRequestKey={headroomRequestKey}
                 projectPickerRequestKey={projectPickerRequestKey}

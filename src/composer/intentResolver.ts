@@ -336,8 +336,11 @@ function selectFromNaturalLanguage(input: string, context: ResolverContext): Fam
     return { family: 'run', args: { target: runMatch.target } };
   }
 
+  // Inspecting an artifact only means something once a project is open; the
+  // orchestrator that serves it requires a workspace. With no project selected,
+  // fall through to the conversational operator rather than bounce the user.
   const inspectMatch = matchInspectPhrase(input);
-  if (inspectMatch) {
+  if (inspectMatch && context.hasWorkspace) {
     return { family: 'artifact', args: { target: inspectMatch.target } };
   }
 
@@ -369,7 +372,11 @@ function selectFromNaturalLanguage(input: string, context: ResolverContext): Fam
     hasSelectedFile: context.hasSelectedFile,
   });
 
-  if (route === 'workspace') {
+  // The workspace route serves the orchestrator, which requires a project. When
+  // none is selected, PaneTera acts as a personal operator instead of demanding
+  // one: workspace-flavoured phrasing still answers conversationally (with memory
+  // and Headroom context), using the non-workspace tools it does have.
+  if (route === 'workspace' && context.hasWorkspace) {
     return { family: 'artifact', args: {} };
   }
 

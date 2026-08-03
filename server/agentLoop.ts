@@ -25,11 +25,23 @@ export interface AgentToolCall {
   id?: string;
 }
 
+// Token accounting for one model turn. Fields are named without the word
+// "token" on purpose: the run store redacts any event-data key matching /token/i,
+// so `promptTokens` would be scrubbed from the durable log. `prompt`,
+// `completion`, and `total` survive and still read clearly in the readout.
+export interface TokenUsage {
+  prompt: number;
+  completion: number;
+  total: number;
+}
+
 export interface ModelTurn {
   /** Final or interim natural-language text, if the model produced any. */
   text?: string | null;
   /** Tool calls the model requested this turn. Empty means the turn is final. */
   toolCalls: AgentToolCall[];
+  /** Token usage for this turn, when the provider reports it. */
+  usage?: TokenUsage | null;
 }
 
 export interface ToolExecution {

@@ -44,7 +44,7 @@ import { agentRouter, getAgentRunStore } from './agent/routes';
 import { AgentRunStore } from './agent/runStore';
 import { StoreEventSink } from './agent/operatorSink';
 import { runOperatorAsRun, type OperatorRunResult } from './operatorRun';
-import { readOpenAIStream } from './openaiStream';
+import { readOpenAIStream, normalizeUsage } from './openaiStream';
 import { modelRouter } from './modelRoutes';
 import { schemaRouter } from './schema/routes';
 import { registerItOpsDomain } from './domains/itops/tools';
@@ -1289,7 +1289,16 @@ function buildOpenAIOperator(
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({ model: resolvedModel, messages: messagesPayload, tools, tool_choice: 'auto', ...(useStream ? { stream: true } : {}) })
+      body: JSON.stringify({
+        model: resolvedModel,
+        messages: messagesPayload,
+        tools,
+        tool_choice: 'auto',
+        // Ask for token accounting so the run readout can report it. In stream
+        // mode this rides a final usage-only chunk; otherwise it lands in the
+        // response body's `usage`.
+        ...(useStream ? { stream: true, stream_options: { include_usage: true } } : {}),
+      })
     });
     if (!response.ok) {
       throw new Error(`OpenAI API error: ${response.status} - ${await response.text()}`);
@@ -1300,7 +1309,7 @@ function buildOpenAIOperator(
       const turn = await readOpenAIStream(response as { body: ReadableStream<Uint8Array> | null }, streamOpts?.onDelta);
       messagesPayload.push(turn.assistantMessage);
       const toolCalls: AgentToolCall[] = turn.toolCalls.map((tc) => ({ id: tc.id, name: tc.name, args: tc.args }));
-      return { text: stripEmoji(turn.content || ''), toolCalls };
+      return { text: stripEmoji(turn.content || ''), toolCalls, usage: turn.usage };
     }
     const data = await response.json();
     const assistantMessage = data.choices?.[0]?.message;
@@ -1313,7 +1322,7 @@ function buildOpenAIOperator(
       name: tc.function?.name,
       args: tc.function?.arguments ? JSON.parse(tc.function.arguments) : {}
     }));
-    return { text: stripEmoji(assistantMessage.content || ''), toolCalls };
+    return { text: stripEmoji(assistantMessage.content || ''), toolCalls, usage: normalizeUsage(data.usage) };
   };
 
   const recordToolResult = (call: AgentToolCall, execution: ToolExecution) => {
@@ -2279,6 +2288,33 @@ app.post('/api/orchestrator/chat', async (req: Request, res: Response) => {
   } catch (gatewayErr: any) {
     console.error('[Error in local gateway resolver]:', gatewayErr);
     return res.status(500).json({ error: gatewayErr.message || 'Error processing gateway card.' });
+  }
+
+  // No project selected: PaneTera answers as a personal operator rather than
+  // demanding one. This is the server-side guarantee behind the client routing
+  // fix — even if a general question reaches this endpoint without a workspace,
+  // it gets a real answer (with recalled memory), never a 'needs project' bounce.
+  if (!workspaceId) {
+    try {
+      const recalled = await memoryBridge.retrieve('workspace').catch(() => [] as string[]);
+      const augmented = recalled.length > 0
+        ? `${message}\n\n[RECALLED CONTEXT from previous sessions]\n${recalled.join('\n')}`
+        : message;
+      const result = await askOpenAI(augmented, [], modelId);
+      return res.json({
+        answer: result.reply,
+        uiComponent: result.uiComponent,
+        mode: 'read-only-orchestrator',
+        intent: 'converse',
+        toolsUsed: [],
+        filesInspected: [],
+        citations: [],
+        suggestedActions: [],
+        warnings: [],
+      });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message || 'Error answering without a workspace.' });
+    }
   }
 
   const resolveWorkspacePath = async (wId: string) => {
