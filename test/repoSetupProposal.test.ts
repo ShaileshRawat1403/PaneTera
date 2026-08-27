@@ -19,14 +19,16 @@ const REPO_NAME = path.basename(REPO_ROOT);
 
 // 1. Intent Parser Tests
 const validQueries = [
-  'add myai-portal',
-  'add my myai-portal repo',
+  'add my frontend repo',
+  'add the backend repo',
   `connect ${REPO_ROOT}`,
-  'track the websiteops repo',
+  'track the analytics repo',
   'make flowright available',
-  'use myai-portal repo',
+  'make auth-service available as a workspace',
+  'use payment-service repo',
   'add websiteops repo',
-  'track websiteops-pothos-proof',
+  'Add this GitHub repository to my workspace',
+  'Set up a repo for this project',
 ];
 
 for (const q of validQueries) {
@@ -41,6 +43,12 @@ const invalidQueries = [
   'read package.json in flowright',
   'git status',
   'npm test',
+  'Add a temporary track called Conversation Probe',
+  'Add a layer named Background',
+  'Add a scene called Intro',
+  'Add 5 to 10',
+  'track 1 volume',
+  'connect pin 1 to pin 2',
 ];
 
 for (const q of invalidQueries) {

@@ -1,12 +1,16 @@
 import { Router } from 'express';
 import { createAgentRuntime } from './agentFactory';
 import type { AgentRuntime } from './runtime';
-import type { AgentRunStore } from './runStore';
+import { AgentRunStore } from './runStore';
 import { approvePendingBrowserAction, rejectPendingBrowserAction } from './browserRunCoordinator';
+import { approvePendingRigCapability, rejectPendingRigCapability } from './rigRunCoordinator';
 import { agentRunLimiter } from '../middleware/rateLimiter';
+import { operatorPrincipalForRequest } from '../operatorPrincipal';
+import { getTesseraAppDataDir } from '../appData';
 
 let cachedRuntime: AgentRuntime | null = null;
 let runtimeInitializationAttempted = false;
+let fallbackStore: AgentRunStore | null = null;
 
 function getRuntime(): AgentRuntime | null {
   if (runtimeInitializationAttempted) return cachedRuntime;
@@ -18,10 +22,14 @@ function getRuntime(): AgentRuntime | null {
 export const agentRouter = Router();
 
 // The chat streaming path (H3b) creates its runs in the runtime's own store so
-// they share the SSE endpoint (/api/agent/run/:id/events) and history. Returns
-// null when the runtime is not configured (no OPENAI_API_KEY).
-export function getAgentRunStore(): AgentRunStore | null {
-  return getRuntime()?.getStore() ?? null;
+// they share the SSE endpoint (/api/agent/run/:id/events) and history.
+export function getAgentRunStore(): AgentRunStore {
+  const rtStore = getRuntime()?.getStore();
+  if (rtStore) return rtStore;
+  if (!fallbackStore) {
+    fallbackStore = new AgentRunStore(getTesseraAppDataDir());
+  }
+  return fallbackStore;
 }
 
 // Agent runs
@@ -30,6 +38,8 @@ agentRouter.get('/runs', handleListRuns);
 agentRouter.get('/run/:runId', handleGetRun);
 agentRouter.get('/run/:runId/events', handleRunEvents);
 agentRouter.post('/run/:runId/cancel', handleCancelRun);
+agentRouter.post('/run/:runId/approve', handleApproveRun);
+agentRouter.post('/run/:runId/reject', handleRejectRun);
 agentRouter.post('/run/:runId/approve-browser', handleApproveBrowserAction);
 agentRouter.post('/run/:runId/reject-browser', handleRejectBrowserAction);
 
@@ -242,6 +252,92 @@ async function handleCancelRun(req: any, res: any): Promise<void> {
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     res.status(500).json({
+      version: 2,
+      error: { kind: 'server-error', message },
+    });
+  }
+}
+
+async function handleApproveRun(req: any, res: any): Promise<void> {
+  const store = getAgentRunStore();
+  const { runId } = req.params;
+  const run = store.get(runId);
+  if (!run) {
+    res.status(404).json({
+      version: 2,
+      error: { kind: 'not-found', message: `Run ${runId} not found.` },
+    });
+    return;
+  }
+
+  if (run.status !== 'waiting-approval' || !run.pendingApproval) {
+    res.status(400).json({
+      version: 2,
+      error: { kind: 'validation', message: `Run is not awaiting approval (status: ${run.status}).` },
+    });
+    return;
+  }
+
+  try {
+    if (run.pendingApproval.kind === 'browser-action') {
+      const updated = await approvePendingBrowserAction(store, runId);
+      res.json({ run: updated });
+      return;
+    }
+
+    if (run.pendingApproval.kind === 'rig-capability') {
+      const updated = await approvePendingRigCapability(store, runId, operatorPrincipalForRequest(req));
+      res.json({
+        run: updated,
+        result: (updated.uiComponent as any)?.data?.result,
+        provenance: updated.provenance,
+      });
+      return;
+    }
+
+    res.status(400).json({
+      version: 2,
+      error: { kind: 'validation', message: `Unsupported pending approval kind: ${run.pendingApproval.kind}` },
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(400).json({
+      version: 2,
+      error: { kind: 'server-error', message },
+    });
+  }
+}
+
+async function handleRejectRun(req: any, res: any): Promise<void> {
+  const store = getAgentRunStore();
+  const { runId } = req.params;
+  const run = store.get(runId);
+  if (!run) {
+    res.status(404).json({
+      version: 2,
+      error: { kind: 'not-found', message: `Run ${runId} not found.` },
+    });
+    return;
+  }
+
+  try {
+    if (run.pendingApproval?.kind === 'browser-action') {
+      const canceled = await rejectPendingBrowserAction(store, runId);
+      res.json({ run: canceled });
+      return;
+    }
+
+    if (run.pendingApproval?.kind === 'rig-capability') {
+      const canceled = await rejectPendingRigCapability(store, runId);
+      res.json({ run: canceled });
+      return;
+    }
+
+    const canceled = await store.cancel(runId);
+    res.json({ run: canceled });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(400).json({
       version: 2,
       error: { kind: 'server-error', message },
     });

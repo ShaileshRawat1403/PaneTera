@@ -26,37 +26,44 @@ export interface RepoSetupProposal {
 export function parseRepoSetupIntent(query: string): { rawTarget: string } | null {
   const q = query.trim();
 
-  // Pattern 1: add my <target> repo
-  let match = q.match(/^add\s+my\s+(.+?)\s+repo$/i);
-  if (match) return { rawTarget: match[1] };
+  // Pattern 1: add this GitHub repository to my workspace / add repo to workspace
+  let match = q.match(/^add\s+(?:this\s+)?(?:github\s+)?(?:repo|repository)(?:\s+to\s+(?:my\s+)?workspace)?(?:\s*:\s*|\s+for\s+|\s+)?(.+)?$/i);
+  if (match) {
+    const target = (match[1] || '').trim();
+    return { rawTarget: target || 'workspace' };
+  }
 
-  // Pattern 2: use <target> repo
-  match = q.match(/^use\s+(.+?)\s+repo$/i);
-  if (match) return { rawTarget: match[1] };
+  // Pattern 2: set up a repo for this project / set up repo for <target>
+  match = q.match(/^set\s*up\s+(?:a\s+)?(?:repo|repository|workspace|project)(?:\s+for\s+(?:this\s+project|(.+)))?$/i);
+  if (match) {
+    const target = (match[1] || '').trim();
+    return { rawTarget: target || 'project' };
+  }
 
-  // Pattern 3: track the <target> repo
-  match = q.match(/^track\s+the\s+(.+?)\s+repo$/i);
-  if (match) return { rawTarget: match[1] };
+  // Pattern 3: add my/the <target> repo / add <target> repo/repository/workspace
+  match = q.match(/^add\s+(?:my\s+|the\s+)?(.+?)\s+(?:repo|repository|workspace)$/i);
+  if (match) return { rawTarget: match[1].trim() };
 
-  // Pattern 4: track <target>
-  match = q.match(/^track\s+(.+)$/i);
-  if (match) return { rawTarget: match[1] };
+  // Pattern 4: use (my/the) <target> repo/repository/workspace
+  match = q.match(/^use\s+(?:my\s+|the\s+)?(.+?)\s+(?:repo|repository|workspace)$/i);
+  if (match) return { rawTarget: match[1].trim() };
 
-  // Pattern 5: connect <target>
-  match = q.match(/^connect\s+(.+)$/i);
-  if (match) return { rawTarget: match[1] };
+  // Pattern 5: track the/my <target> repo/repository/workspace
+  match = q.match(/^track\s+(?:the\s+|my\s+)?(.+?)\s+(?:repo|repository|workspace)$/i);
+  if (match) return { rawTarget: match[1].trim() };
 
-  // Pattern 6: make <target> available
-  match = q.match(/^make\s+(.+?)\s+available$/i);
-  if (match) return { rawTarget: match[1] };
+  // Pattern 6: make <target> available (as a repo/workspace)
+  match = q.match(/^make\s+(.+?)\s+available(?:\s+as\s+a\s+(?:repo|repository|workspace))?$/i);
+  if (match) return { rawTarget: match[1].trim() };
 
-  // Pattern 7: add <target> repo
-  match = q.match(/^add\s+(.+?)\s+repo$/i);
-  if (match) return { rawTarget: match[1] };
-
-  // Pattern 8: add <target>
-  match = q.match(/^add\s+(.+)$/i);
-  if (match) return { rawTarget: match[1] };
+  // Pattern 7: connect <absolute-path-or-repo-identifier>
+  match = q.match(/^connect\s+(?:the\s+)?(.+?)(?:\s+(?:repo|repository|workspace))?$/i);
+  if (match) {
+    const target = match[1].trim();
+    if (!target.includes(' ') || path.isAbsolute(target) || q.toLowerCase().includes('repo') || q.toLowerCase().includes('workspace')) {
+      return { rawTarget: target };
+    }
+  }
 
   return null;
 }

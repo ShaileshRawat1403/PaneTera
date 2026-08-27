@@ -144,10 +144,12 @@ export interface ProvenanceRecord {
 
 export interface LlmToolDefinition {
   name: string;
+  rawToolName?: string;
   description: string;
   inputSchema: Record<string, unknown>;
   connectionId: string;
   capabilityId: string;
+  capabilityDigest?: string;
   permission: Permission;
 }
 

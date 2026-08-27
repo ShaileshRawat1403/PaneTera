@@ -66,7 +66,8 @@ export function toGeminiParameters(schema: unknown): Record<string, unknown> | u
 /** Build a Gemini functionDeclaration from a capability. */
 export function capabilityToGeminiTool(cap: AgentCapability): Record<string, unknown> {
   const parameters = toGeminiParameters(cap.inputSchema);
-  const decl: Record<string, unknown> = { name: cap.name, description: cap.description };
+  const sanitizedName = cap.name.replace(/[^a-zA-Z0-9_]/g, '_');
+  const decl: Record<string, unknown> = { name: sanitizedName, description: cap.description };
   if (parameters) decl.parameters = parameters;
   return decl;
 }
@@ -112,9 +113,17 @@ export async function dispatchCapability(
 /**
  * Index capabilities by name for O(1) dispatch lookup, last-wins on duplicates
  * (so a more specific capability can override a generic one).
+ * Also indexes sanitized names (e.g. replacing hyphens with underscores) so
+ * provider adapters like Gemini that forbid hyphens can dispatch successfully.
  */
 export function indexCapabilities(caps: AgentCapability[]): Map<string, AgentCapability> {
   const map = new Map<string, AgentCapability>();
-  for (const cap of caps) map.set(cap.name, cap);
+  for (const cap of caps) {
+    map.set(cap.name, cap);
+    const sanitized = cap.name.replace(/[^a-zA-Z0-9_]/g, '_');
+    if (sanitized !== cap.name) {
+      map.set(sanitized, cap);
+    }
+  }
   return map;
 }

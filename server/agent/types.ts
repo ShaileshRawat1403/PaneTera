@@ -62,10 +62,16 @@ export interface AgentRun {
 }
 
 export interface AgentPendingApproval {
-  kind: 'browser-action' | 'execution';
+  kind: 'browser-action' | 'execution' | 'rig-capability';
   approvalId: string;
   capability: string;
   summary: string;
+  connectionId?: string;
+  capabilityId?: string;
+  capabilityDigest?: string;
+  proposalId?: string;
+  arguments?: Record<string, unknown>;
+  displayArguments?: unknown;
   expiresAt?: string;
 }
 

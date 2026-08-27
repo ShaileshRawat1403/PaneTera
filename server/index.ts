@@ -41,6 +41,7 @@ import { headroomRouter } from './headroom/routes';
 import { nativeRouter } from './native/routes';
 import { tesseraRouter } from './tessera/routes';
 import { agentRouter, getAgentRunStore } from './agent/routes';
+import { setRigContinuationSynthesizer } from './agent/rigRunCoordinator';
 import { AgentRunStore } from './agent/runStore';
 import { StoreEventSink } from './agent/operatorSink';
 import { runOperatorAsRun, type OperatorRunResult } from './operatorRun';
@@ -1080,14 +1081,22 @@ async function runOperatorLoop(opts: {
   return { reply: result.reply, uiComponent: result.uiComponent as any };
 }
 
-async function askGemini(query: string, history: any[] = [], modelId?: string): Promise<{ reply: string; uiComponent?: any }> {
+function buildGeminiOperator(
+  query: string,
+  history: any[] = [],
+  modelId?: string,
+): {
+  callModel: () => Promise<ModelTurn>;
+  recordToolResult: (call: AgentToolCall, execution: ToolExecution) => void;
+  capIndex: Map<string, AgentCapability>;
+} {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw new Error('GEMINI_API_KEY environment variable is missing.');
   }
 
   const geminiModel = modelId || process.env.GEMINI_MODEL;
-  const url = geminiGenerateContentUrl(geminiModel);
+  const url = geminiGenerateContentUrl(geminiModel).replace('/v1/models', '/v1beta/models');
 
   const contentsPayload: any[] = [];
   for (const h of history) {
@@ -1115,24 +1124,35 @@ async function askGemini(query: string, history: any[] = [], modelId?: string): 
   const stripEmoji = (s: string) => s.replace(/[\u{1F300}-\u{1F9FF}]|[\u{1F600}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu, '');
 
   const callGemini = async (): Promise<ModelTurn> => {
-    const resp = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-      body: JSON.stringify({ contents: contentsPayload, systemInstruction: geminiSystemInstruction, tools: geminiTools })
-    });
-    if (!resp.ok) {
-      throw new Error(`Gemini API error: ${resp.status} - ${await resp.text()}`);
+    let lastError: Error | null = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt > 0) {
+        await new Promise((r) => setTimeout(r, 1500 * attempt));
+      }
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+        body: JSON.stringify({ contents: contentsPayload, systemInstruction: geminiSystemInstruction, tools: geminiTools })
+      });
+      if (resp.status === 503 || resp.status === 429) {
+        lastError = new Error(`Gemini API error: ${resp.status} - ${await resp.text()}`);
+        continue;
+      }
+      if (!resp.ok) {
+        throw new Error(`Gemini API error: ${resp.status} - ${await resp.text()}`);
+      }
+      const data = await resp.json();
+      const content = data.candidates?.[0]?.content;
+      if (content) contentsPayload.push(content);
+      let text = '';
+      const toolCalls: AgentToolCall[] = [];
+      for (const part of (content?.parts ?? [])) {
+        if (part.text) text += part.text;
+        if (part.functionCall) toolCalls.push({ name: part.functionCall.name, args: part.functionCall.args || {} });
+      }
+      return { text: stripEmoji(text), toolCalls };
     }
-    const data = await resp.json();
-    const content = data.candidates?.[0]?.content;
-    if (content) contentsPayload.push(content);
-    let text = '';
-    const toolCalls: AgentToolCall[] = [];
-    for (const part of (content?.parts ?? [])) {
-      if (part.text) text += part.text;
-      if (part.functionCall) toolCalls.push({ name: part.functionCall.name, args: part.functionCall.args || {} });
-    }
-    return { text: stripEmoji(text), toolCalls };
+    throw lastError || new Error('Gemini API request failed after retries.');
   };
 
   const recordToolResult = (call: AgentToolCall, execution: ToolExecution) => {
@@ -1141,7 +1161,32 @@ async function askGemini(query: string, history: any[] = [], modelId?: string): 
 
   const { capabilities, capIndex } = operatorToolset();
   (geminiTools[0].functionDeclarations as any[]).push(...capabilities.map(capabilityToGeminiTool));
-  return runOperatorLoop({ callModel: callGemini, recordToolResult, capIndex });
+  return { callModel: callGemini, recordToolResult, capIndex };
+}
+
+async function askGemini(query: string, history: any[] = [], modelId?: string): Promise<{ reply: string; uiComponent?: any }> {
+  const { callModel, recordToolResult, capIndex } = buildGeminiOperator(query, history, modelId);
+  return runOperatorLoop({ callModel, recordToolResult, capIndex });
+}
+
+async function askGeminiAsRun(
+  query: string,
+  history: any[],
+  modelId: string | undefined,
+  store: AgentRunStore,
+  onRunCreated: (runId: string) => void,
+  recordedObjective?: string,
+): Promise<OperatorRunResult> {
+  const { callModel, recordToolResult, capIndex } = buildGeminiOperator(query, history, modelId);
+  return runOperatorAsRun({
+    store,
+    provider: 'google',
+    model: modelId || DEFAULT_GEMINI_MODEL,
+    objective: query,
+    recordedObjective,
+    handlers: { callModel, executeTool: makeOperatorExecuteTool(capIndex), recordToolResult },
+    onRunCreated,
+  });
 }
 
 // OpenAI Q&A execution handler
@@ -1376,6 +1421,25 @@ async function askOpenAIAsRun(
     onDelta: tokenStream ? (emit) => { emitDelta = emit; } : undefined,
   });
 }
+
+// Wire the chat operator continuation into the generic Rig run coordinator
+// so approved capabilities resume through the active provider abstraction.
+setRigContinuationSynthesizer(async (run, capabilityId, args, result) => {
+  const provider = run.provider || (process.env.OPENAI_API_KEY ? 'openai' : 'google');
+  const model = run.model;
+  if (provider === 'openai' && process.env.OPENAI_API_KEY) {
+    const { callModel, recordToolResult } = buildOpenAIOperator(run.objective, [], model);
+    recordToolResult({ name: capabilityId, args }, { output: result });
+    const turn = await callModel();
+    if (turn.text?.trim()) return turn.text.trim();
+  } else if (provider === 'google' && process.env.GEMINI_API_KEY) {
+    const { callModel, recordToolResult } = buildGeminiOperator(run.objective, [], model);
+    recordToolResult({ name: capabilityId, args }, { output: result });
+    const turn = await callModel();
+    if (turn.text?.trim()) return turn.text.trim();
+  }
+  return `Capability "${capabilityId.split('.').pop() || capabilityId}" completed successfully.`;
+});
 
 // Local Ollama Q&A offline execution fallback handler
 async function askOllama(query: string, modelId?: string): Promise<{ reply: string; uiComponent?: any }> {
@@ -2387,7 +2451,7 @@ app.post('/api/chat/stream', async (req, res) => {
 
   const store = getAgentRunStore();
   if (!store) {
-    return res.status(503).json({ error: 'Streaming runs require the OpenAI-configured runtime (set OPENAI_API_KEY).' });
+    return res.status(503).json({ error: 'Run store unavailable.' });
   }
 
   // Native workbench cards are local UI truth, resolved before any provider call,
@@ -2407,9 +2471,19 @@ app.post('/api/chat/stream', async (req, res) => {
     if (recalled.length > 0) augmentedQuery = query + '\n\n[RECALLED CONTEXT from previous sessions]\n' + recalled.join('\n');
   } catch { /* memory bridge unavailable — proceed without context */ }
 
+  const modelProvider = modelId?.startsWith('ollama:') ? 'ollama'
+    : modelId?.startsWith('claude') ? 'anthropic'
+    : modelId?.startsWith('gemini') ? 'google'
+    : modelId?.startsWith('gpt') || modelId?.startsWith('o4') ? 'openai'
+    : (process.env.GEMINI_API_KEY ? 'google' : 'openai');
+
   try {
     const runId = await new Promise<string>((resolve, reject) => {
-      askOpenAIAsRun(augmentedQuery, history || [], modelId, store, resolve, query, Boolean(tokenStream)).catch(reject);
+      if (modelProvider === 'google') {
+        askGeminiAsRun(augmentedQuery, history || [], modelId, store, resolve, query).catch(reject);
+      } else {
+        askOpenAIAsRun(augmentedQuery, history || [], modelId, store, resolve, query, Boolean(tokenStream)).catch(reject);
+      }
     });
     return res.status(202).json({ runId });
   } catch (err: any) {

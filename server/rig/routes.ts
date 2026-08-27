@@ -22,9 +22,17 @@ const runtime = new RigRuntime(async (connectionId, error) => {
 const approvals = new CapabilityApprovalStore();
 const provenance = new ProvenanceStore();
 
-// The chat operator reuses these exact live instances so it sees the user's
-// actual enabled Rig connections, not a fresh empty registry.
-export { registry as rigRegistry, runtime as rigRuntime };
+// The chat operator and agent run coordinator reuse these exact live instances
+// so they see the user's actual enabled Rig connections, proposals, and approvals.
+export {
+  registry as rigRegistry,
+  runtime as rigRuntime,
+  approvals as rigApprovals,
+  provenance as rigProvenance,
+  rigDataDeps,
+  handleInvocation as rigHandleInvocation,
+  findCapability as rigFindCapability,
+};
 
 rigRouter.get('/portal-manifest', (_req, res) => {
   const manifest = buildUnifiedPortalManifest(registry);

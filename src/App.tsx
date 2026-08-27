@@ -1577,7 +1577,7 @@ const App: React.FC = () => {
 
   const handleApproveBrowserAction = async (runId: string) => {
     try {
-      const resp = await fetch(`/api/agent/run/${runId}/approve-browser`, {
+      const resp = await fetch(`/api/agent/run/${runId}/approve`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -1586,13 +1586,13 @@ const App: React.FC = () => {
         addMessage({ role: 'assistant', content: `Approval failed: ${data.error?.message || 'Unknown error'}` });
       }
     } catch {
-      addMessage({ role: 'assistant', content: 'Failed to communicate with server for browser action approval.' });
+      addMessage({ role: 'assistant', content: 'Failed to communicate with server for action approval.' });
     }
   };
 
   const handleRejectBrowserAction = async (runId: string) => {
     try {
-      const resp = await fetch(`/api/agent/run/${runId}/reject-browser`, {
+      const resp = await fetch(`/api/agent/run/${runId}/reject`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -1601,7 +1601,7 @@ const App: React.FC = () => {
         addMessage({ role: 'assistant', content: `Rejection failed: ${data.error?.message || 'Unknown error'}` });
       }
     } catch {
-      addMessage({ role: 'assistant', content: 'Failed to communicate with server for browser action rejection.' });
+      addMessage({ role: 'assistant', content: 'Failed to communicate with server for action rejection.' });
     }
   };
 

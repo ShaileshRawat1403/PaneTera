@@ -19,12 +19,17 @@ export class RigToolAdapter {
 
       for (const tool of connection.capabilities.tools) {
         if (!tool.enabled || tool.permission === 'denied') continue;
+        const rawDesc = (tool.rawDeclaration && typeof (tool.rawDeclaration as any).description === 'string')
+          ? (tool.rawDeclaration as any).description
+          : tool.description.text;
         result.push({
           name: `${connection.connectionId}__${tool.name}`,
-          description: tool.description.text,
+          rawToolName: tool.name,
+          description: rawDesc,
           inputSchema: tool.inputSchema || {},
           connectionId: connection.connectionId,
           capabilityId: tool.capabilityId,
+          capabilityDigest: tool.structuralDigest,
           permission: tool.permission,
         });
       }
