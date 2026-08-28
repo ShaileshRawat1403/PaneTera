@@ -1,42 +1,57 @@
 // src/theme/tokens.ts
 // The design language from PANETERA_WORKSTATION_CONTRACT.md, as values.
 //
-// The contract specifies warm graphite surfaces, parchment-white text, a
-// restrained violet interaction accent, and brass for attention. Green denotes
-// meaningful success, never continuous healthy decoration.
+// Cool graphite surfaces, near-neutral text, a restrained violet interaction
+// accent, and brass for attention. Green denotes meaningful success, never
+// continuous healthy decoration.
 //
-// "Warm" is the load-bearing word. The composer previously used #171d27 and
-// #a0aec0, which are cool blue-greys: their blue channel exceeds their red.
-// Warm graphite inverts that relationship, so every surface below has
-// red >= blue. test/theme.test.ts asserts it, because "warm" is otherwise the
-// kind of intention that quietly drifts back to Tailwind slate.
+// WHY COOL, WHEN THIS PALETTE USED TO BE WARM
+//
+// PaneTera's claim is that the person's real work sits on the canvas and the
+// workstation recedes around it. That work is frequently colour-critical --
+// an OpenPencil document, a darktable edit, a Shotcut frame, a screenshot
+// under inspection. A warm chrome casts over all of it: every neutral in a
+// photograph placed on a warm ground reads slightly wrong, and the person
+// cannot tell whether they are looking at their image or at our surface.
+// Cool-neutral surfaces are what let a rendered frame look like itself.
+//
+// So the axis is deliberate rather than decorative, and it is now inverted:
+// every surface has blue >= red. The discipline that matters is the second
+// half of the rule -- COOL, NOT BLUE. These are graphite, not slate and not
+// navy, so the blue-over-red margin stays small. test/theme.test.ts asserts
+// both halves: the direction and the bound.
+//
+// Warmth is not gone, it is spent where it carries meaning. Brass is the
+// warmest thing in the interface, which is what makes an approval waiting on
+// a person the warmest thing on screen. Against a cool ground it reads as
+// heat, in a way it never quite did against warm graphite.
 
 export const surface = {
   /** Deepest ground, behind everything. */
-  base: '#181614',
+  base: '#15161A',
   /** The authoritative canvas plane, one step up from base so it reads as its own surface. */
-  canvas: '#1B1917',
+  canvas: '#191A1E',
   /** Default panel: composer, cards, drawers. */
-  raised: '#211E1B',
-  /** An interactive panel under the pointer. One warm step above `raised`. */
-  raisedHover: '#26221F',
+  raised: '#1E2025',
+  /** An interactive panel under the pointer. One step above `raised`. */
+  raisedHover: '#23262C',
   /** Panel above a panel: menus, popovers. */
-  overlay: '#2A2622',
+  overlay: '#282B32',
   /** Pressed or recessed wells. */
-  sunken: '#141211',
+  sunken: '#101115',
   /** Hairlines and dividers. */
-  border: '#3A3430',
+  border: '#2C2F36',
   /** Border on a focused or active container. */
-  borderStrong: '#4C443E',
+  borderStrong: '#3E4148',
   /** Modal scrim over the workstation. */
-  backdrop: 'rgba(24, 22, 20, 0.72)',
+  backdrop: 'rgba(21, 22, 26, 0.72)',
 } as const;
 
 export const ink = {
-  /** Parchment white. Primary reading text. */
-  primary: '#F2EDE4',
+  /** Near-neutral white, a shade cool to sit with the surfaces. Primary reading text. */
+  primary: '#E8E9EC',
   /** Supporting text: descriptions, helper copy, metadata. AA everywhere. */
-  secondary: '#BDB4A8',
+  secondary: '#B4B8C0',
   /**
    * De-emphasised but still readable. AA on every surface.
    *
@@ -46,7 +61,7 @@ export const ink = {
    * holding, the token itself now meets 4.5:1 everywhere, so the remaining
    * distinction between secondary and muted is emphasis rather than safety.
    */
-  muted: '#968C82',
+  muted: '#8F949E',
   /**
    * Genuinely disabled controls only.
    *
@@ -54,9 +69,9 @@ export const ink = {
    * a dimmer value legitimate here and nowhere else. Never use this for text a
    * user is expected to read.
    */
-  disabled: '#7A7268',
+  disabled: '#6E727B',
   /** Text on violet or brass fills. */
-  onAccent: '#17130F',
+  onAccent: '#15161A',
 } as const;
 
 export const accent = {
@@ -83,8 +98,14 @@ export const status = {
   /** Failure and refusal. */
   danger: '#E08A7B',
   dangerMuted: 'rgba(224, 138, 123, 0.14)',
-  /** Neutral, for healthy-and-unremarkable. Deliberately not green. */
-  neutral: '#8E857A',
+  /**
+   * Neutral, for healthy-and-unremarkable. Deliberately not green.
+   *
+   * This is the colour of a connected app, a live surface, a reachable
+   * endpoint -- everything that is merely fine. Green is reserved for
+   * verified, so "fine" has to have somewhere else to go.
+   */
+  neutral: '#8F949E',
 } as const;
 
 /** 8px system. Values are multipliers of the base unit, not raw pixels. */
@@ -130,12 +151,12 @@ export const elevation = {
 
 /** Glassmorphic RGB values for backdrop-filter effects. */
 export const glass = {
-  /** raised surface RGB (33, 30, 27). */
-  raisedRgb: '33, 30, 27',
-  /** overlay surface RGB (42, 38, 34). */
-  overlayRgb: '42, 38, 34',
-  /** border RGB (58, 52, 48). */
-  borderRgb: '58, 52, 48',
+  /** raised surface RGB (30, 32, 37). */
+  raisedRgb: '30, 32, 37',
+  /** overlay surface RGB (40, 43, 50). */
+  overlayRgb: '40, 43, 50',
+  /** border RGB (44, 47, 54). */
+  borderRgb: '44, 47, 54',
   /** accent violet RGB (185, 165, 232). */
   violetRgb: '185, 165, 232',
 } as const;
@@ -145,35 +166,38 @@ export const lightGlass = {
   raisedRgb: '255, 255, 255',
   /** overlay surface RGB for light mode (255, 255, 255). */
   overlayRgb: '255, 255, 255',
-  /** border RGB for light mode (212, 212, 211). */
-  borderRgb: '212, 212, 211',
+  /** border RGB for light mode (210, 213, 218). */
+  borderRgb: '210, 213, 218',
   /** accent violet RGB for light mode (109, 70, 194). */
   violetRgb: '109, 70, 194',
 } as const;
 
 /**
- * Light mode keeps the same warm, restrained identity: parchment becomes the
- * ground, graphite becomes the ink, and violet remains the sole interaction
- * accent. These are raw values for theme construction and contrast tests;
- * components consume the mode-aware CSS variables from cssTokens.ts.
+ * Light mode keeps the same restrained identity with the roles swapped: paper
+ * becomes the ground, graphite becomes the ink, and violet remains the sole
+ * interaction accent. The same cool-not-blue discipline applies, and it needs
+ * more care here: a colour cast is far more visible near white than near
+ * black, so the blue-over-red margins below are smaller than the dark ones.
+ * These are raw values for theme construction and contrast tests; components
+ * consume the mode-aware CSS variables from cssTokens.ts.
  */
 export const lightSurface = {
-  base: '#F4F4F3',
-  canvas: '#FAFAF9',
+  base: '#F2F3F5',
+  canvas: '#F8F9FA',
   raised: '#FFFFFF',
-  raisedHover: '#F4F4F3',
+  raisedHover: '#EDEEF1',
   overlay: '#FFFFFF',
-  sunken: '#E4E4E3',
-  border: '#D4D4D3',
-  borderStrong: '#A1A1A0',
-  backdrop: 'rgba(33, 28, 24, 0.34)',
+  sunken: '#E5E7EA',
+  border: '#D2D5DA',
+  borderStrong: '#A3A6AB',
+  backdrop: 'rgba(21, 22, 26, 0.34)',
 } as const;
 
 export const lightInk = {
-  primary: '#181614',
-  secondary: '#45403B',
-  muted: '#5C564F',
-  disabled: '#948D85',
+  primary: '#15161A',
+  secondary: '#41454D',
+  muted: '#565B64',
+  disabled: '#9298A1',
   onAccent: '#FFFFFF',
 } as const;
 
@@ -192,14 +216,14 @@ export const lightStatus = {
   successMuted: 'rgba(27, 122, 39, 0.10)',
   danger: '#A82B1E',
   dangerMuted: 'rgba(168, 43, 30, 0.10)',
-  neutral: '#5C564F',
+  neutral: '#565B64',
 } as const;
 
 export const lightElevation = {
-  raised: '0 1px 3px rgba(24, 22, 20, 0.06)',
-  card: '0 1px 3px rgba(24, 22, 20, 0.05)',
-  cardHover: '0 8px 24px rgba(24, 22, 20, 0.10)',
-  overlay: '0 12px 32px rgba(24, 22, 20, 0.14)',
+  raised: '0 1px 3px rgba(21, 22, 26, 0.06)',
+  card: '0 1px 3px rgba(21, 22, 26, 0.05)',
+  cardHover: '0 8px 24px rgba(21, 22, 26, 0.10)',
+  overlay: '0 12px 32px rgba(21, 22, 26, 0.14)',
   focusRing: `0 0 0 3px ${lightAccent.violetMuted}`,
 } as const;
 
