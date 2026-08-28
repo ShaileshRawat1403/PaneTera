@@ -50,7 +50,8 @@ export const EvidencePanel: React.FC<EvidencePanelProps> = ({ initialSources }) 
         borderTopLeftRadius: `${radius.md}px`,
         borderTopRightRadius: `${radius.md}px`,
         boxShadow: '0 -4px 20px rgba(0, 0, 0, 0.4)',
-        backdropFilter: 'blur(16px)',
+        // No backdrop-filter: the fill above is opaque, so the blur cost a
+        // compositing layer and bought nothing. Shell chrome is opaque.
         overflow: 'hidden',
       }}
     >

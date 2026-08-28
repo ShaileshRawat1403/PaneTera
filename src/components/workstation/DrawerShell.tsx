@@ -87,7 +87,7 @@ export function DrawerShell({
           py: 1.75,
           borderBottom: `1px solid ${surface.border}`,
           backgroundColor: surface.raised,
-          backdropFilter: 'blur(8px)',
+          // Opaque fill, so the blur was blurring nothing. Shell chrome is opaque.
         }}
       >
         <Box sx={{ minWidth: 0 }}>

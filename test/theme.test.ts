@@ -1,11 +1,18 @@
 // test/theme.test.ts
 // Keeps the design language honest.
 //
-// The contract states warm graphite, parchment text, restrained violet, brass
-// attention, green only for meaningful success, WCAG AA contrast, and reduced
-// motion support. Each of those is checkable, so each is checked. Design
-// intentions stated only in prose drift; these assertions are what stop
-// "warm graphite" quietly becoming Tailwind slate again.
+// The contract states cool graphite surfaces, near-neutral text, restrained
+// violet, brass attention, green only for meaningful success, WCAG AA
+// contrast, and reduced motion support. Each of those is checkable, so each is
+// checked. Design intentions stated only in prose drift; these assertions are
+// what stop the palette sliding somewhere nobody decided on.
+//
+// This file used to assert the opposite axis -- red >= blue on every surface --
+// because the palette was warm graphite. The direction was inverted on purpose:
+// PaneTera's canvas carries colour-critical work, and a warm chrome casts over
+// every photograph and render placed on it. The assertions below were rewritten
+// to pin the new intent rather than deleted, because an unasserted palette is
+// exactly how the old one drifted.
 
 process.env.NODE_ENV = 'test';
 
@@ -56,33 +63,92 @@ function contrast(a: string, b: string): number {
   return (light + 0.05) / (dark + 0.05);
 }
 
-describe('surfaces are warm graphite, not cool grey', () => {
-  // The tell: in a cool grey the blue channel exceeds the red. Every PaneTera
-  // surface must lean the other way, which is what "warm" means in practice.
+describe('surfaces are cool graphite, not blue', () => {
+  // Two halves, and the second is the one that actually needs guarding.
+  //
+  //   Direction: blue >= red, so the ground never casts warm over the work
+  //              sitting on the canvas.
+  //   Bound:     the margin stays small, so "cool graphite" cannot drift into
+  //              slate or navy. Graphite is the noun; cool is the adjective.
+  //
+  // Asserting only the direction would let the palette wander arbitrarily far
+  // blue while still passing, which is how a neutral becomes a hue by degrees.
+  const MAX_COOL_MARGIN_DARK = 12;
+  const MAX_COOL_MARGIN_LIGHT = 8;
+
   const surfaces = Object.entries(surface).filter(([, value]) => value.startsWith('#'));
 
   for (const [name, hex] of surfaces) {
-    it(`${name} is warm`, () => {
+    it(`${name} is cool`, () => {
       const [r, , b] = rgb(hex);
-      assert.ok(r >= b, `${name} (${hex}) has more blue than red, which reads as cool grey`);
+      assert.ok(b >= r, `${name} (${hex}) has more red than blue, which reads warm`);
+    });
+
+    it(`${name} is graphite, not blue`, () => {
+      const [r, , b] = rgb(hex);
+      assert.ok(
+        b - r <= MAX_COOL_MARGIN_DARK,
+        `${name} (${hex}) is ${b - r} points bluer than red; above ${MAX_COOL_MARGIN_DARK} it stops reading as a neutral`,
+      );
     });
   }
 
-  it('parchment text is warm too', () => {
+  const lightSurfaces = Object.entries(lightSurface).filter(([, value]) => value.startsWith('#'));
+
+  for (const [name, hex] of lightSurfaces) {
+    it(`light ${name} is cool but still neutral`, () => {
+      const [r, , b] = rgb(hex);
+      assert.ok(b >= r, `light ${name} (${hex}) reads warm`);
+      // Tighter near white: a cast is far more visible against paper than
+      // against graphite, where the same margin disappears into the dark.
+      assert.ok(
+        b - r <= MAX_COOL_MARGIN_LIGHT,
+        `light ${name} (${hex}) is ${b - r} points blue; near white that reads as a tint`,
+      );
+    });
+  }
+
+  it('primary text is near-neutral rather than parchment', () => {
     const [r, , b] = rgb(ink.primary);
-    assert.ok(r > b, 'parchment white must be warmer than neutral white');
+    assert.ok(b >= r, 'primary ink must not be warmer than its surfaces');
+    assert.ok(b - r <= 8, `primary ink (${ink.primary}) must stay close to neutral white`);
   });
 
-  it('uses a warm neutral modal scrim rather than a cool overlay', () => {
-    assert.ok(surface.backdrop.startsWith('rgba(24, 22, 20,'), surface.backdrop);
-    assert.ok(lightSurface.backdrop.startsWith('rgba(33, 28, 24,'), lightSurface.backdrop);
+  it('derives the modal scrim from the base surface rather than a stray colour', () => {
+    // The scrim is the base surface at opacity. Stating it as an independent
+    // literal is how a palette ends up with a warm veil over a cool ground.
+    const [r, g, b] = rgb(surface.base);
+    assert.ok(surface.backdrop.startsWith(`rgba(${r}, ${g}, ${b},`), surface.backdrop);
+    assert.ok(lightSurface.backdrop.startsWith(`rgba(${r}, ${g}, ${b},`), lightSurface.backdrop);
   });
 
-  it('rejects the previous cool palette', () => {
-    // The values the composer used before the theme existed.
-    for (const oldHex of ['#171d27', '#a0aec0', '#e2e8f0']) {
-      const [r, , b] = rgb(oldHex);
-      assert.ok(b > r, `${oldHex} was cool, which is why it was replaced`);
+  it('keeps warmth for the signals, where it carries meaning', () => {
+    // Brass is the warmest thing in the interface on purpose: an approval
+    // waiting on a person should be the warmest thing on the screen. Against
+    // a cool ground that reads as heat.
+    const [br, , bb] = rgb(status.brass);
+    assert.ok(br > bb, `brass (${status.brass}) must be warm to stand against a cool ground`);
+
+    const [dr, , db] = rgb(status.danger);
+    assert.ok(dr > db, `danger (${status.danger}) must be warm`);
+
+    // And the neutral must not be: healthy-and-unremarkable is the absence of
+    // a signal, so it belongs with the surfaces, not with the warm marks.
+    const [nr, , nb] = rgb(status.neutral);
+    assert.ok(nb >= nr, `neutral (${status.neutral}) must stay cool, or "fine" starts looking like "attention"`);
+  });
+
+  it('rejects the palettes it has already moved away from', () => {
+    // Left as a tripwire in both directions. Tailwind slate is too blue to be
+    // graphite; the old parchment ground is the warm cast this palette exists
+    // to remove.
+    for (const tooBlue of ['#171d27', '#a0aec0', '#e2e8f0']) {
+      const [r, , b] = rgb(tooBlue);
+      assert.ok(b - r > MAX_COOL_MARGIN_DARK, `${tooBlue} is slate, not graphite`);
+    }
+    for (const tooWarm of ['#181614', '#F2EDE4', '#211E1B']) {
+      const [r, , b] = rgb(tooWarm);
+      assert.ok(r > b, `${tooWarm} was warm, which is why it was replaced`);
     }
   });
 });
