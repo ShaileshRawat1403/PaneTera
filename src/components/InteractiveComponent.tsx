@@ -629,6 +629,7 @@ export const InteractiveComponent: React.FC<ComponentProps> = ({ uiComponent, on
                   title="Live Soothsayer"
                   sandbox="allow-scripts allow-forms allow-same-origin allow-popups"
                   referrerPolicy="no-referrer"
+                  // eslint-disable-next-line no-restricted-syntax -- iframe canvas for a guest document, not themed chrome
                   style={{ width: '100%', height: '100%', border: 'none', background: '#fff' }}
                 />
               </Box>

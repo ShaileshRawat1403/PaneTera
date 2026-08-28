@@ -30,11 +30,11 @@ jobs:
       - name: Lint (eslint + tsc)
         run: npm run lint
 
-      # test:core excludes the quarantined suites (see docs triage table).
-      # The default `npm test` stays red by design until they are fixed, so CI
-      # gates on test:core, not test.
-      - name: Test (core suite)
-        run: npm run test:core
+      # The quarantine is retired: every suite runs, and test:core is now an
+      # alias for the full `npm test`. Nothing is excluded from the number CI
+      # reports.
+      - name: Test (full suite)
+        run: npm test
 
       - name: Build
         run: npm run build

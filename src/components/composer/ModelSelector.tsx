@@ -17,10 +17,15 @@ interface ModelSelectorProps {
 }
 
 const providerColors: Record<string, string> = {
+  /* eslint-disable no-restricted-syntax --
+     Provider brand colours, not theme colours. These identify OpenAI,
+     Anthropic, Google and Ollama and must stay exact in both themes; routing
+     them through a palette token would misrepresent someone else's mark. */
   openai: '#10A37F',
   anthropic: '#D97757',
   google: '#4285F4',
   ollama: '#8B5CF6',
+  /* eslint-enable no-restricted-syntax */
 };
 
 const providerLabels: Record<string, string> = {

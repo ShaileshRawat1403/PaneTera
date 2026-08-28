@@ -5,6 +5,7 @@ import LanguageIcon from '@mui/icons-material/Language';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import ViewListIcon from '@mui/icons-material/ViewList';
 import SecurityIcon from '@mui/icons-material/Security';
+import { accent, ink, status } from '../../theme/cssTokens';
 
 interface BrowserExtractionProps {
   data: any;
@@ -24,7 +25,7 @@ export const BrowserExtractionView: React.FC<BrowserExtractionProps> = ({ data, 
           textAlign: 'center'
         }}
       >
-        <Typography variant="body2" sx={{ color: '#71717a' }}>
+        <Typography variant="body2" sx={{ color: ink.disabled }}>
           No extraction data recorded.
         </Typography>
       </Paper>
@@ -38,20 +39,20 @@ export const BrowserExtractionView: React.FC<BrowserExtractionProps> = ({ data, 
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
         <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
           <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-            <Typography variant="body2" sx={{ color: '#cbd5e1', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <Typography variant="body2" sx={{ color: ink.secondary, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {source?.title || 'Extracted Evidence'}
             </Typography>
-            <Typography variant="caption" sx={{ color: '#71717a', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <Typography variant="caption" sx={{ color: ink.disabled, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {source?.url}
             </Typography>
           </Box>
         </Box>
         <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 0.5, flexWrap: 'wrap' }}>
-          <Chip label={capability} size="small" sx={{ height: 16, fontSize: '0.6rem', background: 'rgba(127, 85, 240, 0.1)', color: '#b794f4' }} />
+          <Chip label={capability} size="small" sx={{ height: 16, fontSize: '0.6rem', background: 'rgba(127, 85, 240, 0.1)', color: accent.violet }} />
           {evidence?.items && (
-            <Chip label={`${evidence.items.length} items`} size="small" sx={{ height: 16, fontSize: '0.6rem', background: 'rgba(255,255,255,0.03)', color: '#cbd5e1' }} />
+            <Chip label={`${evidence.items.length} items`} size="small" sx={{ height: 16, fontSize: '0.6rem', background: 'rgba(255,255,255,0.03)', color: ink.secondary }} />
           )}
-          {truncated && <Chip label="Truncated" size="small" sx={{ height: 16, fontSize: '0.6rem', background: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b' }} />}
+          {truncated && <Chip label="Truncated" size="small" sx={{ height: 16, fontSize: '0.6rem', background: 'rgba(245, 158, 11, 0.1)', color: status.brass }} />}
         </Stack>
       </Box>
     );
@@ -74,10 +75,10 @@ export const BrowserExtractionView: React.FC<BrowserExtractionProps> = ({ data, 
       {/* Header and Badge */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Box>
-          <Typography variant="caption" sx={{ color: '#7f5af0', fontWeight: 800, display: 'block', mb: 0.5, letterSpacing: '0.05em' }}>
+          <Typography variant="caption" sx={{ color: accent.violet, fontWeight: 800, display: 'block', mb: 0.5, letterSpacing: '0.05em' }}>
             STRUCTURED EVIDENCE
           </Typography>
-          <Typography variant="h6" sx={{ color: '#f4f4f5', fontWeight: 800 }}>
+          <Typography variant="h6" sx={{ color: ink.primary, fontWeight: 800 }}>
             {capability}
           </Typography>
         </Box>
@@ -91,7 +92,7 @@ export const BrowserExtractionView: React.FC<BrowserExtractionProps> = ({ data, 
                 fontSize: '0.6rem',
                 fontWeight: 800,
                 background: 'rgba(245, 158, 11, 0.08)',
-                color: '#f59e0b',
+                color: status.brass,
                 border: '1px solid rgba(245, 158, 11, 0.15)'
               }}
             />
@@ -104,7 +105,7 @@ export const BrowserExtractionView: React.FC<BrowserExtractionProps> = ({ data, 
               fontSize: '0.6rem',
               fontWeight: 800,
               background: 'rgba(59, 130, 246, 0.08)',
-              color: '#3b82f6',
+              color: accent.violet,
               border: '1px solid rgba(59, 130, 246, 0.15)'
             }}
           />
@@ -115,26 +116,26 @@ export const BrowserExtractionView: React.FC<BrowserExtractionProps> = ({ data, 
       <Paper variant="outlined" sx={{ p: 2, background: 'rgba(0, 0, 0, 0.15)', borderColor: 'rgba(255, 255, 255, 0.04)', borderRadius: '8px' }}>
         <Stack spacing={1.5}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <LanguageIcon sx={{ color: '#71717a', fontSize: 16 }} />
-            <Typography variant="body2" sx={{ color: '#cbd5e1', wordBreak: 'break-all' }}>
-              URL: <strong style={{ color: '#f4f4f5' }}>{source?.url}</strong>
+            <LanguageIcon sx={{ color: ink.disabled, fontSize: 16 }} />
+            <Typography variant="body2" sx={{ color: ink.secondary, wordBreak: 'break-all' }}>
+              URL: <strong style={{ color: ink.primary }}>{source?.url}</strong>
             </Typography>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <ViewListIcon sx={{ color: '#71717a', fontSize: 16 }} />
-            <Typography variant="body2" sx={{ color: '#cbd5e1' }}>
-              Title: <strong style={{ color: '#f4f4f5' }}>{source?.title}</strong>
+            <ViewListIcon sx={{ color: ink.disabled, fontSize: 16 }} />
+            <Typography variant="body2" sx={{ color: ink.secondary }}>
+              Title: <strong style={{ color: ink.primary }}>{source?.title}</strong>
             </Typography>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <CalendarTodayIcon sx={{ color: '#71717a', fontSize: 16 }} />
-            <Typography variant="caption" sx={{ color: '#a0aec0' }}>
+            <CalendarTodayIcon sx={{ color: ink.disabled, fontSize: 16 }} />
+            <Typography variant="caption" sx={{ color: ink.muted }}>
               Captured At: {new Date(source?.capturedAt || new Date()).toLocaleString()}
             </Typography>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <SecurityIcon sx={{ color: '#71717a', fontSize: 16 }} />
-            <Typography variant="caption" sx={{ color: '#a0aec0' }}>
+            <SecurityIcon sx={{ color: ink.disabled, fontSize: 16 }} />
+            <Typography variant="caption" sx={{ color: ink.muted }}>
               Trust: Origin {trust?.origin}, {trust?.isTopFrame ? 'Top Frame' : 'Iframe'}, CSP: {trust?.hasCsp ? 'Yes' : 'No'}
             </Typography>
           </Box>
@@ -143,21 +144,21 @@ export const BrowserExtractionView: React.FC<BrowserExtractionProps> = ({ data, 
 
       {/* Extracted Data Visualization based on capability */}
       <Box>
-        <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, display: 'block', mb: 1.5, letterSpacing: '0.05em' }}>
+        <Typography variant="caption" sx={{ color: ink.disabled, fontWeight: 800, display: 'block', mb: 1.5, letterSpacing: '0.05em' }}>
           EXTRACTION PAYLOAD
         </Typography>
         <Paper variant="outlined" sx={{ p: 2, background: 'rgba(255, 255, 255, 0.01)', borderColor: 'rgba(255, 255, 255, 0.03)', borderRadius: '8px', maxHeight: 350, overflowY: 'auto' }}>
           {capability === 'browser.article.extract' && (
             <Box>
-               <Typography variant="body2" sx={{ color: '#f4f4f5', fontWeight: 'bold', mb: 1 }}>{payloadData?.title}</Typography>
-               <Typography variant="body2" sx={{ color: '#cbd5e1', whiteSpace: 'pre-wrap', fontFamily: 'serif' }}>{payloadData?.textContent}</Typography>
+               <Typography variant="body2" sx={{ color: ink.primary, fontWeight: 'bold', mb: 1 }}>{payloadData?.title}</Typography>
+               <Typography variant="body2" sx={{ color: ink.secondary, whiteSpace: 'pre-wrap', fontFamily: 'serif' }}>{payloadData?.textContent}</Typography>
             </Box>
           )}
           {capability === 'browser.outline.extract' && Array.isArray(payloadData) && (
             <List dense>
               {payloadData.map((item: any, idx: number) => (
                  <ListItem key={idx} sx={{ py: 0.5, pl: (item.level || 1) * 2 }}>
-                    <ListItemText primary={item.text} primaryTypographyProps={{ sx: { color: '#cbd5e1', fontSize: '0.85rem' } }} />
+                    <ListItemText primary={item.text} primaryTypographyProps={{ sx: { color: ink.secondary, fontSize: '0.85rem' } }} />
                  </ListItem>
               ))}
             </List>
@@ -169,15 +170,15 @@ export const BrowserExtractionView: React.FC<BrowserExtractionProps> = ({ data, 
                     <ListItemText 
                        primary={link.text || link.href} 
                        secondary={link.text ? link.href : null}
-                       primaryTypographyProps={{ sx: { color: '#cbd5e1', fontSize: '0.85rem' } }} 
-                       secondaryTypographyProps={{ sx: { color: '#71717a', fontSize: '0.75rem', wordBreak: 'break-all' } }}
+                       primaryTypographyProps={{ sx: { color: ink.secondary, fontSize: '0.85rem' } }} 
+                       secondaryTypographyProps={{ sx: { color: ink.disabled, fontSize: '0.75rem', wordBreak: 'break-all' } }}
                     />
                  </ListItem>
               ))}
             </List>
           )}
           {capability !== 'browser.article.extract' && capability !== 'browser.outline.extract' && capability !== 'browser.links.extract' && (
-            <Typography variant="body2" component="pre" sx={{ color: '#cbd5e1', whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: '0.75rem' }}>
+            <Typography variant="body2" component="pre" sx={{ color: ink.secondary, whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: '0.75rem' }}>
               {JSON.stringify(payloadData, null, 2)}
             </Typography>
           )}
@@ -187,7 +188,7 @@ export const BrowserExtractionView: React.FC<BrowserExtractionProps> = ({ data, 
       {/* Evidence Items Section */}
       {evidence?.items && evidence.items.length > 0 && (
          <Box>
-          <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, display: 'block', mb: 1.5, letterSpacing: '0.05em' }}>
+          <Typography variant="caption" sx={{ color: ink.disabled, fontWeight: 800, display: 'block', mb: 1.5, letterSpacing: '0.05em' }}>
             EVIDENCE ITEMS ({evidence.items.length})
           </Typography>
           <Paper variant="outlined" sx={{ p: 1.5, background: 'rgba(0, 0, 0, 0.1)', borderColor: 'rgba(255, 255, 255, 0.03)', borderRadius: '8px', maxHeight: 200, overflowY: 'auto' }}>
@@ -197,13 +198,13 @@ export const BrowserExtractionView: React.FC<BrowserExtractionProps> = ({ data, 
                     <ListItemText 
                        primary={`[${item.kind}] ID: ${item.evidenceId}`} 
                        secondary={JSON.stringify(item.locator)}
-                       primaryTypographyProps={{ sx: { color: '#b794f4', fontSize: '0.75rem', fontFamily: 'monospace' } }} 
-                       secondaryTypographyProps={{ sx: { color: '#71717a', fontSize: '0.7rem', fontFamily: 'monospace' } }}
+                       primaryTypographyProps={{ sx: { color: accent.violet, fontSize: '0.75rem', fontFamily: 'monospace' } }} 
+                       secondaryTypographyProps={{ sx: { color: ink.disabled, fontSize: '0.7rem', fontFamily: 'monospace' } }}
                     />
                  </ListItem>
               ))}
               {evidence.items.length > 50 && (
-                <Typography variant="caption" sx={{ color: '#71717a', fontStyle: 'italic', pl: 1 }}>
+                <Typography variant="caption" sx={{ color: ink.disabled, fontStyle: 'italic', pl: 1 }}>
                   ...and {evidence.items.length - 50} more items.
                 </Typography>
               )}
@@ -226,8 +227,8 @@ export const BrowserExtractionView: React.FC<BrowserExtractionProps> = ({ data, 
           borderRadius: '8px'
         }}
       >
-        <InfoIcon sx={{ color: '#3b82f6', fontSize: 16, mt: 0.2 }} />
-        <Typography variant="caption" sx={{ color: '#a0aec0', lineHeight: 1.4 }}>
+        <InfoIcon sx={{ color: accent.violet, fontSize: 16, mt: 0.2 }} />
+        <Typography variant="caption" sx={{ color: ink.muted, lineHeight: 1.4 }}>
           <strong>Evidence Disclaimer:</strong> This structured data is extracted deterministically from top-frame DOM content only. No scripts were executed during extraction.
         </Typography>
       </Box>

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Typography, Paper } from '@mui/material';
 import WarningIcon from '@mui/icons-material/Warning';
+import { ink, status } from '../../theme/cssTokens';
 
 interface UnknownViewProps {
   viewId: string;
@@ -24,15 +25,15 @@ export const UnknownNativeView: React.FC<UnknownViewProps> = ({ viewId, type, la
         gap: 1.5
       }}
     >
-      <WarningIcon sx={{ color: '#ef4444', fontSize: 32 }} />
+      <WarningIcon sx={{ color: status.danger, fontSize: 32 }} />
       <Box>
-        <Typography variant="body2" sx={{ color: '#ef4444', fontWeight: 800 }}>
+        <Typography variant="body2" sx={{ color: status.danger, fontWeight: 800 }}>
           Unsupported App-Native View Type
         </Typography>
-        <Typography variant="caption" sx={{ color: '#a0aec0', display: 'block', mt: 0.5 }}>
+        <Typography variant="caption" sx={{ color: ink.muted, display: 'block', mt: 0.5 }}>
           View ID: <strong>{viewId}</strong> | Type: <strong>{type}</strong> | Label: <strong>{label}</strong>
         </Typography>
-        <Typography variant="caption" sx={{ color: '#71717a', display: 'block', mt: 1, fontWeight: 700 }}>
+        <Typography variant="caption" sx={{ color: ink.disabled, display: 'block', mt: 1, fontWeight: 700 }}>
           No actions available. Unknown native views cannot execute operations or collect input.
         </Typography>
       </Box>

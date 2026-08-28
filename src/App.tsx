@@ -19,6 +19,7 @@ import { capabilitiesFrom, executePlan } from './composer/capabilities';
 import type { PlanExecutors } from './composer/capabilities';
 import { describeResolution, resolveAppName } from './composer/appRegistry';
 import { PreviewPanel, FeedItem } from './components/PreviewPanel';
+import { countApprovalsWaiting, isRunAwaitingApproval } from './components/workstation/approvalsWaiting';
 import { InteractiveComponent } from './components/InteractiveComponent';
 import { WorkstationShell } from './components/workstation/WorkstationShell';
 import type { CockpitSummary } from './components/workstation/CockpitStatusBar';
@@ -704,13 +705,29 @@ const App: React.FC = () => {
       .catch(() => setSoothsayerStatus('offline'));
   }, []);
 
-  // Real-time EventSource listener for file updates and execution logs
+  // Real-time EventSource listener for file updates and execution logs.
+  //
+  // The stream authenticates with a single-use ticket rather than the master
+  // token, which must never appear in a URL. Because the ticket is spent when
+  // the stream opens, EventSource's own reconnect can never succeed -- it would
+  // retry the same spent URL forever. So reconnection is handled here: on error
+  // the source is closed and a fresh ticket is fetched, with backoff.
   useEffect(() => {
     if (!token) return;
 
-    const eventSource = new EventSource(`/api/events?token=${encodeURIComponent(token)}`);
+    let cancelled = false;
+    let eventSource: EventSource | null = null;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let backoffMs = 1000;
+    const MAX_BACKOFF_MS = 30000;
 
-    eventSource.onmessage = (e) => {
+    const scheduleRetry = () => {
+      if (cancelled) return;
+      retryTimer = setTimeout(connect, backoffMs);
+      backoffMs = Math.min(backoffMs * 2, MAX_BACKOFF_MS);
+    };
+
+    const handleMessage = (e: MessageEvent) => {
       try {
         const eventData = JSON.parse(e.data);
         if (eventData.type === 'file_change') {
@@ -743,8 +760,39 @@ const App: React.FC = () => {
       }
     };
 
+    async function connect() {
+      if (cancelled) return;
+      try {
+        const resp = await fetch('/api/events/ticket', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!resp.ok) throw new Error(`ticket request failed (${resp.status})`);
+        const { ticket } = await resp.json() as { ticket: string };
+        if (cancelled) return;
+
+        const source = new EventSource(`/api/events?ticket=${encodeURIComponent(ticket)}`);
+        eventSource = source;
+        source.onmessage = handleMessage;
+        // A stream that opened is a working credential path; reset the backoff
+        // so a later transient drop reconnects promptly.
+        source.onopen = () => { backoffMs = 1000; };
+        source.onerror = () => {
+          source.close();
+          if (eventSource === source) eventSource = null;
+          scheduleRetry();
+        };
+      } catch {
+        scheduleRetry();
+      }
+    }
+
+    void connect();
+
     return () => {
-      eventSource.close();
+      cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
+      eventSource?.close();
     };
   }, [token]);
 
@@ -2295,27 +2343,20 @@ const App: React.FC = () => {
             currentObjective: headroomObjective.trim() || null,
           };
 
-          // Cockpit strip summary. Session and the Headroom gauge are live; run
-          // status derives from the in-flight turn and, best-effort, the active
-          // run's declared status. A fully live approvals count would require
-          // lifting run state into the shell, which the run cards own today.
-          const cockpitHeadroomItems = activeHeadroomCapsule
-            ? ((activeHeadroomCapsule.decisions?.length || 0)
-              + (activeHeadroomCapsule.assumptions?.length || 0)
-              + (activeHeadroomCapsule.unresolvedQuestions?.length || 0)
-              + (activeHeadroomCapsule.changedUnderstanding?.length || 0))
-            : 0;
-          const cockpitActiveRunStatus = activeComponent?.type === 'AgentRun'
-            ? (activeComponent.data as { status?: string } | undefined)?.status
-            : undefined;
+          // Cockpit strip summary. Every field is sourced from state the shell can
+          // already see; nothing here is inferred or scaled against an invented
+          // ceiling. Approvals are counted across both places a pending decision
+          // can sit -- the feed and the active run -- rather than reported as a
+          // status flag. Headroom reports its open questions, a defined quantity.
+          const cockpitAwaitingApproval = isRunAwaitingApproval(activeComponent);
           const cockpitSummary: CockpitSummary = {
             sessionLabel: `Session ${headroomSessionId.slice(0, 6)}`,
-            runStatus: cockpitActiveRunStatus === 'waiting-approval'
+            runStatus: cockpitAwaitingApproval
               ? 'awaiting-approval'
               : loading ? 'working' : 'idle',
-            approvalsWaiting: cockpitActiveRunStatus === 'waiting-approval' ? 1 : 0,
+            approvalsWaiting: countApprovalsWaiting(previewFeed, activeComponent),
             headroomActive: Boolean(activeHeadroomCapsule),
-            headroomLevel: Math.min(1, cockpitHeadroomItems / 8),
+            headroomOpenQuestions: activeHeadroomCapsule?.unresolvedQuestions?.length ?? 0,
           };
 
           const contextBrief = buildContextBrief({

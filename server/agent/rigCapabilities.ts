@@ -5,6 +5,8 @@ import { logTypedAudit } from '../auditRecord';
 import { rigAuditFields } from '../rig/auditClassification';
 import { rigRegistry, rigApprovals, rigFindCapability } from '../rig/routes';
 import type { OperatorPrincipal } from '../operatorPrincipal';
+import type { McpConnection } from '../rig/types';
+import type { CapabilityApprovalStore } from '../rig/approval';
 import type { AgentCapability, AgentToolResult } from './types';
 
 /**

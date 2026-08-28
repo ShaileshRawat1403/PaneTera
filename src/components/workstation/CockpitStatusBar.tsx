@@ -2,15 +2,22 @@
 //
 // The cockpit: an always-on strip beneath the top bar that answers, at a glance,
 // "what is happening right now" without opening a drawer. It carries the session,
-// the current run status, any approvals waiting, and Headroom as an ambient gauge.
+// the current run status, any approvals waiting, and whether Headroom is in play.
 //
 // It is a quiet instrument, not a dashboard. Warm palette only, colour reserved
 // for meaning: neutral when idle, violet while working, brass when something is
 // waiting on the person, green when a run has just succeeded. No emojis.
+//
+// Every value here must be a fact the shell can source. An earlier version
+// rendered Headroom as a percentage gauge filled by `items / 8`, where the 8
+// had no referent -- nothing bounds a capsule at eight items, so a ninth pinned
+// the bar at full and left it there. A filled bar reads as a measurement, so it
+// was a measurement of nothing. It is replaced by a count of open questions,
+// which is defined, and which renders as absence when there is nothing to say.
 
 import React from 'react';
 import { Box, Tooltip, Typography } from '@mui/material';
-import { accent, ink, radius, status, surface, typography } from '../../theme/cssTokens';
+import { accent, ink, status, surface, typography } from '../../theme/cssTokens';
 
 export type CockpitRunStatus = 'idle' | 'working' | 'awaiting-approval' | 'succeeded' | 'failed';
 
@@ -19,12 +26,18 @@ export interface CockpitSummary {
   sessionLabel: string;
   /** The current run's coarse status. */
   runStatus: CockpitRunStatus;
-  /** How many governed actions are waiting on the person. */
+  /**
+   * How many governed actions are waiting on the person. A real count, from
+   * countApprovalsWaiting -- never a status flag rendered as a number.
+   */
   approvalsWaiting: number;
   /** Whether a Headroom capsule is currently in play. */
   headroomActive: boolean;
-  /** Ambient fill for the Headroom gauge, 0..1. */
-  headroomLevel: number;
+  /**
+   * Unresolved questions on the active capsule. A defined quantity with a
+   * natural zero, not a proportion of an invented ceiling.
+   */
+  headroomOpenQuestions: number;
 }
 
 // Label and colour for a run status. Pure, so the mapping is unit-tested without
@@ -41,16 +54,25 @@ export function cockpitStatusMeta(runStatus: CockpitRunStatus): { label: string;
   }
 }
 
-// Clamp an ambient level (0..1) to a gauge width percentage. Pure and defended
-// against NaN or out-of-range input.
-export function gaugeWidthPercent(level: number): number {
-  if (!Number.isFinite(level)) return 0;
-  return Math.round(Math.max(0, Math.min(1, level)) * 100);
+/**
+ * What the cockpit says about Headroom, or null to render nothing.
+ *
+ * Absence is a legitimate state and is shown as absence: with no capsule in
+ * play there is no Headroom fact to report, so the slot stays empty rather than
+ * displaying a zeroed instrument.
+ */
+export function headroomReadout(summary: Pick<CockpitSummary, 'headroomActive' | 'headroomOpenQuestions'>): string | null {
+  if (!summary.headroomActive) return null;
+  const open = Number.isFinite(summary.headroomOpenQuestions)
+    ? Math.max(0, Math.trunc(summary.headroomOpenQuestions))
+    : 0;
+  if (open === 0) return 'Headroom · active';
+  return `Headroom · ${open} open`;
 }
 
 export function CockpitStatusBar({ summary }: { summary: CockpitSummary }): React.ReactElement {
   const meta = cockpitStatusMeta(summary.runStatus);
-  const gauge = gaugeWidthPercent(summary.headroomLevel);
+  const headroom = headroomReadout(summary);
   const pulsing = summary.runStatus === 'working';
 
   return (
@@ -111,32 +133,19 @@ export function CockpitStatusBar({ summary }: { summary: CockpitSummary }): Reac
 
       <Box sx={{ flex: 1 }} />
 
-      {/* Headroom ambient gauge */}
-      <Tooltip title={summary.headroomActive ? 'Headroom context in play' : 'No Headroom context active'}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexShrink: 0 }}>
-          <Typography sx={{ color: ink.muted, fontSize: '0.6875rem', whiteSpace: 'nowrap' }}>
-            Headroom
-          </Typography>
-          <Box
-            role="meter"
-            aria-label="Headroom context level"
-            aria-valuenow={gauge}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            sx={{ width: 56, height: 5, borderRadius: `${radius.pill}px`, backgroundColor: surface.border, overflow: 'hidden' }}
+      {/* Headroom: a count when there is one, nothing when there is not. */}
+      {headroom && (
+        <Tooltip title={summary.headroomOpenQuestions > 0
+          ? 'Unresolved questions on the active Headroom capsule'
+          : 'Headroom context in play'}>
+          <Typography
+            sx={{ color: ink.muted, fontSize: '0.6875rem', whiteSpace: 'nowrap', flexShrink: 0 }}
           >
-            <Box
-              sx={{
-                width: `${gauge}%`,
-                height: '100%',
-                borderRadius: `${radius.pill}px`,
-                backgroundColor: summary.headroomActive ? accent.violet : ink.muted,
-                transition: 'width 240ms ease',
-              }}
-            />
-          </Box>
-        </Box>
-      </Tooltip>
+            {headroom}
+          </Typography>
+        </Tooltip>
+      )}
+
     </Box>
   );
 }

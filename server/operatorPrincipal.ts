@@ -32,16 +32,20 @@ function configuredPrincipal(): OperatorPrincipal | null {
 /**
  * Authorize a portal request and bind an opaque principal to that exact Request
  * object only when the operator identity is configured on the server.
+ *
+ * The token is read from the Authorization header and nowhere else. An earlier
+ * version accepted `?token=` for the SSE stream, because EventSource cannot set
+ * headers; that put the master credential into URLs, and from there into access
+ * logs, proxy logs and Referer headers. The stream now authenticates with a
+ * single-use ticket instead (server/eventTicket.ts), so there is no longer any
+ * route on which the master token may travel in a query string.
  */
 export function authenticatePortalRequest(
   req: Request,
   expectedToken: string,
-  options: { allowQueryToken?: boolean } = {},
 ): boolean {
   const authorization = req.headers.authorization ?? '';
-  const bearer = authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : '';
-  const query = options.allowQueryToken && typeof req.query.token === 'string' ? req.query.token : '';
-  const presented = bearer || query;
+  const presented = authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : '';
   if (!expectedToken || !presented || !equalSecret(presented, expectedToken)) return false;
 
   const principal = configuredPrincipal();

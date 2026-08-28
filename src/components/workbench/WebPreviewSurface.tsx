@@ -359,6 +359,7 @@ export function WebPreviewSurface({
             sx={{
               flexGrow: 1,
               minHeight: 0,
+              // eslint-disable-next-line no-restricted-syntax -- the guest page paints its own ground; PaneTera's theme must not tint it
               backgroundColor: '#ffffff',
             }}
           >
@@ -368,6 +369,7 @@ export function WebPreviewSurface({
               title={`${name} website preview`}
               sandbox={sandbox}
               referrerPolicy="strict-origin-when-cross-origin"
+              // eslint-disable-next-line no-restricted-syntax -- see above: the embedded document owns this surface
               style={{ width: '100%', height: '100%', border: 0, background: '#ffffff' }}
             />
           </Box>

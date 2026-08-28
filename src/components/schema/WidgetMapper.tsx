@@ -6,6 +6,7 @@ import { MetricGroupWidget } from './widgets/MetricGroupWidget';
 import { DiffWidget } from './widgets/DiffWidget';
 import { ProposalGateWidget } from './widgets/ProposalGateWidget';
 import { FormWidget } from './widgets/FormWidget';
+import { ink } from '../../theme/cssTokens';
 
 interface WidgetMapperProps {
   schema: PaneTeraCardSchema;
@@ -27,8 +28,8 @@ export const WidgetMapper: React.FC<WidgetMapperProps> = ({ schema, data, onActi
       return <FormWidget schema={schema} data={data} onAction={onAction} />;
     default:
       return (
-        <div style={{ padding: 16, borderRadius: 12, backgroundColor: 'rgba(28,26,24,0.7)', border: '1px solid rgba(51,46,40,0.8)', color: '#9CA3AF', fontSize: 12 }}>
-          Unsupported widget type: <span style={{ fontFamily: 'monospace', color: '#F5F0E8' }}>{schema.type}</span>
+        <div style={{ padding: 16, borderRadius: 12, backgroundColor: 'rgba(28,26,24,0.7)', border: '1px solid rgba(51,46,40,0.8)', color: ink.muted, fontSize: 12 }}>
+          Unsupported widget type: <span style={{ fontFamily: 'monospace', color: ink.primary }}>{schema.type}</span>
         </div>
       );
   }

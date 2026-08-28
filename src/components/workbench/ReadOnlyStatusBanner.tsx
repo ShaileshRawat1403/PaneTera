@@ -2,6 +2,7 @@
 import React from 'react';
 import { Box, Typography, Chip, Stack } from '@mui/material';
 import LockIcon from '@mui/icons-material/Lock';
+import { accent, ink, status } from '../../theme/cssTokens';
 
 interface BannerProps {
   gatewayConnected: boolean;
@@ -46,12 +47,12 @@ export const ReadOnlyStatusBanner: React.FC<BannerProps> = ({
     >
       {/* Sandbox warning text */}
       <Stack direction="row" spacing={1} alignItems="center">
-        <LockIcon sx={{ color: '#ef4444', fontSize: 14 }} />
+        <LockIcon sx={{ color: status.danger, fontSize: 14 }} />
         <Typography
           variant="caption"
           sx={{
             fontWeight: 850,
-            color: '#f4f4f5',
+            color: ink.primary,
             letterSpacing: '0.1em',
             textTransform: 'uppercase',
             fontSize: '0.68rem',
@@ -73,7 +74,7 @@ export const ReadOnlyStatusBanner: React.FC<BannerProps> = ({
             fontSize: '0.55rem',
             fontWeight: 800,
             background: portalAuthValid ? 'rgba(34, 197, 94, 0.06)' : 'rgba(239, 68, 68, 0.06)',
-            color: portalAuthValid ? '#22c55e' : '#ef4444',
+            color: portalAuthValid ? status.success : status.danger,
             border: `1px solid ${portalAuthValid ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)'}`
           }}
         />
@@ -87,7 +88,7 @@ export const ReadOnlyStatusBanner: React.FC<BannerProps> = ({
             fontSize: '0.55rem',
             fontWeight: 800,
             background: gatewayConnected ? 'rgba(34, 197, 94, 0.06)' : 'rgba(239, 68, 68, 0.06)',
-            color: gatewayConnected ? '#22c55e' : '#ef4444',
+            color: gatewayConnected ? status.success : status.danger,
             border: `1px solid ${gatewayConnected ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)'}`
           }}
         />
@@ -101,7 +102,7 @@ export const ReadOnlyStatusBanner: React.FC<BannerProps> = ({
             fontSize: '0.55rem',
             fontWeight: 800,
             background: workspaceCatalogCount > 0 ? 'rgba(127, 85, 240, 0.08)' : 'rgba(251, 191, 36, 0.06)',
-            color: workspaceCatalogCount > 0 ? '#b794f4' : '#fbbf24',
+            color: workspaceCatalogCount > 0 ? accent.violet : status.brass,
             border: `1px solid ${workspaceCatalogCount > 0 ? 'rgba(127,85,240,0.2)' : 'rgba(251,191,36,0.15)'}`
           }}
         />
@@ -115,7 +116,7 @@ export const ReadOnlyStatusBanner: React.FC<BannerProps> = ({
             fontSize: '0.55rem',
             fontWeight: 800,
             background: localAdapterActive ? 'rgba(127, 85, 240, 0.08)' : 'rgba(239, 68, 68, 0.06)',
-            color: localAdapterActive ? '#b794f4' : '#ef4444',
+            color: localAdapterActive ? accent.violet : status.danger,
             border: `1px solid ${localAdapterActive ? 'rgba(127,85,240,0.2)' : 'rgba(239,68,68,0.15)'}`
           }}
         />
@@ -129,7 +130,7 @@ export const ReadOnlyStatusBanner: React.FC<BannerProps> = ({
             fontSize: '0.55rem',
             fontWeight: 800,
             background: liveAppUrlReachable ? 'rgba(34, 197, 94, 0.06)' : 'rgba(255, 255, 255, 0.03)',
-            color: liveAppUrlReachable ? '#22c55e' : '#71717a',
+            color: liveAppUrlReachable ? status.success : ink.disabled,
             border: `1px solid ${liveAppUrlReachable ? 'rgba(34,197,94,0.15)' : 'rgba(255,255,255,0.05)'}`
           }}
         />
@@ -143,7 +144,7 @@ export const ReadOnlyStatusBanner: React.FC<BannerProps> = ({
             fontSize: '0.55rem',
             fontWeight: 800,
             background: liveAppManifestAvailable ? 'rgba(34, 197, 94, 0.06)' : 'rgba(251, 191, 36, 0.06)',
-            color: liveAppManifestAvailable ? '#22c55e' : '#fbbf24',
+            color: liveAppManifestAvailable ? status.success : status.brass,
             border: `1px solid ${liveAppManifestAvailable ? 'rgba(34,197,94,0.15)' : 'rgba(251,191,36,0.15)'}`
           }}
         />
@@ -157,7 +158,7 @@ export const ReadOnlyStatusBanner: React.FC<BannerProps> = ({
               fontSize: '0.55rem',
               fontWeight: 800,
               background: 'rgba(127, 85, 240, 0.15)',
-              color: '#b794f4',
+              color: accent.violet,
               border: '1px solid rgba(127, 85, 240, 0.3)'
             }}
           />
@@ -174,7 +175,7 @@ export const ReadOnlyStatusBanner: React.FC<BannerProps> = ({
               fontSize: '0.55rem',
               fontWeight: 800,
               background: 'rgba(255, 255, 255, 0.05)',
-              color: '#cbd5e1',
+              color: ink.secondary,
               border: '1px solid rgba(255, 255, 255, 0.1)',
               '&:hover': { background: 'rgba(255, 255, 255, 0.1)' }
             }}

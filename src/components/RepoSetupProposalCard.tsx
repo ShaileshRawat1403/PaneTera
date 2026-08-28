@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Typography, Button, Chip, Stack } from '@mui/material';
 import type { RepoSetupProposal } from '../../server/repoSetup';
+import { accent, ink, status } from '../theme/cssTokens';
 
 export interface RepoSetupProposalCardProps {
   data: RepoSetupProposal;
@@ -44,7 +45,7 @@ export const RepoSetupProposalCard: React.FC<RepoSetupProposalCardProps> = ({
         <Typography
           variant="caption"
           sx={{
-            color: '#ef4444',
+            color: status.danger,
             fontWeight: 700,
             letterSpacing: '0.06em',
             display: 'block',
@@ -53,9 +54,9 @@ export const RepoSetupProposalCard: React.FC<RepoSetupProposalCardProps> = ({
         >
           REPO SETUP BLOCKED
         </Typography>
-        <Typography variant="body2" sx={{ color: '#cbd5e1', mb: 1, lineHeight: 1.5 }}>
+        <Typography variant="body2" sx={{ color: ink.secondary, mb: 1, lineHeight: 1.5 }}>
           Proposed repository{' '}
-          <Box component="span" sx={{ fontFamily: 'monospace', color: '#f87171', fontWeight: 700 }}>
+          <Box component="span" sx={{ fontFamily: 'monospace', color: status.danger, fontWeight: 700 }}>
             {workspaceName || 'Unknown'}
           </Box>{' '}
           cannot be configured.
@@ -63,7 +64,7 @@ export const RepoSetupProposalCard: React.FC<RepoSetupProposalCardProps> = ({
 
         <Stack spacing={1} sx={{ mt: 1.5, mb: 2 }}>
           {warnings.map((warning, idx) => (
-            <Typography key={idx} variant="caption" sx={{ color: '#fca5a5', display: 'block' }}>
+            <Typography key={idx} variant="caption" sx={{ color: status.dangerMuted, display: 'block' }}>
               ⚠️ {warning}
             </Typography>
           ))}
@@ -90,7 +91,7 @@ export const RepoSetupProposalCard: React.FC<RepoSetupProposalCardProps> = ({
               variant="outlined"
               onClick={onCancel}
               sx={{
-                color: '#a1a1aa',
+                color: ink.muted,
                 borderColor: 'rgba(255,255,255,0.15)',
                 borderRadius: '8px',
                 textTransform: 'none',
@@ -122,7 +123,7 @@ export const RepoSetupProposalCard: React.FC<RepoSetupProposalCardProps> = ({
       }}
     >
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
-        <Typography variant="caption" sx={{ color: '#a78bfa', fontWeight: 700, letterSpacing: '0.06em' }}>
+        <Typography variant="caption" sx={{ color: accent.violet, fontWeight: 700, letterSpacing: '0.06em' }}>
           PROPOSED REPO SETUP
         </Typography>
         <Chip
@@ -133,15 +134,15 @@ export const RepoSetupProposalCard: React.FC<RepoSetupProposalCardProps> = ({
             fontSize: '0.6rem',
             fontWeight: 700,
             background: 'rgba(127, 85, 240, 0.12)',
-            color: '#d8b4fe',
+            color: accent.violet,
             border: '1px solid rgba(127, 85, 240, 0.25)',
           }}
         />
       </Box>
 
-      <Typography variant="body2" sx={{ color: '#f4f4f5', mb: 0.5, lineHeight: 1.5 }}>
+      <Typography variant="body2" sx={{ color: ink.primary, mb: 0.5, lineHeight: 1.5 }}>
         Add workspace{' '}
-        <Box component="span" sx={{ fontWeight: 700, color: '#c084fc' }}>
+        <Box component="span" sx={{ fontWeight: 700, color: accent.violet }}>
           {workspaceName}
         </Box>
       </Typography>
@@ -149,7 +150,7 @@ export const RepoSetupProposalCard: React.FC<RepoSetupProposalCardProps> = ({
       <Typography
         variant="caption"
         sx={{
-          color: '#94a3b8',
+          color: ink.muted,
           display: 'block',
           fontFamily: 'monospace',
           mb: 1.5,
@@ -196,7 +197,7 @@ export const RepoSetupProposalCard: React.FC<RepoSetupProposalCardProps> = ({
       {/* Package Scripts */}
       {scripts && scripts.length > 0 && (
         <Box sx={{ mb: 2 }}>
-          <Typography variant="caption" sx={{ color: '#a1a1aa', fontWeight: 600, display: 'block', mb: 0.5 }}>
+          <Typography variant="caption" sx={{ color: ink.muted, fontWeight: 600, display: 'block', mb: 0.5 }}>
             Detected Scripts:
           </Typography>
           <Stack direction="row" spacing={0.8} flexWrap="wrap" useFlexGap>
@@ -223,7 +224,7 @@ export const RepoSetupProposalCard: React.FC<RepoSetupProposalCardProps> = ({
       {warnings.length > 0 && (
         <Stack spacing={0.5} sx={{ mb: 2 }}>
           {warnings.map((warning, idx) => (
-            <Typography key={idx} variant="caption" sx={{ color: '#fbbf24', display: 'block' }}>
+            <Typography key={idx} variant="caption" sx={{ color: status.brass, display: 'block' }}>
               ⚠️ {warning}
             </Typography>
           ))}
@@ -252,7 +253,7 @@ export const RepoSetupProposalCard: React.FC<RepoSetupProposalCardProps> = ({
             variant="outlined"
             onClick={onCancel}
             sx={{
-              color: '#a1a1aa',
+              color: ink.muted,
               borderColor: 'rgba(255,255,255,0.15)',
               borderRadius: '8px',
               textTransform: 'none',

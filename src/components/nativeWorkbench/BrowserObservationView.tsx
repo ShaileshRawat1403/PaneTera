@@ -4,6 +4,7 @@ import InfoIcon from '@mui/icons-material/Info';
 import LanguageIcon from '@mui/icons-material/Language';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import ViewListIcon from '@mui/icons-material/ViewList';
+import { accent, ink, status } from '../../theme/cssTokens';
 
 interface DomOutlineItem {
   role: 'heading' | 'button' | 'link' | 'input' | 'text' | 'region';
@@ -37,7 +38,7 @@ export const BrowserObservationView: React.FC<BrowserObservationProps> = ({ data
           textAlign: 'center'
         }}
       >
-        <Typography variant="body2" sx={{ color: '#71717a' }}>
+        <Typography variant="body2" sx={{ color: ink.disabled }}>
           No Chrome browser observations recorded yet. Use a trusted agent to send page state.
         </Typography>
       </Paper>
@@ -74,18 +75,18 @@ export const BrowserObservationView: React.FC<BrowserObservationProps> = ({ data
             />
           )}
           <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-            <Typography variant="body2" sx={{ color: '#cbd5e1', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <Typography variant="body2" sx={{ color: ink.secondary, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {title || 'Observed Page'}
             </Typography>
-            <Typography variant="caption" sx={{ color: '#71717a', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <Typography variant="caption" sx={{ color: ink.disabled, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {url}
             </Typography>
           </Box>
         </Box>
         <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 0.5, flexWrap: 'wrap' }}>
-          <Chip label={`DOM: ${domOutline.length} items`} size="small" sx={{ height: 16, fontSize: '0.6rem', background: 'rgba(255,255,255,0.03)', color: '#cbd5e1' }} />
-          {groupedOutline.heading && <Chip label={`Headings: ${groupedOutline.heading.length}`} size="small" sx={{ height: 16, fontSize: '0.6rem', background: 'rgba(127, 85, 240, 0.08)', color: '#b794f4' }} />}
-          {groupedOutline.button && <Chip label={`Buttons: ${groupedOutline.button.length}`} size="small" sx={{ height: 16, fontSize: '0.6rem', background: 'rgba(34, 197, 94, 0.08)', color: '#22c55e' }} />}
+          <Chip label={`DOM: ${domOutline.length} items`} size="small" sx={{ height: 16, fontSize: '0.6rem', background: 'rgba(255,255,255,0.03)', color: ink.secondary }} />
+          {groupedOutline.heading && <Chip label={`Headings: ${groupedOutline.heading.length}`} size="small" sx={{ height: 16, fontSize: '0.6rem', background: 'rgba(127, 85, 240, 0.08)', color: accent.violet }} />}
+          {groupedOutline.button && <Chip label={`Buttons: ${groupedOutline.button.length}`} size="small" sx={{ height: 16, fontSize: '0.6rem', background: 'rgba(34, 197, 94, 0.08)', color: status.success }} />}
         </Stack>
       </Box>
     );
@@ -108,10 +109,10 @@ export const BrowserObservationView: React.FC<BrowserObservationProps> = ({ data
       {/* Header and Badge */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Box>
-          <Typography variant="caption" sx={{ color: '#7f5af0', fontWeight: 800, display: 'block', mb: 0.5, letterSpacing: '0.05em' }}>
+          <Typography variant="caption" sx={{ color: accent.violet, fontWeight: 800, display: 'block', mb: 0.5, letterSpacing: '0.05em' }}>
             INSPECTION TRACE
           </Typography>
-          <Typography variant="h6" sx={{ color: '#f4f4f5', fontWeight: 800 }}>
+          <Typography variant="h6" sx={{ color: ink.primary, fontWeight: 800 }}>
             Observed in Chrome
           </Typography>
         </Box>
@@ -123,7 +124,7 @@ export const BrowserObservationView: React.FC<BrowserObservationProps> = ({ data
             fontSize: '0.6rem',
             fontWeight: 800,
             background: 'rgba(59, 130, 246, 0.08)',
-            color: '#3b82f6',
+            color: accent.violet,
             border: '1px solid rgba(59, 130, 246, 0.15)'
           }}
         />
@@ -133,20 +134,20 @@ export const BrowserObservationView: React.FC<BrowserObservationProps> = ({ data
       <Paper variant="outlined" sx={{ p: 2, background: 'rgba(0, 0, 0, 0.15)', borderColor: 'rgba(255, 255, 255, 0.04)', borderRadius: '8px' }}>
         <Stack spacing={1.5}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <LanguageIcon sx={{ color: '#71717a', fontSize: 16 }} />
-            <Typography variant="body2" sx={{ color: '#cbd5e1', wordBreak: 'break-all' }}>
-              URL: <strong style={{ color: '#f4f4f5' }}>{url}</strong>
+            <LanguageIcon sx={{ color: ink.disabled, fontSize: 16 }} />
+            <Typography variant="body2" sx={{ color: ink.secondary, wordBreak: 'break-all' }}>
+              URL: <strong style={{ color: ink.primary }}>{url}</strong>
             </Typography>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <ViewListIcon sx={{ color: '#71717a', fontSize: 16 }} />
-            <Typography variant="body2" sx={{ color: '#cbd5e1' }}>
-              Title: <strong style={{ color: '#f4f4f5' }}>{title}</strong>
+            <ViewListIcon sx={{ color: ink.disabled, fontSize: 16 }} />
+            <Typography variant="body2" sx={{ color: ink.secondary }}>
+              Title: <strong style={{ color: ink.primary }}>{title}</strong>
             </Typography>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <CalendarTodayIcon sx={{ color: '#71717a', fontSize: 16 }} />
-            <Typography variant="caption" sx={{ color: '#a0aec0' }}>
+            <CalendarTodayIcon sx={{ color: ink.disabled, fontSize: 16 }} />
+            <Typography variant="caption" sx={{ color: ink.muted }}>
               Observed At: {new Date(observedAt || capturedAt || new Date()).toLocaleString()}
             </Typography>
           </Box>
@@ -156,11 +157,11 @@ export const BrowserObservationView: React.FC<BrowserObservationProps> = ({ data
       {/* Selected text if present */}
       {selectedText && (
         <Box>
-          <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, display: 'block', mb: 1, letterSpacing: '0.05em' }}>
+          <Typography variant="caption" sx={{ color: ink.disabled, fontWeight: 800, display: 'block', mb: 1, letterSpacing: '0.05em' }}>
             SELECTED TEXT
           </Typography>
           <Paper variant="outlined" sx={{ p: 2, background: 'rgba(255, 255, 255, 0.02)', borderColor: 'rgba(255, 255, 255, 0.04)', borderRadius: '8px' }}>
-            <Typography variant="body2" sx={{ color: '#cbd5e1', whiteSpace: 'pre-wrap', fontStyle: 'italic' }}>
+            <Typography variant="body2" sx={{ color: ink.secondary, whiteSpace: 'pre-wrap', fontStyle: 'italic' }}>
               "{selectedText}"
             </Typography>
           </Paper>
@@ -171,13 +172,13 @@ export const BrowserObservationView: React.FC<BrowserObservationProps> = ({ data
       <Grid container spacing={3}>
         {/* DOM Outline */}
         <Grid item xs={12} md={screenshotDataUrl ? 7 : 12}>
-          <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, display: 'block', mb: 1.5, letterSpacing: '0.05em' }}>
+          <Typography variant="caption" sx={{ color: ink.disabled, fontWeight: 800, display: 'block', mb: 1.5, letterSpacing: '0.05em' }}>
             SAFE DOM OUTLINE ({domOutline.length} items)
           </Typography>
           <Stack spacing={2} sx={{ maxHeight: 350, overflowY: 'auto', pr: 1 }}>
             {Object.keys(groupedOutline).map(role => (
               <Box key={role}>
-                <Typography variant="caption" sx={{ color: '#b794f4', fontWeight: 800, textTransform: 'uppercase', display: 'block', mb: 0.5 }}>
+                <Typography variant="caption" sx={{ color: accent.violet, fontWeight: 800, textTransform: 'uppercase', display: 'block', mb: 0.5 }}>
                   {role}s
                 </Typography>
                 <Paper variant="outlined" sx={{ p: 1, background: 'rgba(0,0,0,0.1)', borderColor: 'rgba(255,255,255,0.03)' }}>
@@ -186,9 +187,9 @@ export const BrowserObservationView: React.FC<BrowserObservationProps> = ({ data
                       <ListItem key={idx} sx={{ p: 0, py: 0.25 }}>
                         <ListItemText
                           primary={item.text}
-                          primaryTypographyProps={{ sx: { fontSize: '0.78rem', color: '#cbd5e1' } }}
+                          primaryTypographyProps={{ sx: { fontSize: '0.78rem', color: ink.secondary } }}
                           secondary={item.level ? `Heading Level ${item.level}` : undefined}
-                          secondaryTypographyProps={{ sx: { fontSize: '0.65rem', color: '#71717a' } }}
+                          secondaryTypographyProps={{ sx: { fontSize: '0.65rem', color: ink.disabled } }}
                         />
                       </ListItem>
                     ))}
@@ -202,7 +203,7 @@ export const BrowserObservationView: React.FC<BrowserObservationProps> = ({ data
         {/* Screenshot View */}
         {screenshotDataUrl && (
           <Grid item xs={12} md={5}>
-            <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, display: 'block', mb: 1.5, letterSpacing: '0.05em' }}>
+            <Typography variant="caption" sx={{ color: ink.disabled, fontWeight: 800, display: 'block', mb: 1.5, letterSpacing: '0.05em' }}>
               VIEWPORT PREVIEW
             </Typography>
             <Paper
@@ -249,8 +250,8 @@ export const BrowserObservationView: React.FC<BrowserObservationProps> = ({ data
           borderRadius: '8px'
         }}
       >
-        <InfoIcon sx={{ color: '#3b82f6', fontSize: 16, mt: 0.2 }} />
-        <Typography variant="caption" sx={{ color: '#a0aec0', lineHeight: 1.4 }}>
+        <InfoIcon sx={{ color: accent.violet, fontSize: 16, mt: 0.2 }} />
+        <Typography variant="caption" sx={{ color: ink.muted, lineHeight: 1.4 }}>
           <strong>Disclaimer:</strong> This is browser-observed page state, not app-owned API truth. Chrome is eyes, not authority. App-native workbench remains authority. No action execution buttons are available on observed pages.
         </Typography>
       </Box>
