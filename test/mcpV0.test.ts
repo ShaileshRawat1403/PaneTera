@@ -1,10 +1,42 @@
+// Boots the real composed app in-process. NODE_ENV must be set to 'test'
+// *before* server/index.ts is evaluated, or the module opens its own listener
+// on PORT and starts the file watcher as an import side effect -- handles that
+// nothing here owns and nothing closes, so the runner hung until it timed out.
+// ES imports are hoisted above statements, so the app is pulled in dynamically
+// below rather than with a static import. Type-only imports stay static: they
+// are erased and carry no side effect.
+process.env.NODE_ENV = 'test';
+
+// Boots the real composed app in-process. NODE_ENV must be 'test' before
+// server/index.ts is evaluated, or the module opens its own listener on PORT
+// and starts the file watcher as an import side effect -- handles that nothing
+// here owns and nothing closes, so the runner hung until it timed out.
+//
+// Static imports are hoisted above this assignment, so the app is pulled in
+// dynamically inside runTests() instead. These files transpile to CJS, which
+// has no top-level await, so the import cannot sit at module scope either.
+process.env.NODE_ENV = 'test';
+
 import assert from 'assert';
 import http from 'http';
-import { app } from '../server/index';
-import { browserEvidenceStore } from '../server/browserEvidenceStore';
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js";
+import type { McpClientPrincipal } from '../server/mcp/browserMcpAuth';
+
+type ServerModule = typeof import('../server/index');
+type EvidenceModule = typeof import('../server/browserEvidenceStore');
+type AuthModule = typeof import('../server/mcp/browserMcpAuth');
+
+let app: ServerModule['app'];
+let browserEvidenceStore: EvidenceModule['browserEvidenceStore'];
+let registerMcpCredential: AuthModule['registerMcpCredential'];
+
+async function loadServer(): Promise<void> {
+  ({ app } = await import('../server/index'));
+  ({ browserEvidenceStore } = await import('../server/browserEvidenceStore'));
+  ({ registerMcpCredential } = await import('../server/mcp/browserMcpAuth'));
+}
 
 console.log('Running Browser Operator MCP Façade V0 unit tests...');
 
@@ -75,6 +107,7 @@ class FetchClientTransport implements Transport {
 }
 
 async function runTests() {
+  await loadServer();
   await startServer();
 
   function httpRequest(options: http.RequestOptions, postData?: string): Promise<http.IncomingMessage> {
@@ -94,6 +127,21 @@ async function runTests() {
     // 1. Clear store
     (browserEvidenceStore as any).observations = [];
     (browserEvidenceStore as any).extractions = [];
+
+    // 1b. Register the credential these assertions authenticate with.
+    //
+    // Without this every request below carried an unregistered bearer and was
+    // rejected at 401, so the Host and Origin assertions never reached the
+    // guard they exist to test -- the suite reported a DNS-rebinding failure
+    // that was really a missing fixture. Registering it means a 403 now proves
+    // the rebinding guard fired on an *authenticated* request, which is the
+    // only version of that assertion worth having.
+    const principal: McpClientPrincipal = {
+      clientId: 'mcp-v0-facade-test',
+      subjectId: 'operator-under-test',
+      scopes: ['read'],
+    };
+    registerMcpCredential(V0_CREDENTIAL, principal);
 
     // 2. GET returns 405
     let res = await httpRequest({ host: '127.0.0.1', port: PORT, path: '/mcp/browser', method: 'GET' });
