@@ -19,6 +19,7 @@ import { capabilitiesFrom, executePlan } from './composer/capabilities';
 import type { PlanExecutors } from './composer/capabilities';
 import { describeResolution, resolveAppName } from './composer/appRegistry';
 import { PreviewPanel, FeedItem } from './components/PreviewPanel';
+import { countApprovalsWaiting, isRunAwaitingApproval } from './components/workstation/approvalsWaiting';
 import { InteractiveComponent } from './components/InteractiveComponent';
 import { WorkstationShell } from './components/workstation/WorkstationShell';
 import type { CockpitSummary } from './components/workstation/CockpitStatusBar';
@@ -2295,27 +2296,20 @@ const App: React.FC = () => {
             currentObjective: headroomObjective.trim() || null,
           };
 
-          // Cockpit strip summary. Session and the Headroom gauge are live; run
-          // status derives from the in-flight turn and, best-effort, the active
-          // run's declared status. A fully live approvals count would require
-          // lifting run state into the shell, which the run cards own today.
-          const cockpitHeadroomItems = activeHeadroomCapsule
-            ? ((activeHeadroomCapsule.decisions?.length || 0)
-              + (activeHeadroomCapsule.assumptions?.length || 0)
-              + (activeHeadroomCapsule.unresolvedQuestions?.length || 0)
-              + (activeHeadroomCapsule.changedUnderstanding?.length || 0))
-            : 0;
-          const cockpitActiveRunStatus = activeComponent?.type === 'AgentRun'
-            ? (activeComponent.data as { status?: string } | undefined)?.status
-            : undefined;
+          // Cockpit strip summary. Every field is sourced from state the shell can
+          // already see; nothing here is inferred or scaled against an invented
+          // ceiling. Approvals are counted across both places a pending decision
+          // can sit -- the feed and the active run -- rather than reported as a
+          // status flag. Headroom reports its open questions, a defined quantity.
+          const cockpitAwaitingApproval = isRunAwaitingApproval(activeComponent);
           const cockpitSummary: CockpitSummary = {
             sessionLabel: `Session ${headroomSessionId.slice(0, 6)}`,
-            runStatus: cockpitActiveRunStatus === 'waiting-approval'
+            runStatus: cockpitAwaitingApproval
               ? 'awaiting-approval'
               : loading ? 'working' : 'idle',
-            approvalsWaiting: cockpitActiveRunStatus === 'waiting-approval' ? 1 : 0,
+            approvalsWaiting: countApprovalsWaiting(previewFeed, activeComponent),
             headroomActive: Boolean(activeHeadroomCapsule),
-            headroomLevel: Math.min(1, cockpitHeadroomItems / 8),
+            headroomOpenQuestions: activeHeadroomCapsule?.unresolvedQuestions?.length ?? 0,
           };
 
           const contextBrief = buildContextBrief({
