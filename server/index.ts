@@ -54,7 +54,7 @@ import { registerItOpsDomain } from './domains/itops/tools';
 registerItOpsDomain();
 import { LocalScopeStore, type LocalSelectionKind, type LocalSelectionGrant } from './headroom/localScopeStore';
 import { PANETERA_ASSISTANT_INSTRUCTION } from './assistantInstruction';
-import { geminiGenerateContentUrl } from './modelConfig';
+import { geminiGenerateContentUrl, DEFAULT_GEMINI_MODEL } from './modelConfig';
 import { securityHeaders, corsHeaders } from './middleware/securityHeaders';
 import { apiLimiter, agentRunLimiter } from './middleware/rateLimiter';
 import { requestLogger } from './logging/logger';

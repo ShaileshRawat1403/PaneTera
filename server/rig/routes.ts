@@ -495,9 +495,26 @@ rigRouter.post('/proposals/:proposalId/approve', (req, res) => {
 export interface RigDataDeps {
   registry: Pick<RigRegistry, 'get' | 'update'>;
   runtime: Pick<RigRuntime, 'callTool' | 'readResource' | 'getPrompt'>;
+  /**
+   * Deliberately withholds `approve`. The invocation path may only claim and
+   * consume an approval that already exists, so a handler that receives
+   * RigDataDeps structurally cannot approve its own proposal. Widen this and
+   * that guarantee is gone for every consumer at once.
+   */
   approvals: Pick<CapabilityApprovalStore, 'claim' | 'consume'>;
   provenance: Pick<ProvenanceStore, 'append'>;
 }
+
+/**
+ * The dependency surface held by a caller that carries approval authority:
+ * it resolves a human decision into an authoritative approval and then
+ * invokes it. Strictly wider than RigDataDeps, and assignable to it, so
+ * handler signatures keep the narrow no-self-approve contract above while
+ * the coordinator states the broader authority it genuinely holds.
+ */
+export type RigApprovalDeps = Omit<RigDataDeps, 'approvals'> & {
+  approvals: Pick<CapabilityApprovalStore, 'claim' | 'consume' | 'approve'>;
+};
 
 /**
  * Degrade a connection's health after a failure, without ever suppressing the
@@ -909,7 +926,7 @@ export async function handlePromptGet(
   }
 }
 
-const rigDataDeps = (): RigDataDeps => ({ registry, runtime, approvals, provenance });
+const rigDataDeps = (): RigApprovalDeps => ({ registry, runtime, approvals, provenance });
 
 function sendHandlerResult(res: express.Response, result: HandlerResult): express.Response {
   return res.status(result.status).type('application/json').send(result.payload);

@@ -435,7 +435,7 @@ describe('projectLocalAppSurface', () => {
     // Verify the projection output never contains it.
     const source = makeLocalAppSource();
     // Even if someone casts in extra fields, the projection should not copy them.
-    (source.app as Record<string, unknown>).sandboxProfile = 'strict';
+    (source.app as unknown as Record<string, unknown>).sandboxProfile = 'strict';
     const d = projectLocalAppSurface(source);
     const payload = d.renderer.payload as Record<string, unknown>;
     assert.strictEqual(
