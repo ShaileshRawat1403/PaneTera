@@ -75,11 +75,22 @@ describe('authoritative portal operator principal', () => {
     assert.strictEqual(record.actor.label, 'unauthenticated-principal');
   });
 
-  it('accepts query credentials only for explicitly opted-in EventSource routes', () => withOperatorConfig('owner-123', () => {
+  it('never accepts the master token from a query string, on any route', () => withOperatorConfig('owner-123', () => {
+    // The SSE stream used to opt into `?token=`, which put the master
+    // credential into URLs and therefore into access logs and Referer headers.
+    // It now authenticates with a single-use ticket, so no route accepts a
+    // query credential and there is no opt-in left to pass.
     const req = { headers: {}, query: { token: 'correct-token' } } as unknown as Request;
     assert.strictEqual(authenticatePortalRequest(req, 'correct-token'), false);
-    assert.strictEqual(authenticatePortalRequest(req, 'correct-token', { allowQueryToken: true }), true);
-    assert.ok(operatorPrincipalForRequest(req));
+    assert.strictEqual(operatorPrincipalForRequest(req), undefined, 'no principal is bound to a rejected request');
+
+    // The header remains the one accepted channel.
+    const headerReq = {
+      headers: { authorization: 'Bearer correct-token' },
+      query: {},
+    } as unknown as Request;
+    assert.strictEqual(authenticatePortalRequest(headerReq, 'correct-token'), true);
+    assert.ok(operatorPrincipalForRequest(headerReq));
   }));
 
   it('threads the request-bound principal through every authenticated operator surface', () => {
@@ -93,7 +104,10 @@ describe('authoritative portal operator principal', () => {
       assert.ok(source.includes('operatorPrincipalForRequest(req)'), `${file} uses the request-bound principal`);
     }
     const index = readFileSync(new URL('../server/index.ts', import.meta.url), 'utf8');
-    assert.ok(index.includes("allowQueryToken: req.path === '/api/events'"), 'query bearer is restricted to SSE');
+    assert.ok(index.includes('consumeEventTicket(req.query.ticket)'), 'SSE authenticates by single-use ticket');
+    assert.ok(!index.includes('allowQueryToken'), 'no route opts into a query-string master token');
+    const principal = readFileSync(new URL('../server/operatorPrincipal.ts', import.meta.url), 'utf8');
+    assert.ok(!principal.includes('req.query.token'), 'the token is never read from a query string');
     assert.ok(index.includes('adapter.call(toolName, toolArgs || {}, operatorPrincipalForRequest(req))'));
   });
 });

@@ -16,6 +16,7 @@ import { getWorkspaceCatalogPath, getPortalYamlPath } from './appData';
 import { fingerprint, normalizeAuditRecord } from './auditRecord';
 import { auditOperatorAction } from './operatorAudit';
 import { authenticatePortalRequest, operatorPrincipalForRequest } from './operatorPrincipal';
+import { issueEventTicket, consumeEventTicket } from './eventTicket';
 import * as fs from 'fs';
 import * as yaml from 'js-yaml';
 import { getTesseraAppDataDir } from './appData';
@@ -131,12 +132,32 @@ app.get('/readyz', (_req: Request, res: Response) => {
   res.status(ready ? 200 : 503).json({ status: ready ? 'ready' : 'not-ready', checks });
 });
 
-// Token authentication middleware (supports Authorization header and query parameter token for EventSource)
+// Token authentication middleware. Every route behind this point requires the
+// master token in an Authorization header -- with exactly one exception.
+//
+// EventSource cannot set headers, so the stream authenticates with a single-use
+// ticket minted below by a caller that did present the header. The master token
+// is never accepted from a URL, on this route or any other: a query string is
+// the wrong place for a credential that authorises every governed capability
+// the server exposes.
 app.use((req: Request, res: Response, next: NextFunction) => {
-  if (!authenticatePortalRequest(req, TOKEN, { allowQueryToken: req.path === '/api/events' })) {
+  if (req.path === '/api/events') {
+    if (!consumeEventTicket(req.query.ticket)) {
+      return res.status(401).json({ error: 'Invalid or expired event ticket' });
+    }
+    return next();
+  }
+  if (!authenticatePortalRequest(req, TOKEN)) {
     return res.status(401).json({ error: 'Invalid or missing token' });
   }
   next();
+});
+
+// Exchange the master token for a short-lived, single-use stream ticket. Sits
+// behind the header gate above, so only an already-authenticated caller can
+// mint one.
+app.post('/api/events/ticket', (_req: Request, res: Response) => {
+  res.json(issueEventTicket());
 });
 
 // Rig can establish processes and network connections, so every route lives
@@ -324,7 +345,9 @@ if (process.env.NODE_ENV !== 'test') {
   setupWatcher().catch(err => console.error('Error starting chokidar watcher:', err));
 }
 
-// SSE endpoint to broadcast filesystem event updates
+// SSE endpoint to broadcast filesystem event updates. Authenticated by the
+// single-use ticket consumed in the gate above; the ticket is already spent by
+// the time this handler runs, so a reconnect needs a fresh one.
 app.get('/api/events', (req: Request, res: Response) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');

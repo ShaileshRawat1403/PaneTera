@@ -37,21 +37,55 @@ export function securityHeaders(_req: Request, res: Response, next: NextFunction
   next();
 }
 
-// CORS configuration
-export function corsHeaders(req: Request, res: Response, next: NextFunction): void {
-  const origin = req.headers.origin;
-  const allowedOrigins = (process.env.ALLOWED_ORIGINS || '').split(',').filter(Boolean);
+/**
+ * Decide whether a request's Origin is permitted cross-origin access.
+ *
+ * Fails closed. An empty or unset ALLOWED_ORIGINS grants nothing, where it
+ * previously granted everything: the old condition treated "no allowlist
+ * configured" as "allow all", and then reflected the caller's own Origin back
+ * alongside Access-Control-Allow-Credentials. ALLOWED_ORIGINS is not set in
+ * .env.example, so that permissive branch was the shipping default on a server
+ * whose routes invoke governed capabilities.
+ *
+ * Exported so the policy is unit-tested without an Express request.
+ */
+export function resolveAllowedOrigin(
+  origin: string | undefined,
+  allowedOriginsEnv: string | undefined,
+): string | null {
+  if (!origin) return null;
+  const allowed = (allowedOriginsEnv || '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+  return allowed.includes(origin) ? origin : null;
+}
 
-  if (allowedOrigins.length === 0 || allowedOrigins.includes(origin || '')) {
-    res.setHeader('Access-Control-Allow-Origin', origin || '*');
+/**
+ * CORS configuration.
+ *
+ * Same-origin requests carry no Origin header and need no CORS headers at all,
+ * which is how the app itself is served in both development (the Vite dev
+ * server proxies /api) and production (the API and the built client share an
+ * origin). Cross-origin access is opt-in via ALLOWED_ORIGINS.
+ */
+export function corsHeaders(req: Request, res: Response, next: NextFunction): void {
+  const allowedOrigin = resolveAllowedOrigin(req.headers.origin, process.env.ALLOWED_ORIGINS);
+
+  if (allowedOrigin) {
+    res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+    // Vary matters as soon as the header depends on the request: without it a
+    // cache can serve one allowed origin's response to a different origin.
+    res.setHeader('Vary', 'Origin');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Max-Age', '86400');
   }
 
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Max-Age', '86400');
-
-  // Handle preflight
+  // Preflight is answered either way. Without the headers above the browser
+  // refuses the actual request, which is the intended outcome for an origin
+  // that is not on the allowlist.
   if (req.method === 'OPTIONS') {
     res.status(204).end();
     return;

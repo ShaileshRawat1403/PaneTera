@@ -705,13 +705,29 @@ const App: React.FC = () => {
       .catch(() => setSoothsayerStatus('offline'));
   }, []);
 
-  // Real-time EventSource listener for file updates and execution logs
+  // Real-time EventSource listener for file updates and execution logs.
+  //
+  // The stream authenticates with a single-use ticket rather than the master
+  // token, which must never appear in a URL. Because the ticket is spent when
+  // the stream opens, EventSource's own reconnect can never succeed -- it would
+  // retry the same spent URL forever. So reconnection is handled here: on error
+  // the source is closed and a fresh ticket is fetched, with backoff.
   useEffect(() => {
     if (!token) return;
 
-    const eventSource = new EventSource(`/api/events?token=${encodeURIComponent(token)}`);
+    let cancelled = false;
+    let eventSource: EventSource | null = null;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let backoffMs = 1000;
+    const MAX_BACKOFF_MS = 30000;
 
-    eventSource.onmessage = (e) => {
+    const scheduleRetry = () => {
+      if (cancelled) return;
+      retryTimer = setTimeout(connect, backoffMs);
+      backoffMs = Math.min(backoffMs * 2, MAX_BACKOFF_MS);
+    };
+
+    const handleMessage = (e: MessageEvent) => {
       try {
         const eventData = JSON.parse(e.data);
         if (eventData.type === 'file_change') {
@@ -744,8 +760,39 @@ const App: React.FC = () => {
       }
     };
 
+    async function connect() {
+      if (cancelled) return;
+      try {
+        const resp = await fetch('/api/events/ticket', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!resp.ok) throw new Error(`ticket request failed (${resp.status})`);
+        const { ticket } = await resp.json() as { ticket: string };
+        if (cancelled) return;
+
+        const source = new EventSource(`/api/events?ticket=${encodeURIComponent(ticket)}`);
+        eventSource = source;
+        source.onmessage = handleMessage;
+        // A stream that opened is a working credential path; reset the backoff
+        // so a later transient drop reconnects promptly.
+        source.onopen = () => { backoffMs = 1000; };
+        source.onerror = () => {
+          source.close();
+          if (eventSource === source) eventSource = null;
+          scheduleRetry();
+        };
+      } catch {
+        scheduleRetry();
+      }
+    }
+
+    void connect();
+
     return () => {
-      eventSource.close();
+      cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
+      eventSource?.close();
     };
   }, [token]);
 

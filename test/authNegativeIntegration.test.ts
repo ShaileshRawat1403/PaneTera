@@ -248,18 +248,53 @@ describe('Negative auth integration against the real composed app', () => {
     assert.strictEqual(resp.status, 200, 'authenticated request must reach the handler');
   });
 
-  it('allows the query token only on /api/events', async () => {
+  it('refuses the master token in a query string everywhere, including /api/events', async () => {
+    // /api/events used to accept `?token=` because EventSource cannot set
+    // headers. That put the master credential into URLs, and from there into
+    // access logs and Referer headers. It now takes a single-use ticket.
     const eventsCtrl = new AbortController();
     try {
       const events = await fetch(`${baseUrl}/api/events?token=${encodeURIComponent(TOKEN)}`, {
         signal: eventsCtrl.signal,
       });
-      assert.strictEqual(events.status, 200, '/api/events must accept the query token');
+      assert.strictEqual(events.status, 401, '/api/events must reject a query-string master token');
     } finally {
       eventsCtrl.abort();
     }
+
     const elsewhere = await fetch(`${baseUrl}/api/workspaces?token=${encodeURIComponent(TOKEN)}`);
-    assert.strictEqual(elsewhere.status, 401, 'query token must not be honored outside /api/events');
+    assert.strictEqual(elsewhere.status, 401, 'query token must not be honored anywhere');
+  });
+
+  it('opens the event stream with a single-use ticket, and only once', async () => {
+    // Minting requires the header credential.
+    const unauthorized = await fetch(`${baseUrl}/api/events/ticket`, { method: 'POST' });
+    assert.strictEqual(unauthorized.status, 401, 'a ticket cannot be minted without the master token');
+
+    const minted = await fetch(`${baseUrl}/api/events/ticket`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${TOKEN}` },
+    });
+    assert.strictEqual(minted.status, 200, 'an authenticated caller can mint a ticket');
+    const { ticket } = await minted.json() as { ticket: string };
+    assert.match(ticket, /^[0-9a-f]{64}$/);
+
+    const ctrl = new AbortController();
+    try {
+      const stream = await fetch(`${baseUrl}/api/events?ticket=${encodeURIComponent(ticket)}`, {
+        signal: ctrl.signal,
+      });
+      assert.strictEqual(stream.status, 200, 'a fresh ticket opens the stream');
+    } finally {
+      ctrl.abort();
+    }
+
+    // Spent on first use, so a captured URL is worthless.
+    const replay = await fetch(`${baseUrl}/api/events?ticket=${encodeURIComponent(ticket)}`);
+    assert.strictEqual(replay.status, 401, 'a spent ticket cannot reopen the stream');
+
+    const forged = await fetch(`${baseUrl}/api/events?ticket=${'a'.repeat(64)}`);
+    assert.strictEqual(forged.status, 401, 'an unissued ticket is refused');
   });
 
   it('keeps documented-open surfaces at their classified behavior', async () => {
