@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Typography, Button, Chip, Stack, Divider } from '@mui/material';
 import type { LiveAppWorkbenchData } from '../../server/liveApp';
+import { accent, ink, status as statusToken } from '../theme/cssTokens';
 
 export interface LiveAppWorkbenchCardProps {
   data: LiveAppWorkbenchData;
@@ -51,14 +52,14 @@ export const LiveAppWorkbenchCard: React.FC<LiveAppWorkbenchCardProps> = ({
   const getSourceStatusColor = (status: string) => {
     switch (status) {
       case 'available':
-        return '#22c55e';
+        return statusToken.success;
       case 'unavailable':
-        return '#ef4444';
+        return statusToken.danger;
       case 'unverified':
-        return '#fbbf24';
+        return statusToken.brass;
       case 'future':
       default:
-        return '#71717a';
+        return ink.disabled;
     }
   };
 
@@ -78,7 +79,7 @@ export const LiveAppWorkbenchCard: React.FC<LiveAppWorkbenchCardProps> = ({
       {/* Title & Badge */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Typography variant="caption" sx={{ color: '#7f5af0', fontWeight: 800, letterSpacing: '0.06em' }}>
+          <Typography variant="caption" sx={{ color: accent.violet, fontWeight: 800, letterSpacing: '0.06em' }}>
             LIVE APP WORKBENCH (EXPERIMENTAL)
           </Typography>
           {health && health.status && (
@@ -90,7 +91,7 @@ export const LiveAppWorkbenchCard: React.FC<LiveAppWorkbenchCardProps> = ({
                 fontSize: '0.55rem',
                 fontWeight: 800,
                 background: health.status === 'available' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(255, 255, 255, 0.05)',
-                color: health.status === 'available' ? '#22c55e' : '#cbd5e1',
+                color: health.status === 'available' ? statusToken.success : ink.secondary,
                 border: health.status === 'available' ? '1px solid rgba(34, 197, 94, 0.2)' : '1px solid transparent',
               }}
             />
@@ -104,7 +105,7 @@ export const LiveAppWorkbenchCard: React.FC<LiveAppWorkbenchCardProps> = ({
             fontSize: '0.65rem',
             fontWeight: 800,
             background: 'rgba(127, 85, 240, 0.08)',
-            color: '#b794f4',
+            color: accent.violet,
             border: '1px solid rgba(127, 85, 240, 0.18)',
           }}
         />
@@ -112,24 +113,24 @@ export const LiveAppWorkbenchCard: React.FC<LiveAppWorkbenchCardProps> = ({
 
       {/* Identifiers */}
       <Box sx={{ mb: 2 }}>
-        <Typography variant="h6" sx={{ fontWeight: 800, color: '#f4f4f5', letterSpacing: '-0.02em' }}>
+        <Typography variant="h6" sx={{ fontWeight: 800, color: ink.primary, letterSpacing: '-0.02em' }}>
           {appName}
         </Typography>
-        <Typography variant="caption" sx={{ fontFamily: 'monospace', color: '#71717a', display: 'block', mt: 0.5 }}>
+        <Typography variant="caption" sx={{ fontFamily: 'monospace', color: ink.disabled, display: 'block', mt: 0.5 }}>
           {url || 'Not configured'}
         </Typography>
       </Box>
 
       {/* Experimental Helper Copy */}
       <Box sx={{ mb: 2, p: 1.5, background: 'rgba(127, 85, 240, 0.03)', border: '1px solid rgba(127, 85, 240, 0.15)', borderRadius: '6px' }}>
-        <Typography variant="caption" sx={{ color: '#cbd5e1', display: 'block', lineHeight: 1.4 }}>
+        <Typography variant="caption" sx={{ color: ink.secondary, display: 'block', lineHeight: 1.4 }}>
           ℹ️ <strong>Experimental:</strong> live app manifest integration. Not required for local workspace inspection.
         </Typography>
       </Box>
 
       {!manifestAvailable && (
         <Box sx={{ mb: 2, p: 1.5, background: 'rgba(251, 191, 36, 0.05)', border: '1px solid rgba(251, 191, 36, 0.2)', borderRadius: '6px' }}>
-          <Typography variant="caption" sx={{ color: '#fbbf24', display: 'block', lineHeight: 1.4 }}>
+          <Typography variant="caption" sx={{ color: statusToken.brass, display: 'block', lineHeight: 1.4 }}>
             ⚠️ This deployed app does not expose a Tessera manifest yet. Use Workspace Mission Control for local repo inspection.
           </Typography>
         </Box>
@@ -145,7 +146,7 @@ export const LiveAppWorkbenchCard: React.FC<LiveAppWorkbenchCardProps> = ({
             fontSize: '0.65rem',
             fontWeight: 600,
             background: configured ? 'rgba(34, 197, 94, 0.06)' : 'rgba(239, 68, 68, 0.06)',
-            color: configured ? '#22c55e' : '#ef4444',
+            color: configured ? statusToken.success : statusToken.danger,
             border: `1px solid ${configured ? 'rgba(34, 197, 94, 0.18)' : 'rgba(239, 68, 68, 0.18)'}`,
           }}
         />
@@ -157,7 +158,7 @@ export const LiveAppWorkbenchCard: React.FC<LiveAppWorkbenchCardProps> = ({
             fontSize: '0.65rem',
             fontWeight: 600,
             background: urlReachable ? 'rgba(34, 197, 94, 0.06)' : 'rgba(239, 68, 68, 0.06)',
-            color: urlReachable ? '#22c55e' : '#ef4444',
+            color: urlReachable ? statusToken.success : statusToken.danger,
             border: `1px solid ${urlReachable ? 'rgba(34, 197, 94, 0.18)' : 'rgba(239, 68, 68, 0.18)'}`,
           }}
         />
@@ -169,7 +170,7 @@ export const LiveAppWorkbenchCard: React.FC<LiveAppWorkbenchCardProps> = ({
             fontSize: '0.65rem',
             fontWeight: 600,
             background: manifestReachable ? 'rgba(34, 197, 94, 0.06)' : 'rgba(239, 68, 68, 0.06)',
-            color: manifestReachable ? '#22c55e' : '#ef4444',
+            color: manifestReachable ? statusToken.success : statusToken.danger,
             border: `1px solid ${manifestReachable ? 'rgba(34, 197, 94, 0.18)' : 'rgba(239, 68, 68, 0.18)'}`,
           }}
         />
@@ -181,7 +182,7 @@ export const LiveAppWorkbenchCard: React.FC<LiveAppWorkbenchCardProps> = ({
             fontSize: '0.65rem',
             fontWeight: 600,
             background: manifestAvailable ? 'rgba(34, 197, 94, 0.06)' : 'rgba(251, 191, 36, 0.06)',
-            color: manifestAvailable ? '#22c55e' : '#fbbf24',
+            color: manifestAvailable ? statusToken.success : statusToken.brass,
             border: `1px solid ${manifestAvailable ? 'rgba(34, 197, 94, 0.18)' : 'rgba(251, 191, 36, 0.18)'}`,
           }}
         />
@@ -191,7 +192,7 @@ export const LiveAppWorkbenchCard: React.FC<LiveAppWorkbenchCardProps> = ({
 
       {/* Integration Truth Sources */}
       <Box sx={{ mb: 2.5, opacity: highlightTruth ? 1 : 0.8, p: highlightTruth ? 1.5 : 0, borderRadius: '8px', border: highlightTruth ? '1px solid rgba(127, 85, 240, 0.3)' : 'none', background: highlightTruth ? 'rgba(127, 85, 240, 0.02)' : 'none' }}>
-        <Typography variant="caption" sx={{ color: highlightTruth ? '#b794f4' : '#a1a1aa', fontWeight: 800, display: 'block', mb: 1.5 }}>
+        <Typography variant="caption" sx={{ color: highlightTruth ? accent.violet : ink.muted, fontWeight: 800, display: 'block', mb: 1.5 }}>
           Integration Truth Sources {highlightTruth && '— Focused Lens'}
         </Typography>
         <Stack spacing={1}>
@@ -210,7 +211,7 @@ export const LiveAppWorkbenchCard: React.FC<LiveAppWorkbenchCardProps> = ({
               }}
             >
               <Box>
-                <Typography variant="caption" sx={{ fontWeight: 700, color: '#e2e8f0', display: 'block' }}>
+                <Typography variant="caption" sx={{ fontWeight: 700, color: ink.primary, display: 'block' }}>
                   {sl.source === 'user-config'
                     ? 'Portal config'
                     : sl.source === 'url-preview'
@@ -219,7 +220,7 @@ export const LiveAppWorkbenchCard: React.FC<LiveAppWorkbenchCardProps> = ({
                     ? 'App-Native Manifest'
                     : 'Chrome Extension'}
                 </Typography>
-                <Typography variant="caption" sx={{ color: '#71717a', fontSize: '0.65rem' }}>
+                <Typography variant="caption" sx={{ color: ink.disabled, fontSize: '0.65rem' }}>
                   {sl.note}
                 </Typography>
               </Box>
@@ -245,10 +246,10 @@ export const LiveAppWorkbenchCard: React.FC<LiveAppWorkbenchCardProps> = ({
           {/* Active endpoints */}
           <Box sx={{ mb: 2, opacity: highlightEndpoints ? 1 : 0.8, p: highlightEndpoints ? 1.5 : 0, borderRadius: '8px', border: highlightEndpoints ? '1px solid rgba(127, 85, 240, 0.3)' : 'none', background: highlightEndpoints ? 'rgba(127, 85, 240, 0.02)' : 'none' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-              <Typography variant="caption" sx={{ color: highlightEndpoints ? '#b794f4' : '#a1a1aa', fontWeight: 800 }}>
+              <Typography variant="caption" sx={{ color: highlightEndpoints ? accent.violet : ink.muted, fontWeight: 800 }}>
                 Active Endpoints ({routes.length}) {highlightEndpoints && '— Focused Lens'}
               </Typography>
-              <Typography variant="caption" sx={{ color: '#71717a', fontFamily: 'monospace' }}>
+              <Typography variant="caption" sx={{ color: ink.disabled, fontFamily: 'monospace' }}>
                 {environment} / v{version}
               </Typography>
             </Box>
@@ -264,7 +265,7 @@ export const LiveAppWorkbenchCard: React.FC<LiveAppWorkbenchCardProps> = ({
                     fontFamily: 'monospace',
                     background: 'rgba(255, 255, 255, 0.02)',
                     border: '1px solid rgba(255, 255, 255, 0.05)',
-                    color: '#cbd5e1',
+                    color: ink.secondary,
                   }}
                 />
               ))}
@@ -273,7 +274,7 @@ export const LiveAppWorkbenchCard: React.FC<LiveAppWorkbenchCardProps> = ({
 
           {/* Ecosystem modules */}
           <Box sx={{ mb: 2, opacity: highlightEcosystem ? 1 : 0.8, p: highlightEcosystem ? 1.5 : 0, borderRadius: '8px', border: highlightEcosystem ? '1px solid rgba(127, 85, 240, 0.3)' : 'none', background: highlightEcosystem ? 'rgba(127, 85, 240, 0.02)' : 'none' }}>
-            <Typography variant="caption" sx={{ color: highlightEcosystem ? '#b794f4' : '#a1a1aa', fontWeight: 800, display: 'block', mb: 1 }}>
+            <Typography variant="caption" sx={{ color: highlightEcosystem ? accent.violet : ink.muted, fontWeight: 800, display: 'block', mb: 1 }}>
               Ecosystem Modules ({features.length}) {highlightEcosystem && '— Focused Lens'}
             </Typography>
             <Stack direction="row" spacing={0.8} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
@@ -287,7 +288,7 @@ export const LiveAppWorkbenchCard: React.FC<LiveAppWorkbenchCardProps> = ({
                     fontSize: '0.6rem',
                     background: 'rgba(255, 255, 255, 0.02)',
                     border: '1px solid rgba(255, 255, 255, 0.05)',
-                    color: '#cbd5e1',
+                    color: ink.secondary,
                   }}
                 />
               ))}
@@ -296,7 +297,7 @@ export const LiveAppWorkbenchCard: React.FC<LiveAppWorkbenchCardProps> = ({
 
           {/* Active workflows */}
           <Box sx={{ mb: 2, opacity: highlightWorkflows ? 1 : 0.8, p: highlightWorkflows ? 1.5 : 0, borderRadius: '8px', border: highlightWorkflows ? '1px solid rgba(127, 85, 240, 0.3)' : 'none', background: highlightWorkflows ? 'rgba(127, 85, 240, 0.02)' : 'none' }}>
-            <Typography variant="caption" sx={{ color: highlightWorkflows ? '#b794f4' : '#a1a1aa', fontWeight: 800, display: 'block', mb: 1 }}>
+            <Typography variant="caption" sx={{ color: highlightWorkflows ? accent.violet : ink.muted, fontWeight: 800, display: 'block', mb: 1 }}>
               Governed Workflows ({workflows.length}) {highlightWorkflows && '— Focused Lens'}
             </Typography>
             <Stack direction="row" spacing={0.8} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
@@ -309,7 +310,7 @@ export const LiveAppWorkbenchCard: React.FC<LiveAppWorkbenchCardProps> = ({
                     height: 18,
                     fontSize: '0.6rem',
                     background: 'rgba(34, 197, 94, 0.05)',
-                    color: '#22c55e',
+                    color: statusToken.success,
                     border: '1px solid rgba(34, 197, 94, 0.15)',
                   }}
                 />
@@ -320,10 +321,10 @@ export const LiveAppWorkbenchCard: React.FC<LiveAppWorkbenchCardProps> = ({
           {/* Health metrics */}
           {health && (
             <Box sx={{ mb: 2, opacity: highlightHealth ? 1 : 0.8, p: highlightHealth ? 1.5 : 0, borderRadius: '8px', border: highlightHealth ? '1px solid rgba(127, 85, 240, 0.3)' : 'none', background: highlightHealth ? 'rgba(127, 85, 240, 0.02)' : 'none' }}>
-              <Typography variant="caption" sx={{ color: highlightHealth ? '#b794f4' : '#a1a1aa', fontWeight: 800, display: 'block', mb: 1 }}>
+              <Typography variant="caption" sx={{ color: highlightHealth ? accent.violet : ink.muted, fontWeight: 800, display: 'block', mb: 1 }}>
                 Health Check Endpoint {highlightHealth && '— Focused Lens'}
               </Typography>
-              <Typography variant="caption" sx={{ fontFamily: 'monospace', color: '#22c55e', display: 'block', mt: 0.5 }}>
+              <Typography variant="caption" sx={{ fontFamily: 'monospace', color: statusToken.success, display: 'block', mt: 0.5 }}>
                 {health.endpoint ?? '/health'} [Status: Available]
               </Typography>
             </Box>
@@ -334,7 +335,7 @@ export const LiveAppWorkbenchCard: React.FC<LiveAppWorkbenchCardProps> = ({
       {/* Friendly message if manifest is missing but app is reachable */}
       {!manifestAvailable && urlReachable && (
         <Box sx={{ p: 1.8, mb: 2, background: 'rgba(127, 85, 240, 0.05)', border: '1px solid rgba(127, 85, 240, 0.25)', borderRadius: '8px' }}>
-          <Typography variant="body2" sx={{ color: '#cbd5e1', fontSize: '0.78rem', lineHeight: 1.4 }}>
+          <Typography variant="body2" sx={{ color: ink.secondary, fontSize: '0.78rem', lineHeight: 1.4 }}>
             Live app is reachable, but it does not expose a PaneTera manifest yet. Local project inspection is still available.
           </Typography>
         </Box>
@@ -345,7 +346,7 @@ export const LiveAppWorkbenchCard: React.FC<LiveAppWorkbenchCardProps> = ({
         <Box sx={{ p: 1.5, mb: 2, background: 'rgba(251, 191, 36, 0.05)', border: '1px solid rgba(251, 191, 36, 0.2)', borderRadius: '8px' }}>
           <Stack spacing={0.5}>
             {filteredWarnings.map((warning, idx) => (
-              <Typography key={idx} variant="caption" sx={{ color: '#fbbf24', display: 'block' }}>
+              <Typography key={idx} variant="caption" sx={{ color: statusToken.brass, display: 'block' }}>
                 ⚠️ {warning}
               </Typography>
             ))}
@@ -357,7 +358,7 @@ export const LiveAppWorkbenchCard: React.FC<LiveAppWorkbenchCardProps> = ({
 
       {/* Persona lenses selectors display (readout format) */}
       <Box sx={{ mb: 2.5 }}>
-        <Typography variant="caption" sx={{ color: '#71717a', display: 'block', mb: 1 }}>
+        <Typography variant="caption" sx={{ color: ink.disabled, display: 'block', mb: 1 }}>
           Persona Lenses (Current Context: {activeLens.toUpperCase()})
         </Typography>
         <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
@@ -371,7 +372,7 @@ export const LiveAppWorkbenchCard: React.FC<LiveAppWorkbenchCardProps> = ({
                 height: 20,
                 fontSize: '0.55rem',
                 fontWeight: 700,
-                color: activeLens === lens ? '#b794f4' : 'rgba(255,255,255,0.3)',
+                color: activeLens === lens ? accent.violet : 'rgba(255,255,255,0.3)',
                 borderColor: activeLens === lens ? 'rgba(127, 85, 240, 0.3)' : 'rgba(255,255,255,0.06)',
                 background: activeLens === lens ? 'rgba(127, 85, 240, 0.12)' : 'transparent',
               }}
@@ -402,7 +403,7 @@ export const LiveAppWorkbenchCard: React.FC<LiveAppWorkbenchCardProps> = ({
             variant="outlined"
             onClick={onCancel}
             sx={{
-              color: '#71717a',
+              color: ink.disabled,
               borderColor: 'rgba(255,255,255,0.1)',
               borderRadius: '6px',
               textTransform: 'none',

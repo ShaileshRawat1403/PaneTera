@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Box, Typography, Alert } from '@mui/material';
+import { surface } from '../../theme/cssTokens';
 
 // Instead of importing the server-side definition which might bring in fs/path, we define an inline matching interface.
 export type LocalAppSandboxProfile = 'strict' | 'authenticated-local';
@@ -52,7 +53,7 @@ export const LiveWorkbenchSurface: React.FC<LiveWorkbenchSurfaceProps> = ({ app,
   }, [app.url, app.sandboxProfile]);
 
   return (
-    <Box sx={{ width: '100%', height: '100%', bgcolor: '#09090b', position: 'relative', display: 'flex', flexDirection: 'column' }}>
+    <Box sx={{ width: '100%', height: '100%', bgcolor: surface.sunken, position: 'relative', display: 'flex', flexDirection: 'column' }}>
       {downgraded && (
         <Alert severity="warning" sx={{ m: 2, fontSize: '0.8rem' }}>
           <strong>Same-origin authenticated embedding isn’t permitted. The app has been opened with the strict sandbox profile, so authentication or local storage features may be unavailable.</strong>
@@ -69,6 +70,7 @@ export const LiveWorkbenchSurface: React.FC<LiveWorkbenchSurfaceProps> = ({ app,
               width: '100%',
               height: '100%',
               border: 'none',
+              // eslint-disable-next-line no-restricted-syntax -- the local app paints its own ground
               backgroundColor: '#fff'
             }}
             allow="clipboard-read; clipboard-write"

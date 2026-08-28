@@ -3,6 +3,7 @@ import React from 'react';
 import { Box, Typography, Paper, List, ListItem, ListItemText, Chip, Stack } from '@mui/material';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import HighlightOffIcon from '@mui/icons-material/HighlightOff';
+import { accent, ink, status } from '../../theme/cssTokens';
 
 export interface TraceRecord {
   timestamp: string;
@@ -31,15 +32,15 @@ export const InspectionTracePanel: React.FC<TraceProps> = ({ records, onSelectFi
       }}
     >
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-        <VisibilityIcon sx={{ color: '#b794f4', fontSize: 14 }} />
-        <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 800, letterSpacing: '0.05em' }}>
+        <VisibilityIcon sx={{ color: accent.violet, fontSize: 14 }} />
+        <Typography variant="caption" sx={{ color: ink.disabled, fontWeight: 800, letterSpacing: '0.05em' }}>
           AGENT INSPECTION TRACE
         </Typography>
       </Box>
 
       {records.length === 0 ? (
         <Box sx={{ py: 1.5, textAlign: 'center' }}>
-          <Typography variant="caption" sx={{ color: '#71717a', fontStyle: 'italic' }}>
+          <Typography variant="caption" sx={{ color: ink.disabled, fontStyle: 'italic' }}>
             No workspace inspection traces recorded in this session.
           </Typography>
         </Box>
@@ -70,7 +71,7 @@ export const InspectionTracePanel: React.FC<TraceProps> = ({ records, onSelectFi
                       sx={{
                         fontSize: '0.72rem',
                         fontWeight: 700,
-                        color: rec.allowed ? '#b794f4' : '#ef4444',
+                        color: rec.allowed ? accent.violet : status.danger,
                         fontFamily: 'monospace',
                         textDecoration: rec.allowed && onSelectFile ? 'underline' : 'none'
                       }}
@@ -84,7 +85,7 @@ export const InspectionTracePanel: React.FC<TraceProps> = ({ records, onSelectFi
                         height: 14,
                         fontSize: '0.52rem',
                         background: 'rgba(255,255,255,0.02)',
-                        color: '#71717a',
+                        color: ink.disabled,
                         fontFamily: 'monospace'
                       }}
                     />
@@ -92,11 +93,11 @@ export const InspectionTracePanel: React.FC<TraceProps> = ({ records, onSelectFi
                 }
                 secondary={
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%', mt: 0.2 }}>
-                    <Typography variant="caption" sx={{ fontSize: '0.58rem', color: '#71717a' }}>
+                    <Typography variant="caption" sx={{ fontSize: '0.58rem', color: ink.disabled }}>
                       {new Date(rec.timestamp).toLocaleTimeString()}
                     </Typography>
                     {!rec.allowed && (
-                      <Typography variant="caption" sx={{ fontSize: '0.58rem', color: '#fca5a5', fontWeight: 600 }}>
+                      <Typography variant="caption" sx={{ fontSize: '0.58rem', color: status.dangerMuted, fontWeight: 600 }}>
                         {rec.reason || 'Blocked by host policy'}
                       </Typography>
                     )}
@@ -108,13 +109,13 @@ export const InspectionTracePanel: React.FC<TraceProps> = ({ records, onSelectFi
                   <Chip
                     label="ALLOWED"
                     size="small"
-                    sx={{ height: 14, fontSize: '0.5rem', fontWeight: 900, background: 'rgba(34, 197, 94, 0.08)', color: '#22c55e' }}
+                    sx={{ height: 14, fontSize: '0.5rem', fontWeight: 900, background: 'rgba(34, 197, 94, 0.08)', color: status.success }}
                   />
                 ) : (
                   <Chip
                     label="DENIED"
                     size="small"
-                    sx={{ height: 14, fontSize: '0.5rem', fontWeight: 900, background: 'rgba(239, 68, 68, 0.08)', color: '#ef4444' }}
+                    sx={{ height: 14, fontSize: '0.5rem', fontWeight: 900, background: 'rgba(239, 68, 68, 0.08)', color: status.danger }}
                   />
                 )}
               </Box>

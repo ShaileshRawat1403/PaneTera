@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Box, Button, Typography, Stack, CircularProgress } from '@mui/material';
 import { LocalAppDefinitionClient } from './LiveWorkbenchSurface';
+import { accent, ink } from '../../theme/cssTokens';
 
 interface WorkbenchAppSelectorProps {
   onSelect: (appId: string) => void;
@@ -25,7 +26,7 @@ export const WorkbenchAppSelector: React.FC<WorkbenchAppSelectorProps> = ({ onSe
   if (loading) {
     return (
       <Box sx={{ p: 4, display: 'flex', justifyContent: 'center' }}>
-        <CircularProgress size={24} sx={{ color: '#7f5af0' }} />
+        <CircularProgress size={24} sx={{ color: accent.violet }} />
       </Box>
     );
   }
@@ -50,11 +51,11 @@ export const WorkbenchAppSelector: React.FC<WorkbenchAppSelectorProps> = ({ onSe
           sx={{
             justifyContent: 'flex-start',
             textAlign: 'left',
-            color: '#cbd5e1',
+            color: ink.secondary,
             borderColor: 'rgba(255,255,255,0.1)',
             textTransform: 'none',
             '&:hover': {
-              borderColor: '#7f5af0',
+              borderColor: accent.violet,
               backgroundColor: 'rgba(127, 85, 240, 0.05)'
             }
           }}
@@ -66,7 +67,7 @@ export const WorkbenchAppSelector: React.FC<WorkbenchAppSelectorProps> = ({ onSe
                 {app.description}
               </Typography>
             )}
-            <Typography variant="caption" sx={{ color: '#7f5af0' }}>
+            <Typography variant="caption" sx={{ color: accent.violet }}>
               {app.url}
             </Typography>
           </Box>

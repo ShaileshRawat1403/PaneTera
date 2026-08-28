@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Box, Typography, Paper, TextField, Button, MenuItem, Stack, Chip, FormHelperText } from '@mui/material';
 import InfoIcon from '@mui/icons-material/Info';
+import { accent, ink, status } from '../../theme/cssTokens';
 
 interface Field {
   name: string;
@@ -83,10 +84,10 @@ export const SchemaFormView: React.FC<SchemaFormProps> = ({
       }}
     >
       <Box>
-        <Typography variant="subtitle1" sx={{ color: '#f4f4f5', fontWeight: 800 }}>
+        <Typography variant="subtitle1" sx={{ color: ink.primary, fontWeight: 800 }}>
           Interactive Execution Inputs
         </Typography>
-        <Typography variant="caption" sx={{ color: '#71717a', display: 'block', mt: 0.5 }}>
+        <Typography variant="caption" sx={{ color: ink.disabled, display: 'block', mt: 0.5 }}>
           Input schemas are owned by the native application and synced dynamically.
         </Typography>
       </Box>
@@ -103,13 +104,13 @@ export const SchemaFormView: React.FC<SchemaFormProps> = ({
                 value={formValues[f.name] || ''}
                 onChange={(e) => handleFieldChange(f.name, e.target.value)}
                 variant="outlined"
-                InputLabelProps={{ sx: { color: '#71717a', fontSize: '0.9rem' } }}
-                SelectProps={{ sx: { color: '#cbd5e1' } }}
+                InputLabelProps={{ sx: { color: ink.disabled, fontSize: '0.9rem' } }}
+                SelectProps={{ sx: { color: ink.secondary } }}
                 sx={{
                   '& .MuiOutlinedInput-root': {
                     '& fieldset': { borderColor: 'rgba(255,255,255,0.08)' },
                     '&:hover fieldset': { borderColor: 'rgba(255,255,255,0.2)' },
-                    '&.Mui-focused fieldset': { borderColor: '#7f5af0' }
+                    '&.Mui-focused fieldset': { borderColor: accent.violet }
                   }
                 }}
               >
@@ -131,13 +132,13 @@ export const SchemaFormView: React.FC<SchemaFormProps> = ({
                 value={formValues[f.name] || ''}
                 onChange={(e) => handleFieldChange(f.name, e.target.value)}
                 variant="outlined"
-                InputLabelProps={{ sx: { color: '#71717a', fontSize: '0.9rem' } }}
-                inputProps={{ sx: { color: '#cbd5e1' } }}
+                InputLabelProps={{ sx: { color: ink.disabled, fontSize: '0.9rem' } }}
+                inputProps={{ sx: { color: ink.secondary } }}
                 sx={{
                   '& .MuiOutlinedInput-root': {
                     '& fieldset': { borderColor: 'rgba(255,255,255,0.08)' },
                     '&:hover fieldset': { borderColor: 'rgba(255,255,255,0.2)' },
-                    '&.Mui-focused fieldset': { borderColor: '#7f5af0' }
+                    '&.Mui-focused fieldset': { borderColor: accent.violet }
                   }
                 }}
               />
@@ -158,8 +159,8 @@ export const SchemaFormView: React.FC<SchemaFormProps> = ({
           borderRadius: '8px'
         }}
       >
-        <InfoIcon sx={{ color: '#b794f4', fontSize: 16, mt: 0.2 }} />
-        <Typography variant="caption" sx={{ color: '#cbd5e1', lineHeight: 1.4 }}>
+        <InfoIcon sx={{ color: accent.violet, fontSize: 16, mt: 0.2 }} />
+        <Typography variant="caption" sx={{ color: ink.secondary, lineHeight: 1.4 }}>
           <strong>Governed Space:</strong> Direct mutations are blocked. Action triggers generate a formal execution proposal that must be signed off by the local workspace operator before runs commence.
         </Typography>
       </Box>
@@ -173,7 +174,7 @@ export const SchemaFormView: React.FC<SchemaFormProps> = ({
             borderRadius: '8px'
           }}
         >
-          <Typography variant="caption" sx={{ color: '#fca5a5', fontWeight: 700 }}>
+          <Typography variant="caption" sx={{ color: status.dangerMuted, fontWeight: 700 }}>
             {unsafeActionCount} app action{unsafeActionCount === 1 ? '' : 's'} hidden because only proposal actions requiring approval can be rendered.
           </Typography>
         </Box>
@@ -182,7 +183,7 @@ export const SchemaFormView: React.FC<SchemaFormProps> = ({
       {/* Dynamic Actions Render */}
       <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1.5, mt: 1 }}>
         {proposalActions.length === 0 && (
-          <Typography variant="caption" sx={{ color: '#71717a', fontWeight: 700 }}>
+          <Typography variant="caption" sx={{ color: ink.disabled, fontWeight: 700 }}>
             No approved proposal actions are available for this form.
           </Typography>
         )}
@@ -200,7 +201,7 @@ export const SchemaFormView: React.FC<SchemaFormProps> = ({
                     fontSize: '0.55rem',
                     fontWeight: 800,
                     background: act.risk === 'high' ? 'rgba(239, 68, 68, 0.08)' : 'rgba(245, 158, 11, 0.08)',
-                    color: act.risk === 'high' ? '#ef4444' : '#f59e0b',
+                    color: act.risk === 'high' ? status.danger : status.brass,
                     border: act.risk === 'high' ? '1px solid rgba(239, 68, 68, 0.15)' : '1px solid rgba(245, 158, 11, 0.15)'
                   }}
                 />
@@ -210,11 +211,11 @@ export const SchemaFormView: React.FC<SchemaFormProps> = ({
                 disabled={!isFormValid || isSubmitted}
                 onClick={() => handleTriggerAction(act.id)}
                 sx={{
-                  background: '#7f5af0',
+                  background: accent.violet,
                   fontWeight: 700,
                   textTransform: 'none',
                   borderRadius: '8px',
-                  '&:hover': { background: '#6d47dd' }
+                  '&:hover': { background: accent.violetHover }
                 }}
               >
                 {isSubmitted ? 'Proposal Submitted' : label}
