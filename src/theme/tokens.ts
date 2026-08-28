@@ -111,6 +111,42 @@ export const status = {
 /** 8px system. Values are multipliers of the base unit, not raw pixels. */
 export const SPACING_UNIT = 8;
 
+/**
+ * Vertical rhythm, on a 4px grid.
+ *
+ * These were previously independent literals scattered across the shell -- 56,
+ * 34, 30, 44, 16, 7 -- chosen one at a time. paneSizing.ts already makes this
+ * argument about widths, refusing to let "the canvas holds 60%" and "the layout
+ * is stacked" become two numbers that can drift apart. Heights deserve the
+ * same treatment: "compact, minimal, quiet" is a claim about rhythm, and
+ * independent literals are what destroy rhythm.
+ *
+ * The grid is 4px because that is the largest step that divides every value
+ * here, including the 28px control inside the 44px bar.
+ */
+export const density = {
+  /**
+   * A global chrome bar. One tier, not two.
+   *
+   * The shell previously spent 87px before any work was visible: a 56px top bar
+   * over a 30px cockpit strip. They carry one idea between them -- where you
+   * are and what is happening -- so they are now one bar, and the reclaimed
+   * height goes to the canvas as surface-local identity.
+   */
+  bar: 44,
+  /** A control sitting inside a bar, leaving 8px of breathing room above and below. */
+  control: 28,
+  /** The nav rail's width. Equal to `bar`, so the shell's chrome squares off at the corner. */
+  rail: 44,
+  /**
+   * Minimum comfortable target for a coarse pointer. Controls stay at `control`
+   * height on a mouse and grow to this under `@media (pointer: coarse)`.
+   */
+  touch: 44,
+  /** A surface-local bar: the surface header, the open-surfaces strip. */
+  surfaceBar: 32,
+} as const;
+
 export const radius = {
   sm: 8,
   md: 12,

@@ -14,12 +14,8 @@
 //      real content competes with it for no informational gain.
 
 import React, { useState } from 'react';
-import { Box, Drawer, Typography, Divider, Tooltip, Popover, Button } from '@mui/material';
-import ViewSidebarIcon from '@mui/icons-material/ViewSidebar';
-import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
+import { Box, Typography, Divider, Tooltip, Popover, Button } from '@mui/material';
 import AccountTreeIcon from '@mui/icons-material/AccountTree';
-import HubIcon from '@mui/icons-material/Hub';
-import LayersIcon from '@mui/icons-material/Layers';
 import ForumIcon from '@mui/icons-material/Forum';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
@@ -28,9 +24,9 @@ import SearchIcon from '@mui/icons-material/Search';
 import { PaneMark } from './PaneMark';
 import { EvidencePanel } from '../evidence/EvidencePanel';
 import { ResizableDrawer } from './ResizableDrawer';
-import { accent, elevation, ink, radius, status, surface } from '../../theme/cssTokens';
+import { accent, density, elevation, ink, radius, status, surface } from '../../theme/cssTokens';
 import { themeToggleLabel, useThemeMode } from '../../theme/themeMode';
-import { transition, duration } from '../../theme/motion';
+import { transition } from '../../theme/motion';
 import { PaneDivider } from './PaneDivider';
 import { maxConversationWidth, usePersistentPaneWidth } from './paneSizing';
 import {
@@ -41,7 +37,8 @@ import {
 import { CanvasSelectionProvider } from './CanvasSelectionProvider';
 import MarkupToolbar from './MarkupToolbar';
 import { QuickSwitcherModal } from '../workbench/QuickSwitcherModal';
-import { CockpitStatusBar, type CockpitSummary } from './CockpitStatusBar';
+import { CockpitReadout, type CockpitSummary } from './CockpitStatusBar';
+import { NavRail, type RailTarget } from './NavRail';
 
 export interface GovernanceSummary {
   gatewayConnected: boolean;
@@ -120,21 +117,6 @@ const topBarButton = {
   // A practical 44px target on touch, where a hairline control is hard to hit.
   '@media (pointer: coarse)': { minHeight: 44 },
   ...focusRing,
-} as const;
-
-/** Active drawer indicator — a subtle bottom accent line. */
-const activeIndicator = {
-  '&::after': {
-    content: '""',
-    position: 'absolute',
-    bottom: -1,
-    left: '20%',
-    right: '20%',
-    height: 2,
-    borderRadius: 1,
-    backgroundColor: accent.violet,
-    transition: transition(['opacity', 'transform'], duration.quick),
-  },
 } as const;
 
 export function WorkstationShell({
@@ -260,6 +242,19 @@ export function WorkstationShell({
     setRigOpen(false);
     setHeadroomOpen(current => !current);
   };
+  // The rail reports the open drawer rather than keeping its own copy. The
+  // three drawers are already mutually exclusive -- each toggle closes the
+  // other two -- so one derived value is the honest representation, and there
+  // is no second source that can disagree with the first.
+  const railTarget: RailTarget | null =
+    headroomOpen ? 'headroom' : rigOpen ? 'rig' : activityOpen ? 'activity' : null;
+
+  const toggleRailDrawer = (target: RailTarget) => {
+    if (target === 'headroom') toggleHeadroom();
+    else if (target === 'rig') toggleRig();
+    else toggleActivity();
+  };
+
   const openWorkspacePopover = (event: React.MouseEvent<HTMLElement>) => {
     setWorkspaceAnchorEl(event.currentTarget);
   };
@@ -356,21 +351,32 @@ export function WorkstationShell({
         color: ink.primary,
       }}
     >
-      {/* 1. Governance top bar */}
+      {/*
+        1. The cockpit. One tier.
+
+        This was two: a 56px top bar over a 30px status strip, 87px of chrome
+        before any work was visible. They carried one idea between them -- where
+        you are and what is happening -- so they are one bar now, at the `bar`
+        density token. The drawer toggles moved to the rail below, which is what
+        made the merge possible: the bar could only lose a tier once something
+        else absorbed them.
+
+        Opaque, not glass. The 24px blur was reading the canvas through the
+        chrome and tinting it, which is precisely what the cool palette exists
+        to stop. A workstation that recedes does not shimmer.
+      */}
       <Box
         component="header"
         sx={{
-          height: 56,
-          minHeight: 56,
-          borderBottom: `1px solid rgba(var(--panetera-glass-border-rgb), 0.5)`,
+          height: density.bar,
+          minHeight: density.bar,
+          borderBottom: `1px solid ${surface.border}`,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          px: { xs: 1.5, md: 2.5 },
-          backgroundColor: `rgba(var(--panetera-glass-raised-rgb), 0.7)`,
-          backdropFilter: 'blur(24px) saturate(180%)',
-          WebkitBackdropFilter: 'blur(24px) saturate(180%)',
-          boxShadow: elevation.raised,
+          gap: 1,
+          px: { xs: 1.25, md: 2 },
+          backgroundColor: surface.raised,
           zIndex: 1,
         }}
       >
@@ -463,8 +469,19 @@ export function WorkstationShell({
           )}
         </Box>
 
-        {/* Right: contextual surfaces and quick switcher */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+        {/* Right: live state, then the two utilities that are not drawers. */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0 }}>
+          {cockpit && (
+            <>
+              <CockpitReadout summary={cockpit} />
+              <Divider
+                orientation="vertical"
+                variant="middle"
+                flexItem
+                sx={{ borderColor: surface.border, height: 16, my: 'auto' }}
+              />
+            </>
+          )}
           <Tooltip title="Quick switcher (⌘K)">
             <Button
               size="small"
@@ -496,89 +513,6 @@ export function WorkstationShell({
               </Box>
             </Button>
           </Tooltip>
-          <Tooltip title="Headroom context and memory">
-            <Button
-              size="small"
-              startIcon={<LayersIcon sx={{ fontSize: 16 }} />}
-              aria-label="Toggle Headroom drawer"
-              aria-expanded={headroomOpen}
-              aria-controls="headroom-drawer"
-              onClick={toggleHeadroom}
-              sx={{
-                ...topBarButton,
-                position: 'relative',
-                color: headroomOpen ? ink.primary : ink.secondary,
-                ...(headroomOpen ? activeIndicator : {}),
-                backgroundColor: headroomOpen ? accent.violetSelected : 'transparent',
-                borderColor: headroomOpen ? accent.violetBorder : 'transparent',
-              }}
-            >
-              <Box component="span" sx={{ display: { xs: 'none', md: 'inline' } }}>Headroom</Box>
-            </Button>
-          </Tooltip>
-
-          <Tooltip title="Rig connections and capabilities">
-            <Button
-              size="small"
-              startIcon={<HubIcon sx={{ fontSize: 16 }} />}
-              aria-label="Toggle Rig drawer"
-              aria-expanded={rigOpen}
-              aria-controls="rig-drawer"
-              onClick={toggleRig}
-              sx={{
-                ...topBarButton,
-                position: 'relative',
-                ...(rigOpen ? activeIndicator : {}),
-                color: rigOpen ? ink.primary : ink.secondary,
-                backgroundColor: rigOpen ? accent.violetSelected : 'transparent',
-                borderColor: rigOpen ? accent.violetBorder : 'transparent',
-              }}
-            >
-              <Box component="span" sx={{ display: { xs: 'none', md: 'inline' } }}>Rig</Box>
-            </Button>
-          </Tooltip>
-
-          <Tooltip title="Audit log">
-            <Button
-              size="small"
-              startIcon={<VerifiedUserIcon sx={{ fontSize: 16 }} />}
-              aria-label="Open audit log"
-              onClick={onOpenAudit}
-              sx={topBarButton}
-            >
-              <Box component="span" sx={{ display: { xs: 'none', md: 'inline' } }}>
-                Audit
-              </Box>
-            </Button>
-          </Tooltip>
-
-          <Tooltip title="Activity">
-            <Button
-              size="small"
-              startIcon={<ViewSidebarIcon sx={{ fontSize: 16 }} />}
-              aria-label="Toggle activity drawer"
-              aria-expanded={activityOpen}
-              aria-controls="activity-drawer"
-              onClick={toggleActivity}
-              sx={{
-                ...topBarButton,
-                position: 'relative',
-                color: activityOpen ? ink.primary : ink.secondary,
-                backgroundColor: activityOpen ? accent.violetMuted : 'transparent',
-                borderColor: activityOpen ? accent.violetBorder : 'transparent',
-                ...(activityOpen ? activeIndicator : {}),
-                '&:hover': {
-                  color: ink.primary,
-                  backgroundColor: activityOpen ? accent.violetHover : surface.overlay,
-                },
-              }}
-            >
-              <Box component="span" sx={{ display: { xs: 'none', md: 'inline' } }}>
-                Activity
-              </Box>
-            </Button>
-          </Tooltip>
-
           <Tooltip title={themeToggleLabel(themeMode)}>
             <Button
               size="small"
@@ -598,11 +532,6 @@ export function WorkstationShell({
         </Box>
       </Box>
 
-      {/* 1b. Cockpit: an always-on instrument strip. Session, run status,
-          approvals waiting, and Headroom as an ambient gauge. Rendered only when
-          the host supplies a summary, so it never forces itself on callers. */}
-      {cockpit && <CockpitStatusBar summary={cockpit} />}
-
       {/* 2. Two planes. Split side by side at workstation widths; stacked into
           one switched column when the window is too narrow to hold both.
 
@@ -614,6 +543,19 @@ export function WorkstationShell({
           crossing the breakpoint reordered the siblings and React remounted the
           panes, discarding a half-written composer draft and restarting any
           live preview. Changing style on stable nodes cannot do that. */}
+      {/*
+        The rail sits outside the pane subtree, as its sibling, so mounting it
+        cannot disturb the conversation or canvas nodes. It is rendered at every
+        width, stacked included: a drawer that becomes unreachable because the
+        window got small is worse than 44px of chrome.
+      */}
+      <Box sx={{ flexGrow: 1, display: 'flex', minHeight: 0, overflow: 'hidden' }}>
+        <NavRail
+          openDrawer={railTarget}
+          onToggle={toggleRailDrawer}
+          onOpenAudit={onOpenAudit}
+        />
+
       <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
         {stacked && (
           // The switch is chrome, not a plane, so it lives outside the pane
@@ -740,6 +682,7 @@ export function WorkstationShell({
             </Box>
           </CanvasSelectionProvider>
         </Box>
+      </Box>
       </Box>
 
       {/* 3. Contextual surfaces. Both overlay; neither resizes the canvas. */}

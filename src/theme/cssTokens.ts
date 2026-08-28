@@ -58,4 +58,4 @@ export const glass = {
   violetRgb: 'var(--panetera-glass-violet-rgb)',
 } as const;
 
-export { radius, SPACING_UNIT, typography } from './tokens';
+export { radius, SPACING_UNIT, typography, density } from './tokens';
