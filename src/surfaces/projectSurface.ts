@@ -135,11 +135,17 @@ export interface LocalAppSourceState {
  * Derives SurfacePresence from the current browser inspection lifecycle
  * and pairing state.
  *
- * - paired + live frame → 'live'
- * - paired + evidence/idle with a request → 'snapshot'
- * - paired but no frame or request → 'disconnected'
- * - not paired → 'disconnected'
- * - extension not available → 'unavailable'
+ * Liveness is only claimed when an actual frame has been captured.  A
+ * pending request is not proof of a usable live surface.
+ *
+ * - extension not available            → 'unavailable'
+ * - not paired                         → 'disconnected'
+ * - inspecting live, with a frame      → 'live'
+ * - evidence                           → 'snapshot'
+ * - requesting, with a stale frame     → 'snapshot'
+ * - requesting, with no frame yet      → 'unavailable'
+ * - idle/error with a request          → 'snapshot'
+ * - paired but no frame and no request → 'disconnected'
  */
 function deriveBrowserPresence(source: BrowserSourceState): SurfacePresence {
   if (!source.pairing.extensionAvailable) return 'unavailable';
@@ -147,7 +153,12 @@ function deriveBrowserPresence(source: BrowserSourceState): SurfacePresence {
 
   if (source.inspectionKind === 'live' && source.frame) return 'live';
   if (source.inspectionKind === 'evidence') return 'snapshot';
-  if (source.inspectionKind === 'requesting') return 'live';
+  if (source.inspectionKind === 'requesting') {
+    // A pending request has not proven a usable live surface.  If a prior
+    // frame is still on screen it is stale, so it projects as a snapshot;
+    // with nothing captured yet there is nothing live to show.
+    return source.frame ? 'snapshot' : 'unavailable';
+  }
   if (source.request) return 'snapshot';
 
   return 'disconnected';

@@ -162,6 +162,32 @@ describe('projectBrowserSurface', () => {
     assert.strictEqual(d.state.presence, 'snapshot');
   });
 
+  it('derives presence=unavailable while requesting with no frame yet', () => {
+    // A pending request is not proof of a usable live surface.
+    const source = makeBrowserSource({ inspectionKind: 'requesting', frame: undefined });
+    const d = projectBrowserSurface(source);
+    assert.strictEqual(d.state.presence, 'unavailable');
+  });
+
+  it('derives presence=snapshot while requesting over a stale frame', () => {
+    // The prior frame is still on screen but is no longer proven live.
+    const source = makeBrowserSource({ inspectionKind: 'requesting' });
+    const d = projectBrowserSurface(source);
+    assert.strictEqual(d.state.presence, 'snapshot');
+  });
+
+  it('never derives presence=live without an actual captured frame', () => {
+    const kinds = ['idle', 'requesting', 'live', 'evidence', 'error'] as const;
+    for (const inspectionKind of kinds) {
+      const d = projectBrowserSurface(makeBrowserSource({ inspectionKind, frame: undefined }));
+      assert.notStrictEqual(
+        d.state.presence,
+        'live',
+        `inspectionKind "${inspectionKind}" must not claim live without a frame`,
+      );
+    }
+  });
+
   it('derives presence=disconnected when paired but no frame and no request', () => {
     const source = makeBrowserSource({ frame: undefined, request: undefined, inspectionKind: 'idle' });
     const d = projectBrowserSurface(source);
