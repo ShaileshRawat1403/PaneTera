@@ -62,7 +62,7 @@ import { WorkbenchFailureState } from './components/workbench/WorkbenchFailureSt
 import { LiveWorkbenchSurface } from './components/workbench/LiveWorkbenchSurface';
 import { WebPreviewSurface } from './components/workbench/WebPreviewSurface';
 import { SurfaceHost } from './components/surfaces/SurfaceHost';
-import { projectBrowserSurface, projectLocalAppSurface } from './surfaces/projectSurface';
+import { projectBrowserSurface, projectLocalAppSurface, projectWorkspaceSurface } from './surfaces/projectSurface';
 import { browserSourceState } from './surfaces/browserSource';
 import type { BrowserEvidenceRecord } from './components/workbench/browserEvidenceSurfaceModel';
 import {
@@ -1957,8 +1957,23 @@ const App: React.FC = () => {
   const renderActiveWorkspaceWorkbench = () => {
     if (!activeWorkspace) return null;
 
+    // The workspace branch, migrated to an explicit surface projection -- the
+    // third of the canvas chain to move.
+    //
+    // This one gains something the others only reorganised. The explorer
+    // previously rendered a file tree and an inspector with nothing naming the
+    // project they belonged to: the canvas showed somebody's files and left
+    // which project entirely to memory. The header is the first place that is
+    // stated.
     return (
-      <Box sx={{ flexGrow: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <SurfaceHost
+        descriptor={projectWorkspaceSurface({
+          id: activeWorkspace.id,
+          name: activeWorkspace.name,
+          path: activeWorkspace.path,
+        })}
+        onClose={() => setActiveWorkspace(null)}
+      >
         <Box sx={{ flexGrow: 1, minHeight: 0, height: '100%', p: 3, overflow: 'hidden', display: 'grid', gridTemplateColumns: `${workspaceExplorerWidth}px 7px minmax(0, 1fr)`, gap: 0 }}>
           {/* Left panel: FileTree navigation only */}
           <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0, pr: 2, overflow: 'hidden' }}>
@@ -2065,7 +2080,7 @@ const App: React.FC = () => {
             />
           </Box>
         </Box>
-      </Box>
+      </SurfaceHost>
     );
   };
 
