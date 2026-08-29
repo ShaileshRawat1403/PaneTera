@@ -19,7 +19,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { SurfaceHost } from '../src/components/surfaces/SurfaceHost';
 import { WebPreviewSurface } from '../src/components/workbench/WebPreviewSurface';
 import { browserSourceState } from '../src/surfaces/browserSource';
-import { projectBrowserSurface, projectLocalAppSurface } from '../src/surfaces/projectSurface';
+import { projectBrowserSurface, projectLocalAppSurface, projectWorkspaceSurface } from '../src/surfaces/projectSurface';
 import type { BrowserFrameState } from '../src/surfaces/projectSurface';
 import type { SurfaceDescriptor } from '../src/surfaces/types';
 
@@ -350,6 +350,88 @@ describe('the local app branch, through the same host', () => {
   });
 });
 
+describe('the workspace branch, through the same host', () => {
+  const workspace = { id: 'ws-1', name: 'PaneTera', path: '/Users/x/MYAIAGENTS/PaneTera' };
+
+  it('names the project the explorer belongs to', () => {
+    // What this migration adds rather than reorganises: the explorer used to
+    // render a file tree and an inspector with nothing saying which project
+    // they were of.
+    const html = renderToStaticMarkup(
+      <SurfaceHost descriptor={projectWorkspaceSurface(workspace)} onClose={() => {}}>
+        <div>file tree</div>
+      </SurfaceHost>,
+    );
+
+    assert.ok(html.includes('PaneTera'), 'the project is named');
+    assert.ok(html.includes('/Users/x/MYAIAGENTS/PaneTera'), 'and located');
+    assert.ok(html.includes('data-surface-kind="workspace"'));
+  });
+
+  it('reports an open project as live, never as verified', () => {
+    // A directory listing is not evidence of anything.
+    const d = projectWorkspaceSurface(workspace);
+    assert.strictEqual(d.state.presence, 'live');
+    assert.strictEqual(d.state.integrity, undefined);
+
+    const html = renderToStaticMarkup(
+      <SurfaceHost descriptor={d}><div /></SurfaceHost>,
+    );
+    assert.ok(!html.includes('Verified'));
+  });
+
+  it('offers no tools, rather than inventing one', () => {
+    // The explorer's controls -- selecting a file, resizing panes -- belong to
+    // the body. Zone 2 is elastic, and empty is the honest result.
+    const d = projectWorkspaceSurface(workspace);
+    assert.deepStrictEqual(d.actions, []);
+
+    const html = renderToStaticMarkup(
+      <SurfaceHost descriptor={d}><div /></SurfaceHost>,
+    );
+    assert.ok(!html.includes('data-behavior='), 'no action controls at all');
+  });
+
+  it('uses the workspace-catalog renderer and a stable id', () => {
+    const d = projectWorkspaceSurface(workspace);
+    assert.strictEqual(d.renderer.type, 'workspace-catalog');
+    assert.strictEqual(d.id, 'workspace:ws-1');
+    assert.deepStrictEqual(d.renderer.payload, {
+      workspaceId: 'ws-1',
+      name: 'PaneTera',
+      path: '/Users/x/MYAIAGENTS/PaneTera',
+    });
+  });
+
+  it('leaves identity to the header, not the explorer', () => {
+    // Caught in the browser, not by a test: after the migration the file tree
+    // still printed the project name and path above itself, so the canvas
+    // stated identity twice. That is the same failure the browser branch
+    // needed a chrome seam to avoid, and it is what "replaced, not added"
+    // means in practice.
+    const treeSource = readFileSync(
+      new URL('../src/components/workbench/WorkspaceFileTree.tsx', import.meta.url),
+      'utf8',
+    );
+    assert.ok(
+      !treeSource.includes('{workspace.name}'),
+      'the file tree must not restate the project name; the header states it',
+    );
+    assert.ok(
+      !treeSource.includes('{workspace.path}'),
+      'nor the path',
+    );
+    assert.ok(treeSource.includes('Refresh'), 'its own control stays with the panel it refreshes');
+  });
+
+  it('does not mutate the workspace it was given', () => {
+    const source = { ...workspace };
+    const snapshot = JSON.stringify(source);
+    projectWorkspaceSurface(source);
+    assert.strictEqual(JSON.stringify(source), snapshot);
+  });
+});
+
 describe('the migration is one branch, not a rewrite', () => {
   const appSource = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
 
@@ -374,7 +456,7 @@ describe('the migration is one branch, not a rewrite', () => {
     }
 
     const hosts = appSource.split('<SurfaceHost').length - 1;
-    assert.strictEqual(hosts, 2, 'browser and local app have migrated; the rest have not');
+    assert.strictEqual(hosts, 3, 'browser, local app and workspace have migrated; the rest have not');
     assert.ok(
       !appSource.includes('LiveWorkbenchToolbar'),
       'the local app bespoke toolbar is gone, replaced rather than stacked',

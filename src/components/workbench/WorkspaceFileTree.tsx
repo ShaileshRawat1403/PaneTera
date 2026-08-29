@@ -169,16 +169,14 @@ export const WorkspaceFileTree: React.FC<FileTreeProps> = ({
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
-      {/* Title block */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Box>
-          <Typography variant="subtitle1" sx={{ fontWeight: 650, color: ink.primary }}>
-            {workspace.name}
-          </Typography>
-          <Typography variant="caption" sx={{ color: ink.muted, wordBreak: 'break-all' }}>
-            {workspace.path}
-          </Typography>
-        </Box>
+      {/*
+        The project's name and path used to be restated here. The workspace
+        surface header now states them, and identity said twice in one view is
+        the failure this migration exists to remove -- the same one the browser
+        branch needed a chrome seam to avoid. What is left is the control, which
+        is the file tree's own and belongs to the panel it refreshes.
+      */}
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', mb: 2 }}>
         <Button size="small" variant="outlined" onClick={fetchFiles} disabled={loading} startIcon={<RefreshIconView />} sx={{ textTransform: 'none', fontSize: '0.7rem', borderColor: surface.border }}>
           Refresh
         </Button>

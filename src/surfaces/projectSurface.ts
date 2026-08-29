@@ -10,9 +10,10 @@
 //   - Never execute capabilities, make network calls, or access stores.
 //   - Never import React or return ReactNode values.
 //
-// Supported projections in this slice:
+// Supported projections:
 //   A. Browser live/observation surface
 //   B. Local App workbench surface
+//   C. Workspace (project explorer) surface
 
 import type {
   SurfaceDescriptor,
@@ -348,6 +349,75 @@ export function projectLocalAppSurface(source: LocalAppSourceState): SurfaceDesc
         // embedding, Not configured, Unavailable) without polluting
         // SurfacePresence with app-specific detail.
         sourceStatus: source.status,
+      },
+    },
+  };
+}
+
+// ─── Workspace Projection ─────────────────────────────────────────
+
+/**
+ * Subset of the Workspace record the explorer already holds.
+ * Re-declared structurally, as with the other sources here.
+ */
+export interface WorkspaceSourceState {
+  id: string;
+  name: string;
+  path: string;
+}
+
+/**
+ * Projects an open project into a SurfaceDescriptor.
+ *
+ * The simplest of the three, because a workspace has no reachability to
+ * report: it is a directory the server has already resolved, so by the time
+ * this canvas renders, the project is open. There is no probe, no pairing, and
+ * no connection that can drop, which is exactly why presence is a constant
+ * here rather than derived from anything.
+ *
+ * That constant is 'live' and not 'verified'. An open project is
+ * healthy-and-unremarkable -- the same reading as a reachable local
+ * application -- and integrity stays absent because a directory listing is not
+ * evidence of anything.
+ *
+ * The canvas previously stated no identity at all: a file tree and an
+ * inspector with nothing naming the project they belonged to. The header is
+ * the first place that gets said.
+ */
+export function projectWorkspaceSurface(source: WorkspaceSourceState): SurfaceDescriptor {
+  return {
+    id: `workspace:${source.id}`,
+    kind: 'workspace',
+
+    identity: {
+      title: source.name,
+      // The path is an identifier, and identifiers render in the mono face.
+      subtitle: source.path,
+      icon: 'folder',
+    },
+
+    state: {
+      presence: 'live',
+      // An open project is not a verified one. Nothing here has been proven.
+    },
+
+    // No tools. The explorer's own controls -- selecting a file, resizing the
+    // panes -- belong to the body, not to a header that governs nothing. Zone 2
+    // is elastic, and an empty one is the honest result rather than a gap to
+    // fill with something invented.
+    actions: [],
+
+    view: {
+      canSplit: true,
+      canClose: true,
+    },
+
+    renderer: {
+      type: 'workspace-catalog',
+      payload: {
+        workspaceId: source.id,
+        name: source.name,
+        path: source.path,
       },
     },
   };
