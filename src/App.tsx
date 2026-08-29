@@ -32,7 +32,7 @@ import {
   maxNestedPaneWidth,
   usePersistentPaneWidth,
 } from './components/workstation/paneSizing';
-import { workstationGuidance } from './components/workstation/guidance';
+import { workstationGuidance, type GatewayState } from './components/workstation/guidance';
 import { buildContextBrief } from '../src/context/contextBrief';
 import type { ProjectSnapshot, NextAction, SuggestedWorkflow } from '../src/context/contextBrief';
 import type { HeadroomCapsuleView } from './components/headroom/HeadroomPanel';
@@ -161,6 +161,11 @@ const App: React.FC = () => {
   const [workflowSuggestions, setWorkflowSuggestions] = useState<SuggestedWorkflow[]>([]);
   const [soothsayerStatus, setSoothsayerStatus] = useState<'online' | 'offline' | 'checking' | 'unconfigured' | 'degraded'>('checking');
   const [backendHealth, setBackendHealth] = useState<{ status: string; mode: string; workspaceCount: number; memoryBridgeReady: boolean } | null>(null);
+  // Distinct from backendHealth, which only ever records success. A failed
+  // health check has to say *how* it failed: a refused token and a silent
+  // gateway need different actions from a person, and collapsing them into
+  // "unavailable" sends someone to restart a server that is running fine.
+  const [gatewayState, setGatewayState] = useState<GatewayState>('unknown');
 
   const [workbenchMode, setWorkbenchMode] = useState<WorkbenchMode>(() => {
     const stored = localStorage.getItem('panetera-workbench-mode')
@@ -653,7 +658,13 @@ const App: React.FC = () => {
 
   // Fetch workspaces & health once authenticated
   useEffect(() => {
-    if (!token) return;
+    if (!token) {
+      // Nothing has been asked of the gateway, so nothing is known about it.
+      // Saying so is the honest state; "unavailable" would be a conclusion
+      // drawn from a question never put.
+      setGatewayState('signed-out');
+      return;
+    }
     fetch('/api/workspaces', {
       headers: { Authorization: `Bearer ${token}` }
     })
@@ -666,11 +677,30 @@ const App: React.FC = () => {
     fetch('/api/health', {
       headers: { Authorization: `Bearer ${token}` }
     })
-      .then(r => r.json())
-      .then(data => {
-        if (data && data.status) setBackendHealth(data);
+      .then(async (response) => {
+        // 401 is the server answering, not failing to. It means the token is
+        // wrong or expired -- which is what a stale PORTAL_TOKEN produces, and
+        // what previously surfaced as "gateway unavailable".
+        if (response.status === 401) {
+          setGatewayState('rejected');
+          return;
+        }
+        if (!response.ok) {
+          setGatewayState('unreachable');
+          return;
+        }
+        const data = await response.json();
+        if (data && data.status) {
+          setBackendHealth(data);
+          setGatewayState(data.status === 'ok' ? 'ok' : 'unreachable');
+        } else {
+          setGatewayState('unreachable');
+        }
       })
-      .catch(() => {});
+      .catch(() => {
+        // The request never completed: no server, or no network path to it.
+        setGatewayState('unreachable');
+      });
   }, [token]);
 
   // Fetch workflow suggestions when workspaces or active workspace changes
@@ -2245,7 +2275,7 @@ const App: React.FC = () => {
       <Box sx={{ height: '100vh', width: '100vw' }}>
       {(() => {
           const guidance = workstationGuidance({
-            gatewayConnected: backendHealth?.status === 'ok',
+            gateway: gatewayState,
             loading,
             hasProject: Boolean(activeWorkspace),
             objective: headroomObjective,

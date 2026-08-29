@@ -11,19 +11,68 @@ import { status as statusTokens } from '../src/theme/cssTokens';
 import { workstationGuidance } from '../src/components/workstation/guidance';
 
 describe('Workstation guidance uses one relevant line', () => {
-  it('shows attention only when a required capability is unavailable', () => {
-    assert.deepStrictEqual(workstationGuidance({ gatewayConnected: false, loading: false, hasProject: true, objective: 'Ship' }), {
-      kind: 'attention', text: 'PaneTera’s local gateway is unavailable.',
-    });
+  const base = { loading: false, hasProject: true, objective: 'Ship' } as const;
+
+  it('names the three failures apart, because each has a different remedy', () => {
+    // The bug this replaced: all three read as "gateway unavailable", so a
+    // stale PORTAL_TOKEN told a person to go restart a server that was running
+    // perfectly well and answering every request put to it.
+    assert.deepStrictEqual(
+      workstationGuidance({ ...base, gateway: 'signed-out' }),
+      { kind: 'attention', text: 'Sign in to PaneTera to reach your workstation.' },
+    );
+    assert.deepStrictEqual(
+      workstationGuidance({ ...base, gateway: 'rejected' }),
+      { kind: 'attention', text: 'PaneTera did not accept your sign-in. Sign in again.' },
+    );
+    assert.deepStrictEqual(
+      workstationGuidance({ ...base, gateway: 'unreachable' }),
+      { kind: 'attention', text: 'PaneTera\u2019s local gateway is unavailable.' },
+    );
+
+    const texts = (['signed-out', 'rejected', 'unreachable'] as const)
+      .map((gateway) => workstationGuidance({ ...base, gateway }).text);
+    assert.strictEqual(new Set(texts).size, 3, 'no two failures say the same thing');
+  });
+
+  it('says nothing alarming before the first health check settles', () => {
+    // 'unknown' is the startup state. A moment of "unavailable" while the
+    // request is still in flight is the same lie told briefly.
+    assert.strictEqual(workstationGuidance({ ...base, gateway: 'unknown' }).kind, 'next');
+    assert.strictEqual(
+      workstationGuidance({ ...base, gateway: 'unknown', loading: true }).kind,
+      'now',
+    );
+  });
+
+  it('only claims the gateway is unavailable when that was actually established', () => {
+    // The invariant. Every other state is either fine or not yet known, and
+    // neither is a gateway fault.
+    for (const gateway of ['ok', 'unknown', 'signed-out', 'rejected'] as const) {
+      assert.notStrictEqual(
+        workstationGuidance({ ...base, gateway }).text,
+        'PaneTera\u2019s local gateway is unavailable.',
+        `${gateway} must not be reported as a gateway failure`,
+      );
+    }
   });
 
   it('reports current work before recommending another action', () => {
-    assert.strictEqual(workstationGuidance({ gatewayConnected: true, loading: true, hasProject: true, objective: 'Ship' }).kind, 'now');
+    assert.strictEqual(
+      workstationGuidance({ ...base, gateway: 'ok', loading: true }).kind,
+      'now',
+    );
   });
 
   it('recommends only the smallest useful next step', () => {
-    assert.strictEqual(workstationGuidance({ gatewayConnected: true, loading: false, hasProject: false, objective: '' }).text, 'Choose a project above or describe a goal.');
-    assert.strictEqual(workstationGuidance({ gatewayConnected: true, loading: false, hasProject: true, objective: '' }).text, 'Set the outcome you want to reach.');
+    assert.strictEqual(
+      workstationGuidance({ ...base, gateway: 'ok', hasProject: false, objective: '' }).text,
+      'Choose a project above or describe a goal.',
+    );
+    assert.strictEqual(
+      workstationGuidance({ ...base, gateway: 'ok', objective: '' }).text,
+      'Set the outcome you want to reach.',
+    );
   });
 });
 
