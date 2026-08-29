@@ -52,7 +52,7 @@ export const LiveAppWorkbenchCard: React.FC<LiveAppWorkbenchCardProps> = ({
   const getSourceStatusColor = (status: string) => {
     switch (status) {
       case 'available':
-        return statusToken.success;
+        return statusToken.neutral;
       case 'unavailable':
         return statusToken.danger;
       case 'unverified':
@@ -91,7 +91,7 @@ export const LiveAppWorkbenchCard: React.FC<LiveAppWorkbenchCardProps> = ({
                 fontSize: '0.55rem',
                 fontWeight: 800,
                 background: health.status === 'available' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(255, 255, 255, 0.05)',
-                color: health.status === 'available' ? statusToken.success : ink.secondary,
+                color: health.status === 'available' ? statusToken.neutral : ink.secondary,
                 border: health.status === 'available' ? '1px solid rgba(34, 197, 94, 0.2)' : '1px solid transparent',
               }}
             />
@@ -146,7 +146,7 @@ export const LiveAppWorkbenchCard: React.FC<LiveAppWorkbenchCardProps> = ({
             fontSize: '0.65rem',
             fontWeight: 600,
             background: configured ? 'rgba(34, 197, 94, 0.06)' : 'rgba(239, 68, 68, 0.06)',
-            color: configured ? statusToken.success : statusToken.danger,
+            color: configured ? statusToken.neutral : statusToken.danger,
             border: `1px solid ${configured ? 'rgba(34, 197, 94, 0.18)' : 'rgba(239, 68, 68, 0.18)'}`,
           }}
         />
@@ -158,7 +158,7 @@ export const LiveAppWorkbenchCard: React.FC<LiveAppWorkbenchCardProps> = ({
             fontSize: '0.65rem',
             fontWeight: 600,
             background: urlReachable ? 'rgba(34, 197, 94, 0.06)' : 'rgba(239, 68, 68, 0.06)',
-            color: urlReachable ? statusToken.success : statusToken.danger,
+            color: urlReachable ? statusToken.neutral : statusToken.danger,
             border: `1px solid ${urlReachable ? 'rgba(34, 197, 94, 0.18)' : 'rgba(239, 68, 68, 0.18)'}`,
           }}
         />
@@ -170,7 +170,7 @@ export const LiveAppWorkbenchCard: React.FC<LiveAppWorkbenchCardProps> = ({
             fontSize: '0.65rem',
             fontWeight: 600,
             background: manifestReachable ? 'rgba(34, 197, 94, 0.06)' : 'rgba(239, 68, 68, 0.06)',
-            color: manifestReachable ? statusToken.success : statusToken.danger,
+            color: manifestReachable ? statusToken.neutral : statusToken.danger,
             border: `1px solid ${manifestReachable ? 'rgba(34, 197, 94, 0.18)' : 'rgba(239, 68, 68, 0.18)'}`,
           }}
         />
@@ -182,7 +182,7 @@ export const LiveAppWorkbenchCard: React.FC<LiveAppWorkbenchCardProps> = ({
             fontSize: '0.65rem',
             fontWeight: 600,
             background: manifestAvailable ? 'rgba(34, 197, 94, 0.06)' : 'rgba(251, 191, 36, 0.06)',
-            color: manifestAvailable ? statusToken.success : statusToken.brass,
+            color: manifestAvailable ? statusToken.neutral : statusToken.brass,
             border: `1px solid ${manifestAvailable ? 'rgba(34, 197, 94, 0.18)' : 'rgba(251, 191, 36, 0.18)'}`,
           }}
         />
@@ -310,7 +310,7 @@ export const LiveAppWorkbenchCard: React.FC<LiveAppWorkbenchCardProps> = ({
                     height: 18,
                     fontSize: '0.6rem',
                     background: 'rgba(34, 197, 94, 0.05)',
-                    color: statusToken.success,
+                    color: statusToken.neutral,
                     border: '1px solid rgba(34, 197, 94, 0.15)',
                   }}
                 />
@@ -324,7 +324,7 @@ export const LiveAppWorkbenchCard: React.FC<LiveAppWorkbenchCardProps> = ({
               <Typography variant="caption" sx={{ color: highlightHealth ? accent.violet : ink.muted, fontWeight: 800, display: 'block', mb: 1 }}>
                 Health Check Endpoint {highlightHealth && '— Focused Lens'}
               </Typography>
-              <Typography variant="caption" sx={{ fontFamily: 'monospace', color: statusToken.success, display: 'block', mt: 0.5 }}>
+              <Typography variant="caption" sx={{ fontFamily: 'monospace', color: statusToken.neutral, display: 'block', mt: 0.5 }}>
                 {health.endpoint ?? '/health'} [Status: Available]
               </Typography>
             </Box>

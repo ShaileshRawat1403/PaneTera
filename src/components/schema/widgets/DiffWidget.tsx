@@ -32,7 +32,6 @@ export const DiffWidget: React.FC<DiffWidgetProps> = ({ schema, data }) => {
         backgroundColor: surface.raised,
         borderColor: surface.border,
         borderRadius: `${radius.md}px`,
-        backdropFilter: 'blur(12px)',
         transition: 'border-color 200ms ease',
         '&:hover': {
           borderColor: surface.borderStrong,

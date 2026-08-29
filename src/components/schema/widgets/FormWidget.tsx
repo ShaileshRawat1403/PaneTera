@@ -34,7 +34,6 @@ export const FormWidget: React.FC<FormWidgetProps> = ({ schema, data, onAction }
         backgroundColor: surface.raised,
         borderColor: surface.border,
         borderRadius: `${radius.md}px`,
-        backdropFilter: 'blur(12px)',
         transition: 'border-color 200ms ease',
         '&:hover': {
           borderColor: surface.borderStrong,

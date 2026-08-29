@@ -72,8 +72,8 @@ export const WorkspacesCatalog: React.FC<CatalogProps> = ({ data }) => {
                     height: 18,
                     fontSize: '0.6rem',
                     fontWeight: 800,
-                    backgroundColor: ws.status === 'online' ? status.successMuted : surface.sunken,
-                    color: ws.status === 'online' ? status.success : ink.muted,
+                    backgroundColor: surface.sunken,
+                    color: ws.status === 'online' ? status.neutral : ink.muted,
                   }}
                 />
               </Box>

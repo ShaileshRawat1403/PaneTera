@@ -59,7 +59,6 @@ const ChatInput: React.FC<Props> = ({ onSend, variant = 'default', token }) => {
         background: surface.raised,
         border: `1px solid ${surface.border}`,
         boxShadow: elevation.card,
-        backdropFilter: 'blur(12px)',
         transition: transition(['background-color', 'box-shadow', 'border-color', 'transform'], duration.settled, easing.enter),
         '&:focus-within': {
           borderColor: accent.violetBorder,

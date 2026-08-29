@@ -900,9 +900,9 @@ const DesktopAppsFeedCard: React.FC<{ token: string }> = ({ token }) => {
               height: 18,
               fontSize: '0.55rem',
               fontWeight: 700,
-              background: app.status === 'Running' ? statusToken.successMuted : surface.border,
-              color: app.status === 'Running' ? statusToken.success : ink.muted,
-              border: app.status === 'Running' ? `1px solid ${statusToken.successMuted}` : `1px solid ${surface.border}`
+              background: app.status === 'Running' ? surface.sunken : surface.border,
+              color: app.status === 'Running' ? statusToken.neutral : ink.muted,
+              border: `1px solid ${surface.border}`
             }}
           />
         </Paper>

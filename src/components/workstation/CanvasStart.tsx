@@ -55,7 +55,6 @@ function StartAction({
         border: `1px solid ${primary ? accent.violetBorder : surface.border}`,
         backgroundColor: primary ? accent.violetMuted : surface.raised,
         boxShadow: primary ? elevation.card : elevation.card,
-        backdropFilter: 'blur(8px)',
         transition: transition(['background-color', 'border-color', 'box-shadow', 'transform'], duration.settled, easing.enter),
         // Seam accent hairline
         ...(primary

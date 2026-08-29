@@ -251,7 +251,7 @@ export function AgentRunCard({ result, onCancel, onApprove }: AgentRunCardProps)
         {durationLabel} · {nodes.length} {nodes.length === 1 ? 'step' : 'steps'}{modelTurns > 1 ? ` · ${modelTurns} model turns` : ''}{usageTotals.seen ? ` · ${usageTotals.total.toLocaleString()} tokens` : ''}
       </Typography>
       <Stack direction="row" alignItems="center" spacing={0.75} sx={{ mb: contextParts.length ? 0.5 : 0 }}>
-        <Box sx={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: toolCount > 0 ? status.success : ink.muted, flexShrink: 0 }} />
+        <Box sx={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: toolCount > 0 ? status.neutral : ink.muted, flexShrink: 0 }} />
         <Typography sx={{ color: ink.secondary, fontSize: '0.75rem' }}>
           {toolCount > 0
             ? `Grounded in ${toolCount} tool ${toolCount === 1 ? 'result' : 'results'}`

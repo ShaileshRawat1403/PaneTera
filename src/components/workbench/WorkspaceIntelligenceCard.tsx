@@ -112,8 +112,8 @@ export const WorkspaceIntelligenceCard: React.FC<IntelligenceProps> = ({ files }
                     height: 16,
                     fontSize: '0.55rem',
                     fontWeight: 800,
-                    backgroundColor: tech.confidence === 'detected' ? status.successMuted : (tech.confidence === 'likely' ? accent.violetMuted : surface.raised),
-                    color: tech.confidence === 'detected' ? status.success : (tech.confidence === 'likely' ? accent.violet : ink.muted)
+                    backgroundColor: tech.confidence === 'detected' ? accent.violetMuted : surface.sunken,
+                    color: tech.confidence === 'detected' ? accent.violet : ink.muted
                   }}
                 />
               </Box>

@@ -2,7 +2,7 @@
 import React from 'react';
 import { Box, Typography, Chip, Stack } from '@mui/material';
 import LockIcon from '@mui/icons-material/Lock';
-import { accent, ink, status } from '../../theme/cssTokens';
+import { accent, ink, status, surface } from '../../theme/cssTokens';
 
 interface BannerProps {
   gatewayConnected: boolean;
@@ -32,9 +32,12 @@ export const ReadOnlyStatusBanner: React.FC<BannerProps> = ({
     <Box
       sx={{
         width: '100%',
-        background: 'linear-gradient(90deg, rgba(239, 68, 68, 0.12) 0%, rgba(127, 85, 240, 0.12) 100%)',
-        borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-        backdropFilter: 'blur(8px)',
+        // A flat token surface rather than a red-to-violet gradient built from
+        // the old palette's raw rgba. The banner reports state; the gradient was
+        // reporting drama, and its red half implied a failure that the row of
+        // indicators below may well contradict.
+        backgroundColor: surface.sunken,
+        borderBottom: `1px solid ${surface.border}`,
         py: 1,
         px: { xs: 2, md: 3 },
         display: 'flex',
@@ -74,7 +77,7 @@ export const ReadOnlyStatusBanner: React.FC<BannerProps> = ({
             fontSize: '0.55rem',
             fontWeight: 800,
             background: portalAuthValid ? 'rgba(34, 197, 94, 0.06)' : 'rgba(239, 68, 68, 0.06)',
-            color: portalAuthValid ? status.success : status.danger,
+            color: portalAuthValid ? status.neutral : status.danger,
             border: `1px solid ${portalAuthValid ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)'}`
           }}
         />
@@ -88,7 +91,7 @@ export const ReadOnlyStatusBanner: React.FC<BannerProps> = ({
             fontSize: '0.55rem',
             fontWeight: 800,
             background: gatewayConnected ? 'rgba(34, 197, 94, 0.06)' : 'rgba(239, 68, 68, 0.06)',
-            color: gatewayConnected ? status.success : status.danger,
+            color: gatewayConnected ? status.neutral : status.danger,
             border: `1px solid ${gatewayConnected ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)'}`
           }}
         />
@@ -130,7 +133,7 @@ export const ReadOnlyStatusBanner: React.FC<BannerProps> = ({
             fontSize: '0.55rem',
             fontWeight: 800,
             background: liveAppUrlReachable ? 'rgba(34, 197, 94, 0.06)' : 'rgba(255, 255, 255, 0.03)',
-            color: liveAppUrlReachable ? status.success : ink.disabled,
+            color: liveAppUrlReachable ? status.neutral : ink.disabled,
             border: `1px solid ${liveAppUrlReachable ? 'rgba(34,197,94,0.15)' : 'rgba(255,255,255,0.05)'}`
           }}
         />
@@ -144,7 +147,7 @@ export const ReadOnlyStatusBanner: React.FC<BannerProps> = ({
             fontSize: '0.55rem',
             fontWeight: 800,
             background: liveAppManifestAvailable ? 'rgba(34, 197, 94, 0.06)' : 'rgba(251, 191, 36, 0.06)',
-            color: liveAppManifestAvailable ? status.success : status.brass,
+            color: liveAppManifestAvailable ? status.neutral : status.brass,
             border: `1px solid ${liveAppManifestAvailable ? 'rgba(34,197,94,0.15)' : 'rgba(251,191,36,0.15)'}`
           }}
         />

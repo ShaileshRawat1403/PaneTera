@@ -41,7 +41,6 @@ export function McpToolExecutionCard({
         backgroundColor: surface.raised,
         border: `1px solid ${isError ? status.danger : surface.border}`,
         borderRadius: `${radius.md}px`,
-        backdropFilter: 'blur(12px)',
         transition: 'border-color 200ms ease, box-shadow 200ms ease',
         overflow: 'hidden',
         '&:hover': {

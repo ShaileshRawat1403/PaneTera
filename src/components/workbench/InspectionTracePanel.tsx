@@ -3,7 +3,7 @@ import React from 'react';
 import { Box, Typography, Paper, List, ListItem, ListItemText, Chip, Stack } from '@mui/material';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import HighlightOffIcon from '@mui/icons-material/HighlightOff';
-import { accent, ink, status } from '../../theme/cssTokens';
+import { accent, ink, status, surface } from '../../theme/cssTokens';
 
 export interface TraceRecord {
   timestamp: string;
@@ -109,7 +109,7 @@ export const InspectionTracePanel: React.FC<TraceProps> = ({ records, onSelectFi
                   <Chip
                     label="ALLOWED"
                     size="small"
-                    sx={{ height: 14, fontSize: '0.5rem', fontWeight: 900, background: 'rgba(34, 197, 94, 0.08)', color: status.success }}
+                    sx={{ height: 14, fontSize: '0.5rem', fontWeight: 900, background: surface.sunken, color: ink.secondary }}
                   />
                 ) : (
                   <Chip
