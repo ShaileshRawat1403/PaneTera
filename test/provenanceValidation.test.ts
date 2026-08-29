@@ -1,6 +1,7 @@
 import assert from 'assert';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import { provenanceValidationService } from '../server/research/provenanceValidationService';
 import { researchSessionService } from '../server/research/researchSessionService';
 import { researchSessionStore, resetResearchSessionStoreForTest } from '../server/research/researchSessionStore';
@@ -10,7 +11,10 @@ import { setEvidenceRetentionServiceForTest } from '../server/evidence/evidenceR
 
 async function runTests() {
   console.log('Running ProvenanceValidationService tests...');
-  let tempDir = fs.mkdtempSync(path.join(process.cwd(), 'tessera-test-'));
+  // Created per setup(), removed by it and by cleanup(). Starts empty:
+  // the previous module-scope mkdtemp was orphaned by the first setup()
+  // call and never removed by anything.
+  let tempDir = '';
   
   const baseObs: ObservationItem = {
     captureId: 'cap-1', captureType: 'page-selection',
@@ -34,7 +38,11 @@ async function runTests() {
   };
 
   async function setup() {
-    tempDir = fs.mkdtempSync(path.join(process.cwd(), 'tessera-test-'));
+    // Remove the previous run's directory before replacing the handle to it.
+    // setup() is called once per test, so without this every call but the
+    // last orphaned a directory that cleanup() could no longer see.
+    if (tempDir) fs.rmSync(tempDir, { recursive: true, force: true });
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'panetera-provenance-'));
     process.env.TESSERA_APP_DATA = tempDir;
     resetResearchSessionStoreForTest();
     setEvidenceRetentionServiceForTest(undefined);
@@ -52,7 +60,8 @@ async function runTests() {
   }
 
   function cleanup() {
-    fs.rmSync(tempDir, { recursive: true, force: true });
+    if (tempDir) fs.rmSync(tempDir, { recursive: true, force: true });
+    tempDir = '';
     delete process.env.TESSERA_APP_DATA;
   }
 
