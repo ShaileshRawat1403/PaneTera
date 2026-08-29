@@ -44,7 +44,6 @@ export const ProposalGateWidget: React.FC<ProposalGateWidgetProps> = ({ schema, 
         backgroundColor: surface.raised,
         borderColor: surface.border,
         borderRadius: `${radius.md}px`,
-        backdropFilter: 'blur(12px)',
         transition: 'border-color 200ms ease, box-shadow 200ms ease',
         '&:hover': {
           borderColor: surface.borderStrong,

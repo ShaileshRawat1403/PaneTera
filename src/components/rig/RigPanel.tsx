@@ -571,7 +571,6 @@ function RigPanelSession({ token, onClose, onResourcesChanged }: Props): React.R
                 border: `1px solid ${card.needsAttention ? toneColor : surface.border}`,
                 borderLeft: card.needsAttention ? `3px solid ${toneColor}` : `1px solid ${surface.border}`,
                 borderRadius: `${radius.md}px`,
-                backdropFilter: 'blur(12px)',
                 transition: 'border-color 200ms ease, box-shadow 200ms ease, transform 150ms ease',
                 '&:hover': {
                   borderColor: card.needsAttention ? toneColor : surface.borderStrong,

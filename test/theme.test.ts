@@ -18,6 +18,7 @@ process.env.NODE_ENV = 'test';
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
+import { readFileSync, readdirSync } from 'node:fs';
 import {
   accent,
   ink,
@@ -36,6 +37,16 @@ import { statusColour as liveAppStatusColour } from '../src/components/workbench
 import { riskColours } from '../src/components/ProposedActionCard';
 import { toolColour } from '../src/components/transcript/TranscriptTurn';
 import { workflowStatusColour, workflowStatusLabel } from '../src/components/ContentWorkflowCard';
+
+/** Every .tsx under src/components, recursively. */
+function listComponentFiles(dir: URL): URL[] {
+  const out: URL[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.isDirectory()) out.push(...listComponentFiles(new URL(`${entry.name}/`, dir)));
+    else if (entry.name.endsWith('.tsx')) out.push(new URL(entry.name, dir));
+  }
+  return out;
+}
 
 // --- WCAG relative luminance and contrast -----------------------------------
 
@@ -245,6 +256,64 @@ describe('green means meaningful success only', () => {
   it('keeps success distinct from attention and failure', () => {
     assert.notStrictEqual(status.success, status.brass);
     assert.notStrictEqual(status.success, status.danger);
+  });
+
+  it('never paints a connection green', () => {
+    // The rule that is easy to state and easy to break: connected, reachable,
+    // online, available and running are all "fine", and fine is neutral. Green
+    // is reserved for something that was actually verified or completed, so
+    // that when a person sees green it means a thing was proven rather than
+    // merely plugged in.
+    //
+    // This scans source rather than rendered output because the violation is a
+    // conditional -- `reachable ? success : danger` -- and reaches the screen
+    // only when that branch happens to be taken. A card nobody mounted during
+    // review is exactly where the last nine of these were hiding.
+    const componentFiles = listComponentFiles(new URL('../src/components/', import.meta.url));
+
+    // Words that describe a connection or a liveness state, never an outcome.
+    const connectionWord = /reachable|connected|online|available|=== 'Running'|toolCount > 0/;
+    const greenToken = /status(?:Token)?\.success(?:Muted)?/;
+
+    const offenders: string[] = [];
+    for (const file of componentFiles) {
+      const source = readFileSync(file, 'utf8');
+      source.split('\n').forEach((line, index) => {
+        if (connectionWord.test(line) && greenToken.test(line)) {
+          offenders.push(`${file.pathname.split('/src/')[1]}:${index + 1}  ${line.trim().slice(0, 90)}`);
+        }
+      });
+    }
+
+    assert.deepStrictEqual(
+      offenders,
+      [],
+      `these paint a connection green; use status.neutral for healthy-and-unremarkable:\n${offenders.join('\n')}`,
+    );
+  });
+
+  it('keeps persistent chrome opaque', () => {
+    // A backdrop-filter over an opaque fill blurs nothing and still costs a
+    // compositing layer; over the canvas it tints the work the canvas exists to
+    // show. A modal scrim is the one place the blur is the point, so the rule
+    // is scoped to blur radius rather than banning the property.
+    const componentFiles = listComponentFiles(new URL('../src/components/', import.meta.url));
+
+    const offenders: string[] = [];
+    for (const file of componentFiles) {
+      const name = file.pathname.split('/src/')[1];
+      if (name.endsWith('QuickSwitcherModal.tsx')) continue; // modal scrim
+      const source = readFileSync(file, 'utf8');
+      source.split('\n').forEach((line, index) => {
+        if (/backdropFilter/.test(line)) offenders.push(`${name}:${index + 1}  ${line.trim()}`);
+      });
+    }
+
+    assert.deepStrictEqual(
+      offenders,
+      [],
+      `persistent chrome must not blur:\n${offenders.join('\n')}`,
+    );
   });
 });
 

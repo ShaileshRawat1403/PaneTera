@@ -4,7 +4,7 @@ import InfoIcon from '@mui/icons-material/Info';
 import LanguageIcon from '@mui/icons-material/Language';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import ViewListIcon from '@mui/icons-material/ViewList';
-import { accent, ink, status } from '../../theme/cssTokens';
+import { accent, ink, status, surface } from '../../theme/cssTokens';
 
 interface DomOutlineItem {
   role: 'heading' | 'button' | 'link' | 'input' | 'text' | 'region';
@@ -86,7 +86,7 @@ export const BrowserObservationView: React.FC<BrowserObservationProps> = ({ data
         <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 0.5, flexWrap: 'wrap' }}>
           <Chip label={`DOM: ${domOutline.length} items`} size="small" sx={{ height: 16, fontSize: '0.6rem', background: 'rgba(255,255,255,0.03)', color: ink.secondary }} />
           {groupedOutline.heading && <Chip label={`Headings: ${groupedOutline.heading.length}`} size="small" sx={{ height: 16, fontSize: '0.6rem', background: 'rgba(127, 85, 240, 0.08)', color: accent.violet }} />}
-          {groupedOutline.button && <Chip label={`Buttons: ${groupedOutline.button.length}`} size="small" sx={{ height: 16, fontSize: '0.6rem', background: 'rgba(34, 197, 94, 0.08)', color: status.success }} />}
+          {groupedOutline.button && <Chip label={`Buttons: ${groupedOutline.button.length}`} size="small" sx={{ height: 16, fontSize: '0.6rem', background: surface.sunken, color: ink.secondary }} />}
         </Stack>
       </Box>
     );

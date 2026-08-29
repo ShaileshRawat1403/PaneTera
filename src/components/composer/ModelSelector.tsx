@@ -146,7 +146,6 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             maxHeight: 400,
             overflowY: 'auto',
             backgroundColor: surface.overlay,
-            backdropFilter: 'blur(24px) saturate(180%)',
             WebkitBackdropFilter: 'blur(24px) saturate(180%)',
             border: `1px solid ${surface.border}`,
             borderRadius: `${radius.md}px`,

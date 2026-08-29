@@ -34,9 +34,11 @@ export const RepoSetupProposalCard: React.FC<RepoSetupProposalCardProps> = ({
       <Box
         sx={{
           ...outerSx,
-          background: 'rgba(239, 68, 68, 0.04)',
-          backdropFilter: 'blur(12px)',
-          border: '1px solid rgba(239, 68, 68, 0.25)',
+          // Tinted from the danger token rather than a hardcoded rgba of the
+          // old palette's red. No backdrop-filter: a tint this faint sits over
+          // an opaque canvas, so the blur had nothing to blur.
+          background: status.dangerMuted,
+          border: `1px solid ${status.danger}`,
           borderRadius: '14px',
           p: 2.5,
           transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
@@ -114,9 +116,8 @@ export const RepoSetupProposalCard: React.FC<RepoSetupProposalCardProps> = ({
     <Box
       sx={{
         ...outerSx,
-        background: 'rgba(127, 85, 240, 0.03)',
-        backdropFilter: 'blur(12px)',
-        border: '1px solid rgba(127, 85, 240, 0.25)',
+        background: accent.violetMuted,
+        border: `1px solid ${accent.violetBorder}`,
         borderRadius: '14px',
         p: 2.5,
         transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',

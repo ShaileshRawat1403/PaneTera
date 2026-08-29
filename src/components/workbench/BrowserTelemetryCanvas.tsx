@@ -133,8 +133,8 @@ export function BrowserTelemetryCanvas({
             RENDERING STABILITY (FPS)
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <SpeedIcon sx={{ fontSize: 16, color: status.success }} />
-            <Typography variant="body2" sx={{ color: status.success, fontWeight: 600 }}>
+            <SpeedIcon sx={{ fontSize: 16, color: ink.secondary }} />
+            <Typography variant="body2" sx={{ color: ink.secondary, fontWeight: 600 }}>
               {telemetry.fps} FPS ({Math.round(telemetry.layoutStabilityScore * 100)}% stability)
             </Typography>
           </Box>
