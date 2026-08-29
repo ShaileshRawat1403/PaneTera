@@ -60,10 +60,9 @@ import { exportAsMarkdown, exportAsJson, downloadFile, copyToClipboard } from '.
 import { WorkbenchEmptyState } from './components/workbench/WorkbenchEmptyState';
 import { WorkbenchFailureState } from './components/workbench/WorkbenchFailureState';
 import { LiveWorkbenchSurface } from './components/workbench/LiveWorkbenchSurface';
-import { LiveWorkbenchToolbar } from './components/workbench/LiveWorkbenchToolbar';
 import { WebPreviewSurface } from './components/workbench/WebPreviewSurface';
 import { SurfaceHost } from './components/surfaces/SurfaceHost';
-import { projectBrowserSurface } from './surfaces/projectSurface';
+import { projectBrowserSurface, projectLocalAppSurface } from './surfaces/projectSurface';
 import { browserSourceState } from './surfaces/browserSource';
 import type { BrowserEvidenceRecord } from './components/workbench/browserEvidenceSurfaceModel';
 import {
@@ -2530,14 +2529,29 @@ const App: React.FC = () => {
               <WorkbenchEmptyState onSelectApp={handleSelectLocalApp} onClose={() => handleWorkbenchModeChange('native-focus')} />
             ) : localAppStatus !== 'reachable' ? (
               <WorkbenchFailureState status={localAppStatus} onRetry={handleReloadLocalApp} onClear={handleClearLocalApp} onClose={() => handleWorkbenchModeChange('native-focus')} />
-            ) : (
-              <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-                <LiveWorkbenchToolbar app={localAppDef} status={localAppStatus} onReload={handleReloadLocalApp} onClose={handleClearLocalApp} />
-                <Box sx={{ flexGrow: 1, overflow: 'hidden' }}>
-                  {localAppDef && <LiveWorkbenchSurface app={localAppDef} status={localAppStatus} />}
-                </Box>
-              </Box>
-            )
+            ) : localAppDef ? (
+              // The local app branch, migrated to an explicit surface
+              // projection -- the second of the canvas chain to move.
+              //
+              // Simpler than the browser was: the bespoke chrome was already a
+              // separate sibling component rather than being drawn inside the
+              // surface, so this is a straight swap with no seam needed.
+              <SurfaceHost
+                descriptor={projectLocalAppSurface({ app: localAppDef, status: localAppStatus })}
+                onClose={handleClearLocalApp}
+                onAction={(action) => {
+                  // Both are 'local-ui': they run inside PaneTera's own
+                  // interface and neither reaches into the application. That is
+                  // guide mode, stated as the absence of anything else.
+                  if (action.id === 'reload') handleReloadLocalApp();
+                  if (action.id === 'open-external') {
+                    window.open(localAppDef.url, '_blank', 'noopener,noreferrer');
+                  }
+                }}
+              >
+                <LiveWorkbenchSurface app={localAppDef} status={localAppStatus} />
+              </SurfaceHost>
+            ) : null
           ) : showEvidenceCanvas ? (
             <BrowserEvidenceCanvas
               onReturnToPreview={() => setShowEvidenceCanvas(false)}

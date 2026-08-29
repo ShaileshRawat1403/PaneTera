@@ -33,7 +33,7 @@ import {
 import { accent as cssAccent, status as cssStatus } from '../src/theme/cssTokens';
 import { chipEnterStyles, duration, easing, enterStyles, scrollBehavior, transition } from '../src/theme/motion';
 import { paneteraTheme, paneteraThemes } from '../src/theme/paneteraTheme';
-import { statusColour as liveAppStatusColour } from '../src/components/workbench/LiveWorkbenchToolbar';
+import { statusColour as liveAppStatusColour } from '../src/components/workbench/localAppStatus';
 import { riskColours } from '../src/components/ProposedActionCard';
 import { toolColour } from '../src/components/transcript/TranscriptTurn';
 import { workflowStatusColour, workflowStatusLabel } from '../src/components/ContentWorkflowCard';

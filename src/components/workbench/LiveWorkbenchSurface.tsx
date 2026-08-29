@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Box, Typography, Alert } from '@mui/material';
-import { surface } from '../../theme/cssTokens';
+import { ink, surface } from '../../theme/cssTokens';
 
 // Instead of importing the server-side definition which might bring in fs/path, we define an inline matching interface.
 export type LocalAppSandboxProfile = 'strict' | 'authenticated-local';
@@ -54,6 +54,38 @@ export const LiveWorkbenchSurface: React.FC<LiveWorkbenchSurfaceProps> = ({ app,
 
   return (
     <Box sx={{ width: '100%', height: '100%', bgcolor: surface.sunken, position: 'relative', display: 'flex', flexDirection: 'column' }}>
+      {/*
+        Guide mode.
+
+        This claim used to live in LiveWorkbenchToolbar, which the shared
+        SurfaceHeader replaced. It is not chrome and it is not a status -- it is
+        a statement about what PaneTera can do to the thing in this frame, and
+        losing it in a layout change would have quietly removed the only place
+        the boundary is stated. It belongs with the sandbox notice below, since
+        both describe the terms the embedded application is running under.
+
+        It is also what the header's empty governed zone means in words: every
+        action offered for a local app is 'local-ui', so nothing here can reach
+        inside the application.
+      */}
+      <Box
+        sx={{
+          px: 2,
+          py: 0.75,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1,
+          borderBottom: `1px solid ${surface.border}`,
+        }}
+      >
+        <Typography
+          variant="caption"
+          sx={{ color: ink.muted, fontSize: '0.6875rem' }}
+        >
+          Guide mode — PaneTera observes this application. It does not act inside it.
+        </Typography>
+      </Box>
+
       {downgraded && (
         <Alert severity="warning" sx={{ m: 2, fontSize: '0.8rem' }}>
           <strong>Same-origin authenticated embedding isn’t permitted. The app has been opened with the strict sandbox profile, so authentication or local storage features may be unavailable.</strong>

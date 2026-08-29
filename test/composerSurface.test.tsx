@@ -154,7 +154,6 @@ describe('composer surfaces use theme tokens, not literals', () => {
     'src/components/composer/AttachmentMenu.tsx',
     'src/components/composer/ContextChips.tsx',
     'src/components/workstation/WorkstationShell.tsx',
-    'src/components/workbench/LiveWorkbenchToolbar.tsx',
     'src/components/workbench/WorkbenchFailureState.tsx',
     'src/components/workbench/WorkbenchEmptyState.tsx',
     'src/components/workbench/WorkspaceNavigator.tsx',

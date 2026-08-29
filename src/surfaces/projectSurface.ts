@@ -310,10 +310,25 @@ export function projectLocalAppSurface(source: LocalAppSourceState): SurfaceDesc
       // A connected iframe is not a cryptographic proof.
     },
 
-    // Local app actions are empty for now.
-    // The existing toolbar offers Reload, Open in browser, and Close,
-    // which are view controls (Zone 3), not surface tools (Zone 2).
-    actions: [],
+    // Reload and Open in browser are Zone 2 tools; Close is a Zone 3 view
+    // control and is declared through `view.canClose` below.
+    //
+    // An earlier note here called all three view controls, which did not
+    // survive contact with the header: Zone 3 carries the view mode, split and
+    // close, and has no slot for a reframe or an external hand-off. Both of
+    // these are 'local-ui' by the frozen definition -- they run entirely inside
+    // PaneTera's own interface. Reload re-frames the iframe; opening in a
+    // browser hands the address to the OS. Neither touches the application, and
+    // neither can, which is what "guide mode" means.
+    //
+    // Offered only when the application is actually reachable. A reload button
+    // on a surface that never loaded is a control that cannot work.
+    actions: presence === 'live'
+      ? [
+          { id: 'reload', label: 'Reload', icon: 'refresh', behavior: 'local-ui' as const },
+          { id: 'open-external', label: 'Open in browser', icon: 'external', behavior: 'local-ui' as const },
+        ]
+      : [],
 
     view: {
       canSplit: true,

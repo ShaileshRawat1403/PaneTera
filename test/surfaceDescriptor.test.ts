@@ -380,10 +380,42 @@ describe('projectLocalAppSurface', () => {
     assert.strictEqual(d.state.integrity, undefined, 'Local app must not claim verified integrity');
   });
 
-  it('has no surface actions (toolbar controls are Zone 3 view controls)', () => {
-    const source = makeLocalAppSource();
-    const d = projectLocalAppSurface(source);
-    assert.strictEqual(d.actions.length, 0, 'Reload/Close belong in Zone 3, not Zone 2 actions');
+  it('offers reload and open-in-browser as local-ui tools', () => {
+    // These were originally called Zone 3 view controls, which did not survive
+    // contact with the header: Zone 3 carries the view mode, split and close,
+    // and has no slot for a reframe or an external hand-off. Both are
+    // 'local-ui' by the frozen definition -- entirely inside PaneTera's own
+    // interface, touching the application not at all.
+    const d = projectLocalAppSurface(makeLocalAppSource());
+
+    assert.deepStrictEqual(
+      d.actions.map((action) => action.id).sort(),
+      ['open-external', 'reload'],
+    );
+    for (const action of d.actions) {
+      assert.strictEqual(action.behavior, 'local-ui', `${action.id} runs inside PaneTera only`);
+      assert.strictEqual(action.capabilityRef, undefined, 'no capability is referenced');
+    }
+  });
+
+  it('offers nothing governed, which is what guide mode means', () => {
+    // The whole claim of the local app surface: PaneTera observes the
+    // application and cannot act inside it. In the header that is not a label,
+    // it is the absence of any 'propose' action.
+    const d = projectLocalAppSurface(makeLocalAppSource());
+    assert.ok(
+      d.actions.every((action) => action.behavior !== 'propose'),
+      'a local app surface can never offer a governed action',
+    );
+  });
+
+  it('offers no tools on an application that is not reachable', () => {
+    // A reload control on a surface that never loaded is a control that cannot
+    // work, and offering it invites a person to keep pressing it.
+    for (const status of ['checking', 'framing-likely-blocked', 'invalid-configuration', 'anything']) {
+      const d = projectLocalAppSurface(makeLocalAppSource({ status }));
+      assert.strictEqual(d.actions.length, 0, `${status} offers no tools`);
+    }
   });
 
   it('uses local-app-frame renderer type', () => {

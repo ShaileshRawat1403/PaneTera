@@ -19,7 +19,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { SurfaceHost } from '../src/components/surfaces/SurfaceHost';
 import { WebPreviewSurface } from '../src/components/workbench/WebPreviewSurface';
 import { browserSourceState } from '../src/surfaces/browserSource';
-import { projectBrowserSurface } from '../src/surfaces/projectSurface';
+import { projectBrowserSurface, projectLocalAppSurface } from '../src/surfaces/projectSurface';
 import type { BrowserFrameState } from '../src/surfaces/projectSurface';
 import type { SurfaceDescriptor } from '../src/surfaces/types';
 
@@ -289,6 +289,67 @@ describe('WebPreviewSurface chrome seam', () => {
   });
 });
 
+describe('the local app branch, through the same host', () => {
+  it('states the application and its address in one header', () => {
+    const descriptor = projectLocalAppSurface({
+      app: {
+        appId: 'openpencil',
+        name: 'OpenPencil',
+        url: 'http://localhost:7001',
+        enabled: true,
+      },
+      status: 'reachable',
+    });
+
+    const html = renderToStaticMarkup(
+      <SurfaceHost descriptor={descriptor} onClose={() => {}}>
+        <div>frame</div>
+      </SurfaceHost>,
+    );
+
+    assert.ok(html.includes('OpenPencil'));
+    assert.ok(html.includes('http://localhost:7001'));
+    assert.ok(html.includes('Live'), 'a reachable app is live');
+    assert.strictEqual(
+      html.split('data-testid="surface-presence"').length - 1,
+      1,
+      'one header, as with the browser',
+    );
+  });
+
+  it('offers its tools without offering anything governed', () => {
+    const descriptor = projectLocalAppSurface({
+      app: { appId: 'a', name: 'App', url: 'http://localhost:1', enabled: true },
+      status: 'reachable',
+    });
+
+    const html = renderToStaticMarkup(
+      <SurfaceHost descriptor={descriptor} onClose={() => {}}>
+        <div />
+      </SurfaceHost>,
+    );
+
+    assert.ok(html.includes('data-behavior="local-ui"'));
+    assert.ok(!html.includes('data-behavior="propose"'), 'guide mode: nothing reaches the app');
+    assert.ok(!html.includes('needs your approval'));
+  });
+
+  it('never claims a reachable application is verified', () => {
+    // The distinction the whole colour contract rests on, restated for the
+    // surface that most invites confusing the two.
+    const descriptor = projectLocalAppSurface({
+      app: { appId: 'a', name: 'App', url: 'http://localhost:1', enabled: true },
+      status: 'reachable',
+    });
+    assert.strictEqual(descriptor.state.integrity, undefined);
+
+    const html = renderToStaticMarkup(
+      <SurfaceHost descriptor={descriptor}><div /></SurfaceHost>,
+    );
+    assert.ok(!html.includes('Verified'), 'reachable is not verified');
+  });
+});
+
 describe('the migration is one branch, not a rewrite', () => {
   const appSource = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
 
@@ -313,6 +374,10 @@ describe('the migration is one branch, not a rewrite', () => {
     }
 
     const hosts = appSource.split('<SurfaceHost').length - 1;
-    assert.strictEqual(hosts, 1, 'exactly one branch has been migrated so far');
+    assert.strictEqual(hosts, 2, 'browser and local app have migrated; the rest have not');
+    assert.ok(
+      !appSource.includes('LiveWorkbenchToolbar'),
+      'the local app bespoke toolbar is gone, replaced rather than stacked',
+    );
   });
 });
