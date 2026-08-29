@@ -62,6 +62,9 @@ import { WorkbenchFailureState } from './components/workbench/WorkbenchFailureSt
 import { LiveWorkbenchSurface } from './components/workbench/LiveWorkbenchSurface';
 import { LiveWorkbenchToolbar } from './components/workbench/LiveWorkbenchToolbar';
 import { WebPreviewSurface } from './components/workbench/WebPreviewSurface';
+import { SurfaceHost } from './components/surfaces/SurfaceHost';
+import { projectBrowserSurface } from './surfaces/projectSurface';
+import { browserSourceState } from './surfaces/browserSource';
 import type { BrowserEvidenceRecord } from './components/workbench/browserEvidenceSurfaceModel';
 import {
   describeOutcome,
@@ -205,6 +208,10 @@ const App: React.FC = () => {
    * to inspect with something absent is another false promise.
    */
   const [browserOperatorConnected, setBrowserOperatorConnected] = useState(false);
+  // The projection needs both halves of the pairing state: an unavailable
+  // extension and an available-but-unpaired one are different surfaces, and
+  // collapsing them would make a missing extension look like a refusal.
+  const [browserExtensionAvailable, setBrowserExtensionAvailable] = useState(false);
 
   /**
    * Guards against announcing the same preview attempt twice.
@@ -626,10 +633,14 @@ const App: React.FC = () => {
     const read = () => {
       requestBrowserOperatorStatus()
         .then((value) => {
-          if (!cancelled) setBrowserOperatorConnected(value.paired);
+          if (cancelled) return;
+          setBrowserOperatorConnected(value.paired);
+          setBrowserExtensionAvailable(value.extensionAvailable);
         })
         .catch(() => {
-          if (!cancelled) setBrowserOperatorConnected(false);
+          if (cancelled) return;
+          setBrowserOperatorConnected(false);
+          setBrowserExtensionAvailable(false);
         });
     };
     read();
@@ -2407,15 +2418,54 @@ const App: React.FC = () => {
             />
           );
 
-          const canvasNode = webPreview ? (
+          // The browser branch, migrated to an explicit surface projection.
+          //
+          // This is the first of the canvas chain to move. App state is adapted
+          // to the projection's input, projected into a descriptor, and hosted:
+          // identity, presence and the header's actions now all derive from one
+          // place instead of being restated by each surface's own chrome.
+          //
+          // WebPreviewSurface keeps its body and its probe. Only the header
+          // moved, which is what keeps this step small enough to verify -- the
+          // remaining branches stay exactly as they were until each is moved.
+          const browserDescriptor = webPreview
+            ? projectBrowserSurface(
+                browserSourceState({
+                  request: webPreview,
+                  inspection: webPreviewInspection,
+                  pairing: {
+                    paired: browserOperatorConnected,
+                    extensionAvailable: browserExtensionAvailable,
+                  },
+                }),
+              )
+            : null;
+
+          const closeWebPreview = () => {
+            clearWebPreviewInspection();
+            setWebPreview(null);
+          };
+
+          const canvasNode = webPreview && browserDescriptor ? (
+            <SurfaceHost
+              descriptor={browserDescriptor}
+              onClose={closeWebPreview}
+              onAction={(action) => {
+                // Both browser header actions are 'observe': they read the page
+                // without changing it, so neither enters the governed path. A
+                // 'propose' action would be routed to the approval flow instead
+                // of handled here, and the header marks it as such before it is
+                // clicked.
+                if (action.id === 'snapshot') setWebPreviewRevision((value) => value + 1);
+                if (action.id === 'inspect') inspectWebPreview();
+              }}
+            >
             <WebPreviewSurface
+              chrome="hosted"
               key={`${webPreview.url}:${webPreviewRevision}`}
               name={webPreview.name}
               url={webPreview.url}
-              onClose={() => {
-                clearWebPreviewInspection();
-                setWebPreview(null);
-              }}
+              onClose={closeWebPreview}
               operator={browserOperatorConnected ? 'connected' : 'not-connected'}
               onConnectOperator={() => setRigRequestKey((value) => value + 1)}
               onInspectWithOperator={inspectWebPreview}
@@ -2444,6 +2494,7 @@ const App: React.FC = () => {
                 setActiveReply(summariseOutcome(outcome, { siteName: webPreview.name }));
               }}
             />
+            </SurfaceHost>
           ) : workbenchMode === 'local-app' ? (
             !prefs.activeAppId ? (
               <WorkbenchEmptyState onSelectApp={handleSelectLocalApp} onClose={() => handleWorkbenchModeChange('native-focus')} />

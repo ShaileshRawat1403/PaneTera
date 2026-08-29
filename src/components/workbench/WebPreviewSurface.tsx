@@ -48,6 +48,18 @@ interface WebPreviewSurfaceProps {
    * could describe different outcomes for the same page.
    */
   onOutcome?: (outcome: WebPreviewOutcome) => void;
+  /**
+   * Who draws the surface's chrome.
+   *
+   * 'own' keeps the bespoke 56px bar this surface has always drawn.
+   * 'hosted' suppresses it, because SurfaceHost is drawing the shared 3-zone
+   * header above and two headers would state the same identity twice.
+   *
+   * Defaults to 'own' so nothing changes for a caller that has not migrated.
+   * The migration moves one canvas branch at a time, and this is the seam that
+   * lets the browser branch move without the others following.
+   */
+  chrome?: 'own' | 'hosted';
   /** Injectable so the outcome logic can be tested without a network. */
   probe?: (url: string) => Promise<WebPreviewOutcome>;
   inspection?:
@@ -70,6 +82,7 @@ export function WebPreviewSurface({
   probe,
   inspection = { kind: 'idle' },
   onClearEvidence,
+  chrome = 'own',
 }: WebPreviewSurfaceProps) {
   const [reloadKey, setReloadKey] = useState(0);
   const [embedRevealed, setEmbedRevealed] = useState(false);
@@ -181,6 +194,14 @@ export function WebPreviewSurface({
         backgroundColor: surface.base,
       }}
     >
+      {/*
+        The bespoke header, drawn only when this surface owns its chrome. When
+        SurfaceHost is drawing the shared 3-zone header above, this is skipped:
+        the identity, the reload and the close all live up there instead, and
+        stating them twice would be the clearest possible sign that the
+        migration had added a header rather than replaced one.
+      */}
+      {chrome === 'own' && (
       <Box
         sx={{
           minHeight: 56,
@@ -251,6 +272,7 @@ export function WebPreviewSurface({
           </Tooltip>
         </Box>
       </Box>
+      )}
 
       {/*
         The white ground applies only when a page is actually rendering, because
