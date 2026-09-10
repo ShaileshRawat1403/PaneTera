@@ -60,6 +60,9 @@ export const RIG_EVENT_CLASS: Record<string, RigAuditClass> = {
   // denial: the actor is the unattributed operator, the outcome is an error, and
   // policy remains allowed because nothing denied the action.
   'rig.prompt.invalid': { actorClass: 'operator', outcome: 'error', policyDecision: 'allowed' },
+  // A proposal whose arguments fail the capability schema or limits. The same
+  // operator input error: nothing entered the approval queue (ADR-005).
+  'rig.invocation.proposal-invalid': { actorClass: 'operator', outcome: 'error', policyDecision: 'allowed' },
   'rig.connection.proposed': { actorClass: 'operator', outcome: 'success', policyDecision: 'approval-required' },
   'rig.connection.approved': { actorClass: 'operator', outcome: 'success', policyDecision: 'allowed' },
   'rig.connection.stopped': { actorClass: 'operator', outcome: 'success', policyDecision: 'allowed' },
