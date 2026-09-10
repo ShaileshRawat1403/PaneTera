@@ -298,6 +298,7 @@ export function projectLocalAppSurface(source: LocalAppSourceState): SurfaceDesc
   return {
     id: `local-app:${source.app.appId}`,
     kind: 'local-app',
+    appId: source.app.appId,
 
     identity: {
       title: source.app.name,

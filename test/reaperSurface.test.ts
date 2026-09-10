@@ -131,7 +131,7 @@ describe('projectReaperSurface', () => {
   it('derives identity with project name and tempo/samplerate in subtitle', () => {
     const source = makeReaperSource();
     const d = projectReaperSurface(source);
-    assert.strictEqual(d.kind, 'reaper');
+    assert.strictEqual(d.kind, 'local-app');
     assert.strictEqual(d.identity.title, 'REAPER · Cinematic_Cue_01.rpp');
     assert.strictEqual(d.identity.subtitle, '120 BPM · 4/4 · 48kHz (v7.79)');
     assert.strictEqual(d.identity.icon, 'wave');
@@ -214,5 +214,12 @@ describe('projectReaperSurface', () => {
     assert.strictEqual((payload.tracks as unknown[]).length, 3);
     assert.ok(Array.isArray(payload.markers));
     assert.strictEqual((payload.markers as unknown[]).length, 3);
+  });
+
+  it('classifies REAPER as a local-app identified by appId (ADR-003)', () => {
+    const d = projectReaperSurface(makeReaperSource());
+    assert.strictEqual(d.kind, 'local-app');
+    assert.strictEqual(d.appId, 'reaper');
+    assert.strictEqual(d.renderer.type, 'reaper-project-state');
   });
 });

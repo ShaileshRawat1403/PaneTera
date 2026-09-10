@@ -146,7 +146,8 @@ export function projectBlenderSurface(source: BlenderSourceState): SurfaceDescri
 
   return {
     id: `blender:${source.fileName || 'scene'}`,
-    kind: 'blender',
+    kind: 'local-app',
+    appId: 'blender',
 
     identity: {
       title,

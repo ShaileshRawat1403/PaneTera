@@ -160,7 +160,8 @@ export function projectReaperSurface(source: ReaperSourceState): SurfaceDescript
 
   return {
     id: `reaper:${source.projectName || 'project'}`,
-    kind: 'reaper',
+    kind: 'local-app',
+    appId: 'reaper',
 
     identity: {
       title,

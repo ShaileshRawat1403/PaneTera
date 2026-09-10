@@ -103,7 +103,7 @@ describe('projectBlenderSurface', () => {
   it('derives identity with filename and version', () => {
     const source = makeBlenderSource();
     const d = projectBlenderSurface(source);
-    assert.strictEqual(d.kind, 'blender');
+    assert.strictEqual(d.kind, 'local-app');
     assert.strictEqual(d.identity.title, 'Blender · canister_mech.blend');
     assert.strictEqual(d.identity.subtitle, '/projects/scifi/canister_mech.blend (v5.2.1)');
     assert.strictEqual(d.identity.icon, 'cube');
@@ -177,5 +177,12 @@ describe('projectBlenderSurface', () => {
     assert.strictEqual(payload.viewportSnapshotUrl, 'data:image/jpeg;base64,/9j/fakeblenderpreview==');
     assert.ok(Array.isArray(payload.objects));
     assert.strictEqual((payload.objects as unknown[]).length, 2);
+  });
+
+  it('classifies Blender as a local-app identified by appId (ADR-003)', () => {
+    const d = projectBlenderSurface(makeBlenderSource());
+    assert.strictEqual(d.kind, 'local-app');
+    assert.strictEqual(d.appId, 'blender');
+    assert.strictEqual(d.renderer.type, 'blender-scene-state');
   });
 });
