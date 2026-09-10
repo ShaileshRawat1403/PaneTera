@@ -176,16 +176,23 @@ app.use('/api/reaper', reaperRouter);
 // Register Blender and REAPER as stdio MCP connections in the Rig.
 // These connections are gated by approval and governed invocation.
 
-import { registerAppMcpConnection } from './rig/appConnectionRegistry';
+import { ensureAppConnections } from './rig/appConnectionRegistry';
 
 // Register IT Ops domain schemas on startup
 registerItOpsDomain();
 
-// Register Blender MCP connection (uses tsx to launch the MCP server)
-registerAppMcpConnection('blender', rigRegistry, rigRuntime);
-
-// Register REAPER MCP connection
-registerAppMcpConnection('reaper', rigRegistry, rigRuntime);
+// Declare the Blender and REAPER connections. This starts no process: each
+// launches only after its launch specification is reviewed and approved in
+// Rig. Failing to declare one is a PaneTera configuration error, recorded as
+// rig.connection.registration-failed; Blender or REAPER not running is a
+// normal disconnected state and never fails here.
+void ensureAppConnections(rigRegistry).then((results) => {
+  for (const result of results) {
+    if (result.outcome === 'failed') {
+      console.error(`[Rig] Could not declare the ${result.connectionId} connection: ${result.error}`);
+    }
+  }
+});
 
 // ── Rook MCP Memory Bridge (optional) ────────────────────────────────────────
 // Spawns `rook mcp memory` as a child process and communicates over stdio
@@ -2840,10 +2847,12 @@ let shuttingDown = false;
 function shutdown(): void {
   if (shuttingDown) return;
   shuttingDown = true;
-  setTimeout(() => process.exit(0), 300).unref();
+  // Rig owns the MCP child processes it started: close them (SIGTERM, then
+  // SIGKILL) before exiting. The unref'd fallback bounds the wait.
+  setTimeout(() => process.exit(0), 2000).unref();
   try { stopAllWorkspaceAdapters(); } catch { /* best effort on shutdown */ }
   try { httpServer?.close(); } catch { /* best effort on shutdown */ }
-  process.exit(0);
+  rigRuntime.disconnectAll().catch(() => undefined).finally(() => process.exit(0));
 }
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
