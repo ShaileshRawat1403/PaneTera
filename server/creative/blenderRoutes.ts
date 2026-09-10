@@ -7,17 +7,16 @@
 
 import { Router, Request, Response } from 'express';
 import { sendBlenderCommand } from './blenderClient';
+import { toObservationResponse } from './observation';
 
 export const blenderRouter = Router();
 
 // GET /api/blender/status - Test live connection
 blenderRouter.get('/status', async (_req: Request, res: Response) => {
-  const result = await sendBlenderCommand('status');
-  res.json(result);
+  res.json(toObservationResponse(await sendBlenderCommand('status')));
 });
 
 // GET /api/blender/scene - Fetch live scene summary
 blenderRouter.get('/scene', async (_req: Request, res: Response) => {
-  const result = await sendBlenderCommand('blender.get_scene_summary');
-  res.json(result);
+  res.json(toObservationResponse(await sendBlenderCommand('blender.get_scene_summary')));
 });

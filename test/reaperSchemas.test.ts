@@ -11,7 +11,7 @@ import {
   dbToLinear,
   linearToDb,
 } from '../bridges/reaper/src/schemas';
-import type { ReaperTrackState, ReaperSourceState } from '../src/surfaces/reaperSurface';
+import type { ReaperTrackState, ReaperProjectState } from '../src/surfaces/reaperSurface';
 
 describe('REAPER Capabilities & Schemas', () => {
   it('declares orthogonal effects and permissions correctly', () => {
@@ -67,7 +67,7 @@ describe('REAPER Capabilities & Schemas', () => {
   });
 
   it('computes deterministic project digest', () => {
-    const project: ReaperSourceState = {
+    const project: ReaperProjectState = {
       runtime: {
         reaperVersion: '7.79',
         sampleRate: 48000,
@@ -76,7 +76,6 @@ describe('REAPER Capabilities & Schemas', () => {
         isPlaying: false,
         isRecording: false,
         playheadSeconds: 0,
-        isConnected: true,
       },
       tracks: [
         {

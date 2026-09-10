@@ -10,7 +10,7 @@ import {
   computeBlenderSceneDigest,
   evaluateBlenderCompatibility,
 } from '../bridges/blender/src/schemas';
-import type { BlenderObjectState, BlenderSourceState } from '../src/surfaces/blenderSurface';
+import type { BlenderObjectState, BlenderSceneState } from '../src/surfaces/blenderSurface';
 
 describe('Blender Capabilities & Schemas', () => {
   it('declares orthogonal effects and permissions correctly', () => {
@@ -59,8 +59,8 @@ describe('Blender Capabilities & Schemas', () => {
   });
 
   it('computes deterministic scene digest', () => {
-    const scene: BlenderSourceState = {
-      runtime: { blenderVersion: '5.2.1', activeEngine: 'CYCLES', isConnected: true },
+    const scene: BlenderSceneState = {
+      runtime: { blenderVersion: '5.2.1', activeEngine: 'CYCLES' },
       collections: [],
       objects: [
         {

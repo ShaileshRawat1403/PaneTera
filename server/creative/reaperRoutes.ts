@@ -7,23 +7,21 @@
 
 import { Router, Request, Response } from 'express';
 import { sendReaperCommand } from './reaperClient.js';
+import { toObservationResponse } from './observation.js';
 
 export const reaperRouter = Router();
 
 // GET /api/reaper/status - Test live connection
 reaperRouter.get('/status', async (_req: Request, res: Response) => {
-  const result = await sendReaperCommand('status');
-  res.json(result);
+  res.json(toObservationResponse(await sendReaperCommand('status')));
 });
 
 // GET /api/reaper/scene - Fetch live project summary
 reaperRouter.get('/scene', async (_req: Request, res: Response) => {
-  const result = await sendReaperCommand('reaper.get_project_summary');
-  res.json(result);
+  res.json(toObservationResponse(await sendReaperCommand('reaper.get_project_summary')));
 });
 
 // GET /api/reaper/peaks - Fetch track peaks
 reaperRouter.get('/peaks', async (_req: Request, res: Response) => {
-  const result = await sendReaperCommand('reaper.get_track_peaks', {});
-  res.json(result);
+  res.json(toObservationResponse(await sendReaperCommand('reaper.get_track_peaks', {})));
 });

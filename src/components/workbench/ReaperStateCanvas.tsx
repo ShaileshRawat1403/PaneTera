@@ -12,10 +12,11 @@ import SpeedIcon from '@mui/icons-material/Speed';
 import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
 import ExtensionIcon from '@mui/icons-material/Extension';
 import { surface, ink, accent, status, radius, typography } from '../../theme/cssTokens';
-import type { ReaperSourceState, ReaperTrackState } from '../../surfaces/reaperSurface';
+import type { ReaperProjectState, ReaperTrackState } from '../../surfaces/reaperSurface';
 
 export interface ReaperStateCanvasProps {
-  state: ReaperSourceState;
+  /** An observed project. Never sample content (ADR-004). */
+  state: ReaperProjectState;
   onSelectTrack?: (trackIndex: number) => void;
   onSetTrackGain?: (trackIndex: number, gainDb: number) => void;
 }
@@ -77,7 +78,7 @@ export function ReaperStateCanvas({
             <GraphicEqIcon sx={{ color: accent.violet, fontSize: 22 }} />
             <Box>
               <Typography variant="body1" sx={{ fontWeight: 800, fontSize: '0.95rem', letterSpacing: 0.2 }}>
-                {state.projectName || 'Active Session'}
+                {state.projectName || 'Unsaved project'}
               </Typography>
               <Typography variant="caption" sx={{ color: ink.muted, fontSize: '0.7rem', fontFamily: typography.mono }}>
                 REAPER {state.runtime.reaperVersion} · {state.tracks.length} Channels · {state.runtime.sampleRate / 1000} kHz

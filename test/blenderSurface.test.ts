@@ -4,11 +4,18 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { projectBlenderSurface } from '../src/surfaces/blenderSurface';
-import type { BlenderSourceState } from '../src/surfaces/blenderSurface';
+import { applyBlenderObservation, parseBlenderScene, projectBlenderSurface } from '../src/surfaces/blenderSurface';
+import type { BlenderSceneState, BlenderSourceState } from '../src/surfaces/blenderSurface';
+import type { AppConnectionState } from '../src/surfaces/appConnection';
 import type { SurfaceDescriptor } from '../src/surfaces/types';
 
-function makeBlenderSource(overrides?: Partial<BlenderSourceState>): BlenderSourceState {
+const OBSERVED_AT = '2026-09-10T08:00:00.000Z';
+
+function makeBlenderSource(overrides?: Partial<BlenderSceneState>, connection: AppConnectionState = 'connected'): BlenderSourceState {
+  return { connection, observedAt: OBSERVED_AT, scene: makeBlenderScene(overrides) };
+}
+
+function makeBlenderScene(overrides?: Partial<BlenderSceneState>): BlenderSceneState {
   return {
     runtime: {
       blenderVersion: '5.2.1',
@@ -16,7 +23,6 @@ function makeBlenderSource(overrides?: Partial<BlenderSourceState>): BlenderSour
       buildHash: 'a1b2c3d',
       groundingPackVersion: '5.2-v1',
       activeEngine: 'CYCLES',
-      isConnected: true,
     },
     fileName: 'canister_mech.blend',
     filePath: '/projects/scifi/canister_mech.blend',
@@ -122,35 +128,72 @@ describe('projectBlenderSurface', () => {
     assert.strictEqual(d.state.presence, 'live');
   });
 
-  it('derives presence=unavailable when disconnected', () => {
-    const source = makeBlenderSource({
-      runtime: {
-        blenderVersion: '5.2.1',
-        activeEngine: 'CYCLES',
-        isConnected: false,
-      },
-    });
-    const d = projectBlenderSurface(source);
-    assert.strictEqual(d.state.presence, 'unavailable');
-    assert.strictEqual(d.actions.length, 0, 'No actions when disconnected');
+  it('keeps the last observed scene as a snapshot when the bridge stops responding', () => {
+    const d = projectBlenderSurface(makeBlenderSource(undefined, 'disconnected'));
+    assert.strictEqual(d.state.presence, 'snapshot');
+    assert.strictEqual(d.identity.subtitle, `Not connected · last observed ${OBSERVED_AT}`);
+    assert.strictEqual(d.actions.length, 0, 'No actions without a live connection');
   });
 
-  it('offers observe and propose actions with capabilityRefs', () => {
-    const source = makeBlenderSource();
-    const d = projectBlenderSurface(source);
-    assert.ok(d.actions.length >= 3);
+  it('never claims liveness before an observation succeeds (ADR-004)', () => {
+    const cases: Array<[AppConnectionState, string]> = [
+      ['unknown', 'unavailable'],
+      ['connecting', 'unavailable'],
+      ['disconnected', 'disconnected'],
+      ['error', 'unavailable'],
+      ['connected', 'unavailable'],
+    ];
+    for (const [connection, presence] of cases) {
+      const d = projectBlenderSurface({ connection });
+      const payload = d.renderer.payload as Record<string, unknown>;
+      assert.strictEqual(d.state.presence, presence, connection);
+      assert.strictEqual(d.actions.length, 0, connection);
+      assert.strictEqual(payload.runtime, null, connection);
+      assert.strictEqual(payload.observedAt, null, connection);
+      assert.deepStrictEqual(payload.objects, [], connection);
+    }
+  });
 
-    const snapshot = d.actions.find((a) => a.id === 'capture-viewport');
-    assert.ok(snapshot);
-    assert.strictEqual(snapshot.behavior, 'observe');
-
+  it('offers only governed propose actions while connected', () => {
+    const d = projectBlenderSurface(makeBlenderSource());
+    assert.deepStrictEqual(d.actions.map((a) => a.behavior), ['propose', 'propose']);
     const addMod = d.actions.find((a) => a.id === 'add-modifier');
     assert.ok(addMod);
-    assert.strictEqual(addMod.behavior, 'propose');
     assert.deepStrictEqual(addMod.capabilityRef, {
       connectionId: 'blender',
       capabilityId: 'blender.add_modifier',
     });
+  });
+
+  it("applies a successful observation and discards the bridge's own connectivity claim", () => {
+    const scene = makeBlenderScene();
+    const data = { ...scene, runtime: { ...scene.runtime, isConnected: true } };
+    const next = applyBlenderObservation({ connection: 'connecting' }, { connection: 'connected', observedAt: OBSERVED_AT, data });
+    assert.strictEqual(next.connection, 'connected');
+    assert.strictEqual(next.observedAt, OBSERVED_AT);
+    assert.ok(next.scene);
+    assert.ok(!('isConnected' in next.scene.runtime));
+  });
+
+  it('keeps the previous scene and observation time when an observation fails', () => {
+    const previous = makeBlenderSource();
+    const next = applyBlenderObservation(previous, { connection: 'disconnected', error: 'Could not connect to Blender' });
+    assert.strictEqual(next.connection, 'disconnected');
+    assert.strictEqual(next.observedAt, OBSERVED_AT);
+    assert.strictEqual(next.scene, previous.scene);
+    assert.strictEqual(next.connectionError, 'Could not connect to Blender');
+  });
+
+  it('treats an unreadable or undated scene as an error, never a connection', () => {
+    const unreadable = applyBlenderObservation({ connection: 'connecting' }, { connection: 'connected', observedAt: OBSERVED_AT, data: { objects: 'nope' } });
+    assert.strictEqual(unreadable.connection, 'error');
+    assert.strictEqual(unreadable.scene, undefined);
+    assert.strictEqual(unreadable.observedAt, undefined);
+
+    const undated = applyBlenderObservation({ connection: 'connecting' }, { connection: 'connected', data: makeBlenderScene() });
+    assert.strictEqual(undated.connection, 'error');
+    assert.strictEqual(undated.observedAt, undefined);
+    assert.strictEqual(parseBlenderScene(null), null);
   });
 
   it('does not mutate source state', () => {

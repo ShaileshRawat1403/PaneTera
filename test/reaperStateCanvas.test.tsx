@@ -9,9 +9,9 @@ import assert from 'node:assert';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { ReaperStateCanvas } from '../src/components/workbench/ReaperStateCanvas';
-import type { ReaperSourceState } from '../src/surfaces/reaperSurface';
+import type { ReaperProjectState } from '../src/surfaces/reaperSurface';
 
-function makeReaperSource(): ReaperSourceState {
+function makeReaperSource(): ReaperProjectState {
   return {
     runtime: {
       reaperVersion: '7.79',
@@ -21,7 +21,6 @@ function makeReaperSource(): ReaperSourceState {
       isPlaying: false,
       isRecording: false,
       playheadSeconds: 0,
-      isConnected: true,
     },
     projectName: 'Soundtrack_Cue.rpp',
     tracks: [

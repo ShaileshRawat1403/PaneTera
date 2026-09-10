@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 import type {
   ReaperCapabilityDeclaration,
 } from './types';
-import type { ReaperTrackState, ReaperSourceState } from '../../../src/surfaces/reaperSurface';
+import type { ReaperTrackState, ReaperProjectState } from '../../../src/surfaces/reaperSurface';
 
 // ─── Capability Declarations ──────────────────────────────────────
 
@@ -186,7 +186,7 @@ export function computeReaperTrackDigest(track: ReaperTrackState): string {
 /**
  * Computes a deterministic SHA-256 state digest for the entire REAPER project.
  */
-export function computeReaperProjectDigest(project: ReaperSourceState): string {
+export function computeReaperProjectDigest(project: ReaperProjectState): string {
   const trackDigests = (project.tracks || [])
     .map((t) => `${t.guid}:${computeReaperTrackDigest(t)}`)
     .sort()

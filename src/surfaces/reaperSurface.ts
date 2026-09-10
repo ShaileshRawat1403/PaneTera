@@ -13,8 +13,15 @@
 import type {
   SurfaceDescriptor,
   SurfaceAction,
-  SurfacePresence,
 } from './types';
+import {
+  describeAppConnection,
+  isRecord,
+  optionalString,
+  presenceForAppConnection,
+  type AppConnectionState,
+  type AppObservation,
+} from './appConnection';
 
 // ─── Source State Types ───────────────────────────────────────────
 
@@ -75,10 +82,10 @@ export interface ReaperRuntimeState {
   isPlaying: boolean;
   isRecording: boolean;
   playheadSeconds: number;
-  isConnected: boolean;
 }
 
-export interface ReaperSourceState {
+/** One successfully observed REAPER project, as reported by the bridge. */
+export interface ReaperProjectState {
   runtime: ReaperRuntimeState;
   projectName?: string;
   projectPath?: string;
@@ -89,29 +96,32 @@ export interface ReaperSourceState {
   stateDigest?: string;
 }
 
-// ─── Projection ───────────────────────────────────────────────────
-
-function deriveReaperPresence(runtime: ReaperRuntimeState): SurfacePresence {
-  if (runtime.isConnected) return 'live';
-  return 'unavailable';
+/**
+ * What the workstation knows about REAPER (ADR-004).
+ *
+ * `project` and `observedAt` exist only after a bridge observation succeeds.
+ * A later failure changes `connection` but keeps the last project, which then
+ * projects as a snapshot rather than as live state.
+ */
+export interface ReaperSourceState {
+  connection: AppConnectionState;
+  /** Time of the last successful observation. */
+  observedAt?: string;
+  /** Detail of the most recent failed observation. */
+  connectionError?: string;
+  /** The last successfully observed project. */
+  project?: ReaperProjectState;
 }
 
-function deriveReaperActions(isConnected: boolean): SurfaceAction[] {
-  if (!isConnected) return [];
+// ─── Projection ───────────────────────────────────────────────────
 
+function deriveReaperActions(live: boolean): SurfaceAction[] {
+  if (!live) return [];
+
+  // Observe actions (read peaks, check LUFS) were removed: nothing performed
+  // them, and an affordance without an implementation implies a capability
+  // PaneTera does not have.
   return [
-    {
-      id: 'read-peaks',
-      label: 'Read Peaks',
-      icon: 'volume',
-      behavior: 'observe',
-    },
-    {
-      id: 'check-lufs',
-      label: 'Check LUFS',
-      icon: 'speedometer',
-      behavior: 'observe',
-    },
     {
       id: 'set-track-gain',
       label: 'Adjust Gain',
@@ -136,30 +146,35 @@ function deriveReaperActions(isConnected: boolean): SurfaceAction[] {
 }
 
 /**
- * Projects existing REAPER source state into a SurfaceDescriptor.
+ * Projects REAPER source state into a SurfaceDescriptor.
  *
  * This is a pure function. It does not:
  *   - mutate the input
  *   - access REAPER APIs, sockets, or stores
  *   - execute any commands
  *   - return React components
+ *
+ * Presence is 'live' only while connected with an observed project; a
+ * project retained from an earlier observation is a 'snapshot'.
  */
 export function projectReaperSurface(source: ReaperSourceState): SurfaceDescriptor {
-  const presence = deriveReaperPresence(source.runtime);
-  const actions = deriveReaperActions(source.runtime.isConnected);
+  const { project } = source;
+  const live = source.connection === 'connected' && project !== undefined;
 
-  const title = source.projectName ? `REAPER · ${source.projectName}` : 'REAPER Project';
-  const subtitle = `${source.runtime.tempoBpm} BPM · ${source.runtime.timeSignature} · ${source.runtime.sampleRate / 1000}kHz (v${source.runtime.reaperVersion})`;
-
-  const transportStatus = source.runtime.isRecording
-    ? 'REC'
-    : source.runtime.isPlaying
-    ? 'PLAY'
-    : 'STOP';
-  const viewMode = `${source.tracks.length} tracks · ${transportStatus}`;
+  const title = project?.projectName ? `REAPER · ${project.projectName}` : 'REAPER Project';
+  let subtitle = describeAppConnection(source.connection, source.observedAt);
+  let viewMode: string | undefined;
+  if (project) {
+    const { runtime } = project;
+    if (live) {
+      subtitle = `${runtime.tempoBpm} BPM · ${runtime.timeSignature} · ${runtime.sampleRate / 1000}kHz (v${runtime.reaperVersion})`;
+    }
+    const transportStatus = runtime.isRecording ? 'REC' : runtime.isPlaying ? 'PLAY' : 'STOP';
+    viewMode = `${project.tracks.length} tracks · ${transportStatus}`;
+  }
 
   return {
-    id: `reaper:${source.projectName || 'project'}`,
+    id: `reaper:${project?.projectName || 'project'}`,
     kind: 'local-app',
     appId: 'reaper',
 
@@ -170,10 +185,10 @@ export function projectReaperSurface(source: ReaperSourceState): SurfaceDescript
     },
 
     state: {
-      presence,
+      presence: presenceForAppConnection(source.connection, project !== undefined),
     },
 
-    actions,
+    actions: deriveReaperActions(live),
 
     view: {
       mode: viewMode,
@@ -184,103 +199,89 @@ export function projectReaperSurface(source: ReaperSourceState): SurfaceDescript
     renderer: {
       type: 'reaper-project-state',
       payload: {
-        runtime: {
-          reaperVersion: source.runtime.reaperVersion,
-          apiVersion: source.runtime.apiVersion ?? null,
-          sampleRate: source.runtime.sampleRate,
-          tempoBpm: source.runtime.tempoBpm,
-          timeSignature: source.runtime.timeSignature,
-          isPlaying: source.runtime.isPlaying,
-          isRecording: source.runtime.isRecording,
-          playheadSeconds: source.runtime.playheadSeconds,
-          isConnected: source.runtime.isConnected,
-        },
-        projectName: source.projectName ?? null,
-        projectPath: source.projectPath ?? null,
-        tracks: source.tracks,
-        selectedTrackGuid: source.selectedTrackGuid ?? null,
-        markers: source.markers,
-        masterTrack: source.masterTrack ?? null,
-        stateDigest: source.stateDigest ?? null,
+        connection: source.connection,
+        observedAt: source.observedAt ?? null,
+        connectionError: source.connectionError ?? null,
+        runtime: project
+          ? {
+              reaperVersion: project.runtime.reaperVersion,
+              apiVersion: project.runtime.apiVersion ?? null,
+              sampleRate: project.runtime.sampleRate,
+              tempoBpm: project.runtime.tempoBpm,
+              timeSignature: project.runtime.timeSignature,
+              isPlaying: project.runtime.isPlaying,
+              isRecording: project.runtime.isRecording,
+              playheadSeconds: project.runtime.playheadSeconds,
+            }
+          : null,
+        projectName: project?.projectName ?? null,
+        projectPath: project?.projectPath ?? null,
+        tracks: project?.tracks ?? [],
+        selectedTrackGuid: project?.selectedTrackGuid ?? null,
+        markers: project?.markers ?? [],
+        masterTrack: project?.masterTrack ?? null,
+        stateDigest: project?.stateDigest ?? null,
       },
     },
   };
 }
 
-export function createDefaultReaperState(): ReaperSourceState {
+// ─── Observation ──────────────────────────────────────────────────
+
+/**
+ * Reads a bridge project payload, or returns null when required fields are
+ * missing. The bridge's own connectivity field is deliberately not carried
+ * over: an application reporting itself connected is not evidence.
+ */
+export function parseReaperProject(data: unknown): ReaperProjectState | null {
+  if (!isRecord(data)) return null;
+  const runtime = data.runtime;
+  if (!isRecord(runtime) || !Array.isArray(data.tracks) || !Array.isArray(data.markers)) return null;
+  if (
+    typeof runtime.reaperVersion !== 'string'
+    || typeof runtime.sampleRate !== 'number'
+    || typeof runtime.tempoBpm !== 'number'
+    || typeof runtime.timeSignature !== 'string'
+    || typeof runtime.isPlaying !== 'boolean'
+    || typeof runtime.isRecording !== 'boolean'
+    || typeof runtime.playheadSeconds !== 'number'
+  ) {
+    return null;
+  }
+
   return {
     runtime: {
-      reaperVersion: '7.79',
-      apiVersion: '7.79-reascript',
-      sampleRate: 48000,
-      tempoBpm: 120,
-      timeSignature: '4/4',
-      isPlaying: false,
-      isRecording: false,
-      playheadSeconds: 14.5,
-      isConnected: true,
+      reaperVersion: runtime.reaperVersion,
+      apiVersion: optionalString(runtime.apiVersion),
+      sampleRate: runtime.sampleRate,
+      tempoBpm: runtime.tempoBpm,
+      timeSignature: runtime.timeSignature,
+      isPlaying: runtime.isPlaying,
+      isRecording: runtime.isRecording,
+      playheadSeconds: runtime.playheadSeconds,
     },
-    projectName: 'Cinematic_Cue_01.rpp',
-    projectPath: '/projects/audio/Cinematic_Cue_01.rpp',
-    tracks: [
-      {
-        guid: '{TRK-KICK-001}',
-        index: 0,
-        name: 'Kick Drum',
-        volumeDb: -2.5,
-        pan: 0.0,
-        isMuted: false,
-        isSoloed: false,
-        isArmed: false,
-        fxList: [{ id: 'fx-1', index: 0, name: 'ReaEQ', isEnabled: true }],
-        sends: [{ targetTrackGuid: '{TRK-BASS-002}', targetTrackName: 'Bass Synth', volumeDb: 0.0, isMuted: false }],
-        peakLeftDb: -6.2,
-        peakRightDb: -6.2,
-        stateDigest: 'sha256:kick-state-v1',
-      },
-      {
-        guid: '{TRK-BASS-002}',
-        index: 1,
-        name: 'Bass Synth',
-        volumeDb: -4.0,
-        pan: 0.0,
-        isMuted: false,
-        isSoloed: false,
-        isArmed: false,
-        fxList: [{ id: 'fx-2', index: 0, name: 'ReaComp', isEnabled: true }],
-        sends: [],
-        peakLeftDb: -8.1,
-        peakRightDb: -8.0,
-        stateDigest: 'sha256:bass-state-v1',
-      },
-      {
-        guid: '{TRK-LEAD-003}',
-        index: 2,
-        name: 'Lead Melody',
-        volumeDb: -1.0,
-        pan: -0.15,
-        isMuted: false,
-        isSoloed: false,
-        isArmed: false,
-        fxList: [{ id: 'fx-3', index: 0, name: 'ReaDelay', isEnabled: true }],
-        sends: [],
-        peakLeftDb: -3.5,
-        peakRightDb: -3.2,
-        stateDigest: 'sha256:lead-state-v1',
-      },
-    ],
-    selectedTrackGuid: '{TRK-KICK-001}',
-    markers: [
-      { id: 1, name: 'Intro', positionSeconds: 0, isRegion: false },
-      { id: 2, name: 'Drop A', positionSeconds: 16, isRegion: true, endSeconds: 32 },
-    ],
-    masterTrack: {
-      volumeDb: 0.0,
-      peakLeftDb: -1.2,
-      peakRightDb: -1.2,
-      lufsMomentary: -14.2,
-      lufsIntegrated: -16.0,
-    },
-    stateDigest: 'sha256:reaper-project-cue-v1',
+    projectName: optionalString(data.projectName),
+    projectPath: optionalString(data.projectPath),
+    tracks: data.tracks as ReaperTrackState[],
+    selectedTrackGuid: optionalString(data.selectedTrackGuid),
+    markers: data.markers as ReaperMarkerState[],
+    masterTrack: isRecord(data.masterTrack) ? (data.masterTrack as unknown as ReaperMasterTrackState) : undefined,
+    stateDigest: optionalString(data.stateDigest),
   };
+}
+
+/**
+ * Folds one observation into source state. Success replaces the project and
+ * observedAt; failure changes only the connection, so the last observed
+ * project stays visible as a snapshot.
+ */
+export function applyReaperObservation(previous: ReaperSourceState, observation: AppObservation): ReaperSourceState {
+  if (observation.connection === 'connected') {
+    const project = parseReaperProject(observation.data);
+    if (project && observation.observedAt) {
+      return { connection: 'connected', observedAt: observation.observedAt, project };
+    }
+    return { ...previous, connection: 'error', connectionError: 'The REAPER bridge returned a project PaneTera could not read.' };
+  }
+  return { ...previous, connection: observation.connection, connectionError: observation.error };
 }

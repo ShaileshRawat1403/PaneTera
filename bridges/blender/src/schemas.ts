@@ -9,7 +9,7 @@ import type {
   BlenderAssignMaterialInput,
   BlenderCreatePrimitiveInput,
 } from './types';
-import type { BlenderObjectState, BlenderSourceState } from '../../../src/surfaces/blenderSurface';
+import type { BlenderObjectState, BlenderSceneState } from '../../../src/surfaces/blenderSurface';
 
 // ─── Capability Declarations ──────────────────────────────────────
 
@@ -166,7 +166,7 @@ export function computeBlenderObjectDigest(obj: BlenderObjectState): string {
 /**
  * Computes a deterministic SHA-256 state digest for the entire scene.
  */
-export function computeBlenderSceneDigest(scene: BlenderSourceState): string {
+export function computeBlenderSceneDigest(scene: BlenderSceneState): string {
   const objectDigests = (scene.objects || [])
     .map((o) => `${o.id}:${computeBlenderObjectDigest(o)}`)
     .sort()

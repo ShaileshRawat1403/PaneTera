@@ -63,8 +63,10 @@ import { LiveWorkbenchSurface } from './components/workbench/LiveWorkbenchSurfac
 import { WebPreviewSurface } from './components/workbench/WebPreviewSurface';
 import { SurfaceHost } from './components/surfaces/SurfaceHost';
 import { projectBrowserSurface, projectLocalAppSurface, projectWorkspaceSurface } from './surfaces/projectSurface';
-import { projectBlenderSurface, createDefaultBlenderState, type BlenderSourceState } from './surfaces/blenderSurface';
-import { projectReaperSurface, createDefaultReaperState, type ReaperSourceState } from './surfaces/reaperSurface';
+import { projectBlenderSurface, applyBlenderObservation, type BlenderSourceState } from './surfaces/blenderSurface';
+import { projectReaperSurface, applyReaperObservation, type ReaperSourceState } from './surfaces/reaperSurface';
+import { fetchAppObservation } from './utils/appObservation';
+import { AppConnectionNotice } from './components/workbench/AppConnectionNotice';
 import { BlenderStateCanvas } from './components/workbench/BlenderStateCanvas';
 import { ReaperStateCanvas } from './components/workbench/ReaperStateCanvas';
 import { browserSourceState } from './surfaces/browserSource';
@@ -180,39 +182,49 @@ const App: React.FC = () => {
     return (stored as WorkbenchMode) || 'native-focus';
   });
 
-   // Auto-sync live Blender state when active
-   useEffect(() => {
-     if (!activeBlenderSource) return;
-     const interval = setInterval(async () => {
-       try {
-         const resp = await fetch('/api/blender/scene');
-         const data = await resp.json();
-         if (data && data.success && data.data) {
-           setActiveBlenderSource(data.data);
-         }
-       } catch {
-         // quiet fallback
-       }
-     }, 1800);
-     return () => clearInterval(interval);
-   }, [activeBlenderSource]);
+  // Observe the live Blender and REAPER bridges while their surfaces are open.
+  // Connection state comes only from these observations (ADR-004): nothing
+  // here assumes connectivity, and a failed observation keeps the last
+  // observed scene as a snapshot instead of substituting sample content.
+  const blenderSurfaceOpen = activeBlenderSource !== null;
+  useEffect(() => {
+    if (!blenderSurfaceOpen) return;
+    let cancelled = false;
+    let inFlight = false;
+    const observe = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      const observation = await fetchAppObservation('/api/blender/scene', token);
+      inFlight = false;
+      if (!cancelled) setActiveBlenderSource((prev) => (prev ? applyBlenderObservation(prev, observation) : prev));
+    };
+    void observe();
+    const interval = setInterval(observe, 1800);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [blenderSurfaceOpen, token]);
 
-   // Auto-sync live REAPER state when active
-   useEffect(() => {
-     if (!activeReaperSource) return;
-     const interval = setInterval(async () => {
-       try {
-         const resp = await fetch('/api/reaper/scene');
-         const data = await resp.json();
-         if (data && data.success && data.data) {
-           setActiveReaperSource(data.data);
-         }
-       } catch {
-         // quiet fallback
-       }
-     }, 1800);
-     return () => clearInterval(interval);
-   }, [activeReaperSource]);
+  const reaperSurfaceOpen = activeReaperSource !== null;
+  useEffect(() => {
+    if (!reaperSurfaceOpen) return;
+    let cancelled = false;
+    let inFlight = false;
+    const observe = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      const observation = await fetchAppObservation('/api/reaper/scene', token);
+      inFlight = false;
+      if (!cancelled) setActiveReaperSource((prev) => (prev ? applyReaperObservation(prev, observation) : prev));
+    };
+    void observe();
+    const interval = setInterval(observe, 1800);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [reaperSurfaceOpen, token]);
 
   const { prefs, setAppId } = useWorkbenchPreferences();
   const { models: modelList, activeModel, selectModel } = useModelSelection();
@@ -1236,153 +1248,6 @@ const App: React.FC = () => {
     }
   }, [token]);
 
-  const DEFAULT_BLENDER_DEMO: BlenderSourceState = {
-    runtime: {
-      blenderVersion: '5.2.1',
-      pythonVersion: '3.11.8',
-      buildHash: 'a1b2c3d',
-      groundingPackVersion: '5.2-v1',
-      activeEngine: 'CYCLES',
-      isConnected: true,
-    },
-    fileName: 'scifi_canister_v2.blend',
-    filePath: '/projects/3d/scifi_canister_v2.blend',
-    collections: [
-      { name: 'Props', objectIds: ['obj-canister-1', 'obj-lid-1'] },
-      { name: 'Lighting', objectIds: ['light-key-1'] },
-    ],
-    objects: [
-      {
-        id: 'obj-canister-1',
-        name: 'CanisterBody',
-        type: 'MESH',
-        location: [0, 0, 0],
-        rotation: [0, 0, 0],
-        scale: [1, 1, 1],
-        vertexCount: 512,
-        faceCount: 480,
-        modifiers: [
-          { name: 'Bevel', type: 'BEVEL', parameters: { width: 0.05, segments: 3, clampOverlap: true } },
-        ],
-        materials: [
-          { name: 'DarkBrushedMetal', nodeType: 'PrincipledBSDF', metallic: 0.9, roughness: 0.2 },
-          { name: 'CyanEmissionRing', nodeType: 'Emission', emission: '#00e5ff' },
-        ],
-        selected: true,
-        stateDigest: 'sha256:7f83b1657ff1fc53b92dc18148a1d65dfc2d4b1fa3d677284addd200126d9069',
-      },
-      {
-        id: 'obj-lid-1',
-        name: 'CanisterLid',
-        type: 'MESH',
-        location: [0, 0, 1.2],
-        rotation: [0, 0, 0],
-        scale: [0.95, 0.95, 0.2],
-        vertexCount: 256,
-        faceCount: 240,
-        modifiers: [],
-        materials: [
-          { name: 'DarkBrushedMetal', nodeType: 'PrincipledBSDF', metallic: 0.9, roughness: 0.2 },
-        ],
-        stateDigest: 'sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
-      },
-      {
-        id: 'light-key-1',
-        name: 'KeyLight',
-        type: 'LIGHT',
-        location: [2.5, -3.0, 4.0],
-        rotation: [45, 0, 30],
-        scale: [1, 1, 1],
-        modifiers: [],
-        materials: [],
-        stateDigest: 'sha256:4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a',
-      },
-    ],
-    selectedObjectId: 'obj-canister-1',
-    activeCamera: 'CameraMain',
-    stateDigest: 'sha256:scene-canister-v2-full',
-  };
-
-  const DEFAULT_REAPER_DEMO: ReaperSourceState = {
-    runtime: {
-      reaperVersion: '7.79',
-      apiVersion: '7.79-reascript',
-      sampleRate: 48000,
-      tempoBpm: 124,
-      timeSignature: '4/4',
-      isPlaying: false,
-      isRecording: false,
-      playheadSeconds: 32.0,
-      isConnected: true,
-    },
-    projectName: 'Cyberpunk_OST_Cue_02.rpp',
-    projectPath: '/projects/audio/Cyberpunk_OST_Cue_02.rpp',
-    tracks: [
-      {
-        guid: '{TRK-KICK-001}',
-        index: 0,
-        name: '01 Kick Drum',
-        volumeDb: -3.0,
-        pan: 0.0,
-        isMuted: false,
-        isSoloed: false,
-        isArmed: false,
-        fxList: [{ id: 'fx-1', index: 0, name: 'ReaEQ', isEnabled: true }],
-        sends: [{ targetTrackGuid: '{TRK-BASS-002}', targetTrackName: '02 Bass Synth (Sidechain 3/4)', volumeDb: 0.0, isMuted: false }],
-        peakLeftDb: -4.5,
-        peakRightDb: -4.5,
-        stateDigest: 'sha256:trk-kick-v1',
-      },
-      {
-        guid: '{TRK-BASS-002}',
-        index: 1,
-        name: '02 Bass Synth',
-        volumeDb: -5.5,
-        pan: 0.0,
-        isMuted: false,
-        isSoloed: false,
-        isArmed: false,
-        fxList: [{ id: 'fx-2', index: 0, name: 'ReaComp', isEnabled: true }],
-        sends: [],
-        peakLeftDb: -7.2,
-        peakRightDb: -7.0,
-        stateDigest: 'sha256:trk-bass-v1',
-      },
-      {
-        guid: '{TRK-VOCAL-003}',
-        index: 2,
-        name: '03 Lead Vocal',
-        volumeDb: 0.0,
-        pan: 0.0,
-        isMuted: false,
-        isSoloed: false,
-        isArmed: false,
-        fxList: [
-          { id: 'fx-3', index: 0, name: 'ReaEQ', isEnabled: true },
-          { id: 'fx-4', index: 1, name: 'ReaDelay', isEnabled: true },
-        ],
-        sends: [],
-        peakLeftDb: -11.0,
-        peakRightDb: -11.0,
-        stateDigest: 'sha256:trk-vocal-0db',
-      },
-    ],
-    selectedTrackGuid: '{TRK-VOCAL-003}',
-    markers: [
-      { id: 1, name: 'Intro', positionSeconds: 0.0, isRegion: false },
-      { id: 2, name: 'Build Up', positionSeconds: 16.0, isRegion: false },
-      { id: 3, name: 'Drop / Chorus', positionSeconds: 32.0, isRegion: true, endSeconds: 64.0 },
-    ],
-    masterTrack: {
-      volumeDb: 0.0,
-      peakLeftDb: -2.1,
-      peakRightDb: -2.0,
-      lufsMomentary: -14.2,
-      lufsIntegrated: -14.0,
-    },
-    stateDigest: 'sha256:reaper-cyberpunk-full-v1',
-  };
-
   /**
    * Handlers for every plan this app can carry out.
    *
@@ -1472,7 +1337,7 @@ const App: React.FC = () => {
         setActiveReaperSource(null);
         setWebPreview(null);
         setActiveComponent(null);
-        setActiveBlenderSource(createDefaultBlenderState());
+        setActiveBlenderSource({ connection: 'connecting' });
         addMessage({
           role: 'assistant',
           content: 'Opened Blender 3D Studio in the workstation canvas.',
@@ -1485,7 +1350,7 @@ const App: React.FC = () => {
         setActiveBlenderSource(null);
         setWebPreview(null);
         setActiveComponent(null);
-        setActiveReaperSource(createDefaultReaperState());
+        setActiveReaperSource({ connection: 'connecting' });
         addMessage({
           role: 'assistant',
           content: 'Opened REAPER Audio DAW in the workstation canvas.',
@@ -1571,55 +1436,35 @@ const App: React.FC = () => {
 
       const queryLower = (plan.rawInput || plan.message || '').toLowerCase();
       if (queryLower.includes('blender') && (queryLower.includes('show') || queryLower.includes('open') || queryLower.includes('inspect') || queryLower.includes('scene') || queryLower.includes('3d') || queryLower.includes('cube') || queryLower.includes('add') || queryLower.includes('connect'))) {
-        try {
-          const resp = await fetch('/api/blender/scene');
-          const data = await resp.json();
-          if (data && data.success && data.data) {
-            setActiveBlenderSource(data.data);
-            setActiveReaperSource(null);
-            setWebPreview(null);
-            setActiveComponent(null);
-            addMessage({
-              role: 'assistant',
-              content: `Connected live to your running **Blender ${data.data.runtime?.blenderVersion || '5.2'}** instance! Active scene has **${data.data.objects.length} objects** (${data.data.objects.map((o: any) => o.name).join(', ')}). You can inspect the live scene outliner and modifiers on the canvas.`,
-              intent: 'artifact',
-            });
-            setLoading(false);
-            return;
-          }
-        } catch {
-          // Live connection fallback
-        }
-
-        setActiveBlenderSource(DEFAULT_BLENDER_DEMO);
         setActiveReaperSource(null);
         setWebPreview(null);
         setActiveComponent(null);
+        setActiveBlenderSource({ connection: 'connecting' });
         addMessage({
           role: 'assistant',
-          content: 'I opened the Blender scene surface. To connect live to your open Blender 5.2 window, switch to the **Scripting** tab in Blender, open `bridges/blender/addon/panetera_blender_bridge.py`, and click **Run Script**.',
-          intent: 'artifact',
+          content: 'Opened the Blender surface. It shows scene state only once the PaneTera bridge in Blender responds; until then it reports the connection state.',
+          intent: 'live_app',
         });
         setLoading(false);
         return;
       }
 
       if (queryLower.includes('reaper') && (queryLower.includes('show') || queryLower.includes('open') || queryLower.includes('inspect') || queryLower.includes('project') || queryLower.includes('audio') || queryLower.includes('mix') || queryLower.includes('vocal'))) {
-        setActiveReaperSource(DEFAULT_REAPER_DEMO);
         setActiveBlenderSource(null);
         setWebPreview(null);
         setActiveComponent(null);
+        setActiveReaperSource({ connection: 'connecting' });
         addMessage({
           role: 'assistant',
-          content: 'I opened the REAPER project surface (`Cyberpunk_OST_Cue_02.rpp` on REAPER 7.79). You can inspect tracks, volume faders, FX chains, and LUFS loudness on the canvas, or ask me to propose mixing and routing changes.',
-          intent: 'artifact',
+          content: 'Opened the REAPER surface. It shows project state only once the PaneTera bridge in REAPER responds; until then it reports the connection state.',
+          intent: 'live_app',
         });
         setLoading(false);
         return;
       }
 
       if (queryLower.includes('bevel') || (queryLower.includes('modifier') && queryLower.includes('add'))) {
-        const targetObj = activeBlenderSource?.objects.find((o: any) => o.type === 'MESH') || activeBlenderSource?.objects[0];
+        const targetObj = activeBlenderSource?.scene?.objects.find((o: any) => o.type === 'MESH') || activeBlenderSource?.scene?.objects[0];
         const targetName = targetObj?.name || 'Cube';
         const targetId = targetObj?.id || 'Cube';
 
@@ -2039,11 +1884,8 @@ const App: React.FC = () => {
           role: 'assistant',
           content: `✓ Executed **${action}** on your live Blender session via governed path.`,
         });
-        const sceneResp = await fetch('/api/blender/scene');
-        const sceneData = await sceneResp.json();
-        if (sceneData.success && sceneData.data) {
-          setActiveBlenderSource(sceneData.data);
-        }
+        const observation = await fetchAppObservation('/api/blender/scene', token);
+        setActiveBlenderSource((prev) => (prev ? applyBlenderObservation(prev, observation) : prev));
       } catch (err: any) {
         addMessage({ role: 'assistant', content: `Blender execution error: ${err.message}`, intent: 'needs_capability' });
       }
@@ -2974,12 +2816,12 @@ const App: React.FC = () => {
               onOpenBlender={() => {
                 setActiveReaperSource(null);
                 setWebPreview(null);
-                setActiveBlenderSource(createDefaultBlenderState());
+                setActiveBlenderSource({ connection: 'connecting' });
               }}
               onOpenReaper={() => {
                 setActiveBlenderSource(null);
                 setWebPreview(null);
-                setActiveReaperSource(createDefaultReaperState());
+                setActiveReaperSource({ connection: 'connecting' });
               }}
               onOpenAst={() => setProjectPickerRequestKey((value) => value + 1)}
             />
@@ -3094,28 +2936,40 @@ const App: React.FC = () => {
             <SurfaceHost
               descriptor={projectBlenderSurface(activeBlenderSource)}
               onClose={() => setActiveBlenderSource(null)}
-               onAction={(action) => {
-                 if (action.behavior === 'propose') {
-                   handleProposeAction(action);
-                 } else if (action.id === 'capture-viewport') {
-                   setActiveBlenderSource((prev) => prev ? { ...prev, capturedAt: new Date().toISOString() } : null);
-                 }
-               }}
-             >
-               <BlenderStateCanvas state={activeBlenderSource} />
-             </SurfaceHost>
-           ) : activeReaperSource ? (
-             <SurfaceHost
-               descriptor={projectReaperSurface(activeReaperSource)}
-               onClose={() => setActiveReaperSource(null)}
-               onAction={(action) => {
-                 if (action.behavior === 'propose') {
-                   handleProposeAction(action);
-                 }
-               }}
-             >
-               <ReaperStateCanvas state={activeReaperSource} />
-             </SurfaceHost>
+              onAction={(action) => {
+                if (action.behavior === 'propose') handleProposeAction(action);
+              }}
+            >
+              {activeBlenderSource.scene ? (
+                <BlenderStateCanvas state={activeBlenderSource.scene} />
+              ) : (
+                <AppConnectionNotice
+                  appName="Blender"
+                  connection={activeBlenderSource.connection}
+                  connectionError={activeBlenderSource.connectionError}
+                  setupHint="In Blender, open bridges/blender/addon/panetera_blender_bridge.py in the Scripting tab and run it."
+                />
+              )}
+            </SurfaceHost>
+          ) : activeReaperSource ? (
+            <SurfaceHost
+              descriptor={projectReaperSurface(activeReaperSource)}
+              onClose={() => setActiveReaperSource(null)}
+              onAction={(action) => {
+                if (action.behavior === 'propose') handleProposeAction(action);
+              }}
+            >
+              {activeReaperSource.project ? (
+                <ReaperStateCanvas state={activeReaperSource.project} />
+              ) : (
+                <AppConnectionNotice
+                  appName="REAPER"
+                  connection={activeReaperSource.connection}
+                  connectionError={activeReaperSource.connectionError}
+                  setupHint="In REAPER, load bridges/reaper/addon/panetera_reaper_bridge.lua as a ReaScript and run it."
+                />
+              )}
+            </SurfaceHost>
           ) : showEvidenceCanvas ? (
             <BrowserEvidenceCanvas
               onReturnToPreview={() => setShowEvidenceCanvas(false)}

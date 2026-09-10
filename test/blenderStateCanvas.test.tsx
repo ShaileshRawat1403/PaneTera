@@ -9,14 +9,13 @@ import assert from 'node:assert';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { BlenderStateCanvas } from '../src/components/workbench/BlenderStateCanvas';
-import type { BlenderSourceState } from '../src/surfaces/blenderSurface';
+import type { BlenderSceneState } from '../src/surfaces/blenderSurface';
 
-function makeBlenderSource(): BlenderSourceState {
+function makeBlenderSource(): BlenderSceneState {
   return {
     runtime: {
       blenderVersion: '5.2.1',
       activeEngine: 'CYCLES',
-      isConnected: true,
     },
     fileName: 'canister_mech.blend',
     filePath: '/projects/scifi/canister_mech.blend',
@@ -64,8 +63,8 @@ describe('BlenderStateCanvas', () => {
   });
 
   it('renders clean fallback when no modifiers or snapshot are present', () => {
-    const state: BlenderSourceState = {
-      runtime: { blenderVersion: '5.2.1', activeEngine: 'EEVEE', isConnected: true },
+    const state: BlenderSceneState = {
+      runtime: { blenderVersion: '5.2.1', activeEngine: 'EEVEE' },
       collections: [],
       objects: [
         {

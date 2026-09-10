@@ -4,11 +4,18 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { projectReaperSurface } from '../src/surfaces/reaperSurface';
-import type { ReaperSourceState } from '../src/surfaces/reaperSurface';
+import { applyReaperObservation, parseReaperProject, projectReaperSurface } from '../src/surfaces/reaperSurface';
+import type { ReaperProjectState, ReaperSourceState } from '../src/surfaces/reaperSurface';
+import type { AppConnectionState } from '../src/surfaces/appConnection';
 import type { SurfaceDescriptor } from '../src/surfaces/types';
 
-function makeReaperSource(overrides?: Partial<ReaperSourceState>): ReaperSourceState {
+const OBSERVED_AT = '2026-09-10T08:00:00.000Z';
+
+function makeReaperSource(overrides?: Partial<ReaperProjectState>, connection: AppConnectionState = 'connected'): ReaperSourceState {
+  return { connection, observedAt: OBSERVED_AT, project: makeReaperProject(overrides) };
+}
+
+function makeReaperProject(overrides?: Partial<ReaperProjectState>): ReaperProjectState {
   return {
     runtime: {
       reaperVersion: '7.79',
@@ -19,7 +26,6 @@ function makeReaperSource(overrides?: Partial<ReaperSourceState>): ReaperSourceS
       isPlaying: false,
       isRecording: false,
       playheadSeconds: 14.5,
-      isConnected: true,
     },
     projectName: 'Cinematic_Cue_01.rpp',
     projectPath: '/projects/audio/Cinematic_Cue_01.rpp',
@@ -149,44 +155,64 @@ describe('projectReaperSurface', () => {
     assert.strictEqual(d.state.presence, 'live');
   });
 
-  it('derives presence=unavailable when disconnected', () => {
-    const source = makeReaperSource({
-      runtime: {
-        reaperVersion: '7.79',
-        sampleRate: 48000,
-        tempoBpm: 120,
-        timeSignature: '4/4',
-        isPlaying: false,
-        isRecording: false,
-        playheadSeconds: 0,
-        isConnected: false,
-      },
-    });
-    const d = projectReaperSurface(source);
-    assert.strictEqual(d.state.presence, 'unavailable');
-    assert.strictEqual(d.actions.length, 0, 'No actions when disconnected');
+  it('keeps the last observed project as a snapshot when the bridge stops responding', () => {
+    const d = projectReaperSurface(makeReaperSource(undefined, 'disconnected'));
+    assert.strictEqual(d.state.presence, 'snapshot');
+    assert.strictEqual(d.identity.subtitle, `Not connected · last observed ${OBSERVED_AT}`);
+    assert.strictEqual(d.actions.length, 0, 'No actions without a live connection');
   });
 
-  it('offers observe and propose actions with capabilityRefs', () => {
-    const source = makeReaperSource();
-    const d = projectReaperSurface(source);
-    assert.ok(d.actions.length >= 3);
+  it('never claims liveness before an observation succeeds (ADR-004)', () => {
+    const cases: Array<[AppConnectionState, string]> = [
+      ['unknown', 'unavailable'],
+      ['connecting', 'unavailable'],
+      ['disconnected', 'disconnected'],
+      ['error', 'unavailable'],
+      ['connected', 'unavailable'],
+    ];
+    for (const [connection, presence] of cases) {
+      const d = projectReaperSurface({ connection });
+      const payload = d.renderer.payload as Record<string, unknown>;
+      assert.strictEqual(d.state.presence, presence, connection);
+      assert.strictEqual(d.actions.length, 0, connection);
+      assert.strictEqual(payload.runtime, null, connection);
+      assert.strictEqual(payload.observedAt, null, connection);
+      assert.deepStrictEqual(payload.tracks, [], connection);
+    }
+  });
 
-    const peaks = d.actions.find((a) => a.id === 'read-peaks');
-    assert.ok(peaks);
-    assert.strictEqual(peaks.behavior, 'observe');
-
-    const lufs = d.actions.find((a) => a.id === 'check-lufs');
-    assert.ok(lufs);
-    assert.strictEqual(lufs.behavior, 'observe');
-
+  it('offers only governed propose actions while connected', () => {
+    const d = projectReaperSurface(makeReaperSource());
+    assert.deepStrictEqual(d.actions.map((a) => a.behavior), ['propose', 'propose']);
     const setGain = d.actions.find((a) => a.id === 'set-track-gain');
     assert.ok(setGain);
-    assert.strictEqual(setGain.behavior, 'propose');
     assert.deepStrictEqual(setGain.capabilityRef, {
       connectionId: 'reaper',
       capabilityId: 'reaper.set_track_gain',
     });
+  });
+
+  it("applies a successful observation and discards the bridge's own connectivity claim", () => {
+    const project = makeReaperProject();
+    const data = { ...project, runtime: { ...project.runtime, isConnected: true } };
+    const next = applyReaperObservation({ connection: 'connecting' }, { connection: 'connected', observedAt: OBSERVED_AT, data });
+    assert.strictEqual(next.connection, 'connected');
+    assert.strictEqual(next.observedAt, OBSERVED_AT);
+    assert.ok(next.project);
+    assert.ok(!('isConnected' in next.project.runtime));
+  });
+
+  it('keeps the previous project on failure and rejects unreadable data', () => {
+    const previous = makeReaperSource();
+    const failed = applyReaperObservation(previous, { connection: 'error', error: 'timed out' });
+    assert.strictEqual(failed.connection, 'error');
+    assert.strictEqual(failed.project, previous.project);
+    assert.strictEqual(failed.observedAt, OBSERVED_AT);
+
+    const unreadable = applyReaperObservation({ connection: 'connecting' }, { connection: 'connected', observedAt: OBSERVED_AT, data: { tracks: [] } });
+    assert.strictEqual(unreadable.connection, 'error');
+    assert.strictEqual(unreadable.project, undefined);
+    assert.strictEqual(parseReaperProject({ ...makeReaperProject(), tracks: {} }), null);
   });
 
   it('does not mutate source state', () => {

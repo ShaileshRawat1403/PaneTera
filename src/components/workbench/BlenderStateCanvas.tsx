@@ -30,11 +30,12 @@ import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
 import CloseIcon from '@mui/icons-material/Close';
 import { surface, ink, accent, status, radius, typography, elevation } from '../../theme/cssTokens';
 import { transition } from '../../theme/motion';
-import type { BlenderSourceState, BlenderObjectState } from '../../surfaces/blenderSurface';
+import type { BlenderSceneState, BlenderObjectState } from '../../surfaces/blenderSurface';
 import { Blender3DViewport } from './Blender3DViewport';
 
 export interface BlenderStateCanvasProps {
-  state: BlenderSourceState;
+  /** An observed scene. Never sample content (ADR-004). */
+  state: BlenderSceneState;
   onSelectObject?: (objectId: string) => void;
 }
 
@@ -138,17 +139,17 @@ export function BlenderStateCanvas({
               }}
             />
             <Typography variant="body2" sx={{ fontWeight: 700, fontSize: '0.8rem', color: ink.primary }}>
-              {state.fileName || 'scifi_outpost_mech.blend'}
+              {state.fileName || 'Unsaved scene'}
             </Typography>
           </Box>
 
           <Typography variant="caption" sx={{ color: ink.muted, fontSize: '0.72rem' }}>
-            {state.objects.length} objs · {state.runtime.activeEngine || 'CYCLES'}
+            {state.objects.length} objs · {state.runtime.activeEngine}
           </Typography>
 
           <Chip
             size="small"
-            label={`Blender ${state.runtime.blenderVersion || '5.2'}`}
+            label={`Blender ${state.runtime.blenderVersion}`}
             sx={{
               height: 18,
               fontSize: '0.65rem',
