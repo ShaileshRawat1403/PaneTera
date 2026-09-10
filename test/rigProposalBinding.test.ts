@@ -11,12 +11,12 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { resolveAuditLogPath } from '../server/audit';
 import { CapabilityApprovalStore } from '../server/rig/approval';
 import { handleInvocation, handleProposal, type RigDataDeps } from '../server/rig/routes';
 import type { CapabilityCard, McpConnection } from '../server/rig/types';
 
-const AUDIT_LOG = fileURLToPath(new URL('../server/audit.log', import.meta.url));
+const AUDIT_LOG = resolveAuditLogPath();
 
 function auditRecordsFor(connectionId: string): Record<string, unknown>[] {
   if (!fs.existsSync(AUDIT_LOG)) return [];

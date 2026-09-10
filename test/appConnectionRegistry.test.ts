@@ -12,13 +12,14 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolveAuditLogPath } from '../server/audit';
 import { RigRegistry } from '../server/rig/registry';
 import { verifyStdioSpec } from '../server/rig/transportSecurity';
 import { APP_CONNECTIONS, ensureAppConnections, expectedAppTransport } from '../server/rig/appConnectionRegistry';
 import type { StdioTransportSpec } from '../server/rig/types';
 
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
-const AUDIT_LOG = fileURLToPath(new URL('../server/audit.log', import.meta.url));
+const AUDIT_LOG = resolveAuditLogPath();
 const ENV = { PATH: '/usr/bin:/bin', NODE_ENV: 'test', PORTAL_TOKEN: 'ambient-token-must-not-be-bound' };
 const [BLENDER, REAPER] = APP_CONNECTIONS;
 

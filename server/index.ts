@@ -15,6 +15,7 @@ import { getWorkspaceAdapter, stopWorkspaceAdapter, stopAllWorkspaceAdapters } f
 import { getWorkspaceCatalogPath, getPortalYamlPath } from './appData';
 import { fingerprint, normalizeAuditRecord } from './auditRecord';
 import { auditOperatorAction } from './operatorAudit';
+import { resolveAuditLogPath } from './audit';
 import { authenticatePortalRequest, operatorPrincipalForRequest } from './operatorPrincipal';
 import { issueEventTicket, consumeEventTicket } from './eventTicket';
 import * as fs from 'fs';
@@ -176,23 +177,13 @@ app.use('/api/reaper', reaperRouter);
 // Register Blender and REAPER as stdio MCP connections in the Rig.
 // These connections are gated by approval and governed invocation.
 
-import { ensureAppConnections } from './rig/appConnectionRegistry';
+import { ensureAppConnections, type AppConnectionRegistration } from './rig/appConnectionRegistry';
 
 // Register IT Ops domain schemas on startup
 registerItOpsDomain();
 
-// Declare the Blender and REAPER connections. This starts no process: each
-// launches only after its launch specification is reviewed and approved in
-// Rig. Failing to declare one is a PaneTera configuration error, recorded as
-// rig.connection.registration-failed; Blender or REAPER not running is a
-// normal disconnected state and never fails here.
-void ensureAppConnections(rigRegistry).then((results) => {
-  for (const result of results) {
-    if (result.outcome === 'failed') {
-      console.error(`[Rig] Could not declare the ${result.connectionId} connection: ${result.error}`);
-    }
-  }
-});
+// The Blender and REAPER connections are declared by startPaneTeraServer(),
+// never as an import side effect.
 
 // ── Rook MCP Memory Bridge (optional) ────────────────────────────────────────
 // Spawns `rook mcp memory` as a child process and communicates over stdio
@@ -2346,8 +2337,8 @@ app.post('/api/myai-workspaces/query', async (req: Request, res: Response) => {
 
 // 6. Retrieve recent audit logs (latest 50 records)
 app.get('/api/myai-workspaces/audit', (req: Request, res: Response) => {
-  const logPath = path.resolve(__dirname, 'audit.log');
   try {
+    const logPath = resolveAuditLogPath();
     if (!fs.existsSync(logPath)) {
       return res.json({ logs: [] });
     }
@@ -2832,11 +2823,7 @@ app.get('/api/evidence', (_req, res) => {
   }
 });
 
-const httpServer = process.env.NODE_ENV !== 'test'
-  ? app.listen(PORT, '127.0.0.1', () => {
-      console.log(`🚀 PaneTera backend listening on http://127.0.0.1:${PORT}`);
-    })
-  : null;
+let httpServer: ReturnType<typeof app.listen> | null = null;
 
 // Fast, idempotent shutdown so `tsx watch` restarts and Ctrl+C exit promptly
 // rather than being force-killed after a 5s timeout. Every cleanup step is
@@ -2854,5 +2841,61 @@ function shutdown(): void {
   try { httpServer?.close(); } catch { /* best effort on shutdown */ }
   rigRuntime.disconnectAll().catch(() => undefined).finally(() => process.exit(0));
 }
-process.on('SIGINT', shutdown);
-process.on('SIGTERM', shutdown);
+
+export interface PaneTeraServerHandle {
+  httpServer: ReturnType<typeof app.listen>;
+  /** Settles once the managed application connections have been declared. */
+  registration: Promise<AppConnectionRegistration[]>;
+}
+
+/**
+ * Start the PaneTera backend: listen, declare the managed application
+ * connections, and own process shutdown.
+ *
+ * Importing this module only defines the app. Listening, persistent
+ * registration against the app-data directory, and signal handling all happen
+ * here, so a test can import the app without touching operator state.
+ */
+export function startPaneTeraServer(options: { port?: number } = {}): PaneTeraServerHandle {
+  if (httpServer) throw new Error('The PaneTera server is already started in this process.');
+  const port = options.port ?? PORT;
+  const server = app.listen(port, '127.0.0.1', () => {
+    console.log(`🚀 PaneTera backend listening on http://127.0.0.1:${port}`);
+  });
+  httpServer = server;
+
+  // Declare the Blender and REAPER connections. This starts no process: each
+  // launches only after its launch specification is reviewed and approved in
+  // Rig. Failing to declare one is a PaneTera configuration error, recorded as
+  // rig.connection.registration-failed; Blender or REAPER not running is a
+  // normal disconnected state and never fails here.
+  const registration = ensureAppConnections(rigRegistry).then((results) => {
+    for (const result of results) {
+      if (result.outcome === 'failed') {
+        console.error(`[Rig] Could not declare the ${result.connectionId} connection: ${result.error}`);
+      }
+    }
+    return results;
+  });
+
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
+  return { httpServer: server, registration };
+}
+
+/** True when this file is the process entrypoint, not a module someone imported. */
+function isProcessEntrypoint(): boolean {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  try {
+    return fs.realpathSync(path.resolve(entry)) === fs.realpathSync(__filename);
+  } catch {
+    return false;
+  }
+}
+
+// `tsx watch server/index.ts` and `node --import tsx server/index.ts` start the
+// server. Importing the module (tests, tooling) never does.
+if (isProcessEntrypoint() && process.env.NODE_ENV !== 'test') {
+  startPaneTeraServer();
+}

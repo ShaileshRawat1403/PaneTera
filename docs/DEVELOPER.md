@@ -83,14 +83,14 @@ npm run preview
 
 ## Testing
 
-Tests use Node.js built-in test runner with `tsx`:
+Tests use Node.js built-in test runner with `tsx`. Every test process gets its own temporary app-data directory, audit log, and run history through `test/support/isolatedAppData.mjs`; server code refuses the real locations from a test process, so a test run without that preload fails instead of touching your PaneTera state.
 
 ```bash
 # Run all tests (takes ~30s)
 npm test
 
-# Run a single test file
-npx tsx test/agentRunQueue.test.ts
+# Run a single test file (with the same isolation as npm test)
+node --import tsx --import ./test/support/isolatedAppData.mjs --test test/agentRunQueue.test.ts
 
 # Run tests matching a pattern
 npm test | grep "AgentRunQueue"

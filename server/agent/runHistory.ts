@@ -4,7 +4,8 @@
 // Stores completed runs in a file-based FIFO rotation.
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
-import { join } from 'path';
+import { join, resolve } from 'path';
+import { isTestProcess, sameLocation } from '../appData';
 
 export interface HistoricalRun {
   runId: string;
@@ -29,12 +30,38 @@ export interface HistoryQuery {
 }
 
 const MAX_HISTORY = 500;
-const HISTORY_DIR = join(process.cwd(), '.panetera', 'agent-history');
+const RUN_HISTORY_REFUSAL =
+  'Refusing to use the PaneTera server run history from a test process. '
+  + 'Set PANETERA_RUN_HISTORY_DIR to an isolated temporary directory '
+  + '(npm test does this through test/support/isolatedAppData.mjs).';
+
+/** The server's own run history, under the directory it runs from. */
+export function defaultRunHistoryDir(): string {
+  return join(process.cwd(), '.panetera', 'agent-history');
+}
+
+/**
+ * Where run history is stored. PANETERA_RUN_HISTORY_DIR overrides it. A test
+ * process must supply an isolated directory and never reads, writes, or clears
+ * the server's own history.
+ */
+export function resolveRunHistoryDir(env: Readonly<Record<string, string | undefined>> = process.env): string {
+  const override = env.PANETERA_RUN_HISTORY_DIR;
+  const testProcess = isTestProcess(env);
+  if (override) {
+    if (testProcess && sameLocation(override, defaultRunHistoryDir())) throw new Error(RUN_HISTORY_REFUSAL);
+    return resolve(override);
+  }
+  if (testProcess) throw new Error(RUN_HISTORY_REFUSAL);
+  return defaultRunHistoryDir();
+}
 
 export class RunHistory {
   private history: HistoricalRun[] = [];
+  private readonly dir: string;
 
   constructor() {
+    this.dir = resolveRunHistoryDir();
     this.ensureDir();
     this.load();
   }
@@ -146,14 +173,14 @@ export class RunHistory {
   }
 
   private ensureDir(): void {
-    if (!existsSync(HISTORY_DIR)) {
-      mkdirSync(HISTORY_DIR, { recursive: true });
+    if (!existsSync(this.dir)) {
+      mkdirSync(this.dir, { recursive: true });
     }
   }
 
   private load(): void {
     try {
-      const filePath = join(HISTORY_DIR, 'history.json');
+      const filePath = join(this.dir, 'history.json');
       if (existsSync(filePath)) {
         const data = readFileSync(filePath, 'utf-8');
         this.history = JSON.parse(data).slice(0, MAX_HISTORY);
@@ -165,7 +192,7 @@ export class RunHistory {
 
   private save(): void {
     try {
-      const filePath = join(HISTORY_DIR, 'history.json');
+      const filePath = join(this.dir, 'history.json');
       writeFileSync(filePath, JSON.stringify(this.history, null, 2), 'utf-8');
     } catch {
       // Silently fail - history is best-effort

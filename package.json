@@ -13,9 +13,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "pretest": "node scripts/check-node-version.mjs",
-    "test": "node --import tsx --test --test-concurrency=1 --test-timeout=30000 $(find test -name '*.test.ts' -o -name '*.test.tsx')",
+    "test": "node --import tsx --import ./test/support/isolatedAppData.mjs --test --test-concurrency=1 --test-timeout=30000 $(find test -name '*.test.ts' -o -name '*.test.tsx')",
     "test:core": "npm test",
-    "test:coverage": "node --import tsx --experimental-test-coverage --test --test-concurrency=1 --test-timeout=30000 $(find test -name '*.test.ts' -o -name '*.test.tsx')",
+    "test:coverage": "node --import tsx --import ./test/support/isolatedAppData.mjs --experimental-test-coverage --test --test-concurrency=1 --test-timeout=30000 $(find test -name '*.test.ts' -o -name '*.test.tsx')",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"
   },

@@ -1,7 +1,30 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { isTestProcess, sameLocation } from './appData';
 
-const AUDIT_LOG_PATH = path.resolve(__dirname, 'audit.log');
+/** The PaneTera server's own audit log, next to this module. */
+export const DEFAULT_AUDIT_LOG_PATH = path.resolve(__dirname, 'audit.log');
+
+const AUDIT_LOG_REFUSAL =
+  'Refusing to use the PaneTera server audit log from a test process. '
+  + 'Set PANETERA_AUDIT_LOG to an isolated temporary file '
+  + '(npm test does this through test/support/isolatedAppData.mjs).';
+
+/**
+ * Where audit records are written and read. PANETERA_AUDIT_LOG overrides the
+ * location. A test process must supply an isolated file and never appends to
+ * the server's own log.
+ */
+export function resolveAuditLogPath(env: Readonly<Record<string, string | undefined>> = process.env): string {
+  const override = env.PANETERA_AUDIT_LOG;
+  const testProcess = isTestProcess(env);
+  if (override) {
+    if (testProcess && sameLocation(override, DEFAULT_AUDIT_LOG_PATH)) throw new Error(AUDIT_LOG_REFUSAL);
+    return path.resolve(override);
+  }
+  if (testProcess) throw new Error(AUDIT_LOG_REFUSAL);
+  return DEFAULT_AUDIT_LOG_PATH;
+}
 
 export interface AuditRecord {
   timestamp: string;
@@ -19,7 +42,7 @@ export interface AuditRecord {
 export function appendAuditLine(record: object): void {
   const line = JSON.stringify(record) + '\n';
   try {
-    fs.appendFileSync(AUDIT_LOG_PATH, line, 'utf8');
+    fs.appendFileSync(resolveAuditLogPath(), line, 'utf8');
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[AUDIT ERROR] Failed to write audit record:', msg);

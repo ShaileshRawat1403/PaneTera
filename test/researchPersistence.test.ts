@@ -12,6 +12,15 @@ import { setEvidenceRetentionServiceForTest } from '../server/evidence/evidenceR
 import { ObservationItem, ExtractionResult, EvidenceItem } from '../server/evidence/evidenceTypes';
 import { hashCanonicalText } from '../server/evidence/evidenceCanonicalizer';
 
+// The isolated state that npm test provides (test/support/isolatedAppData.mjs).
+// cleanup() restores it instead of deleting it, so later cases never fall back
+// to the operator's real app-data directory.
+const ORIGINAL_ENV: Record<'TESSERA_APP_DATA' | 'XDG_DATA_HOME' | 'LOCALAPPDATA', string | undefined> = {
+  TESSERA_APP_DATA: process.env.TESSERA_APP_DATA,
+  XDG_DATA_HOME: process.env.XDG_DATA_HOME,
+  LOCALAPPDATA: process.env.LOCALAPPDATA,
+};
+
 async function runTests() {
   console.log('Running Research Persistence and AppData tests...');
   // Created per setup(), removed by it and by cleanup(). Starts empty:
@@ -51,9 +60,10 @@ async function runTests() {
   function cleanup() {
     if (tempDir) fs.rmSync(tempDir, { recursive: true, force: true });
     tempDir = '';
-    delete process.env.TESSERA_APP_DATA;
-    delete process.env.XDG_DATA_HOME;
-    delete process.env.LOCALAPPDATA;
+    for (const [key, value] of Object.entries(ORIGINAL_ENV)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
   }
 
   try {
