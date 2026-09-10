@@ -10,6 +10,7 @@ import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mc
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { sendBlenderCommand } from '../creative/blenderClient.js';
+import { decodeResourceVariable } from './resourceIdentifiers.js';
 
 const server = new McpServer({
   name: 'PaneTera Blender',
@@ -315,18 +316,18 @@ server.resource(
 server.resource(
   'blender-object',
   new ResourceTemplate('blender://object/{objectId}', { list: undefined }),
-  async (uri) => {
-    const objectId = uri.pathname.split('/').pop() || '';
+  async (uri, variables) => {
+    const objectId = decodeResourceVariable(variables, 'objectId');
     try {
       const result = await sendBlenderCommand('blender.inspect_object', { objectId });
       if (result.success && result.data) {
         return {
-          contents: [{ uri: `blender://object/${objectId}`, text: JSON.stringify(result.data, null, 2) }],
+          contents: [{ uri: uri.href, text: JSON.stringify(result.data, null, 2) }],
         };
       }
-      return { contents: [{ uri: `blender://object/${objectId}`, text: JSON.stringify({ error: result.error }) }] };
+      return { contents: [{ uri: uri.href, text: JSON.stringify({ error: result.error }) }] };
     } catch (err: any) {
-      return { contents: [{ uri: `blender://object/${objectId}`, text: JSON.stringify({ error: err.message }) }] };
+      return { contents: [{ uri: uri.href, text: JSON.stringify({ error: err.message }) }] };
     }
   }
 );

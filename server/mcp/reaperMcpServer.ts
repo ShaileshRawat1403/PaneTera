@@ -9,6 +9,7 @@ import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mc
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { sendReaperCommand } from '../creative/reaperClient.js';
+import { decodeResourceVariable } from './resourceIdentifiers.js';
 
 const server = new McpServer({
   name: 'PaneTera REAPER',
@@ -232,17 +233,17 @@ server.resource(
 server.resource(
   'reaper-track',
   new ResourceTemplate('reaper://track/{guid}', { list: undefined }),
-  async (uri) => {
-    const guid = uri.pathname.split('/').pop() || '';
+  async (uri, variables) => {
+    const guid = decodeResourceVariable(variables, 'guid');
     try {
       const result = await sendReaperCommand('reaper.get_project_summary', {});
       if (result.success && result.data) {
         const track = (result.data as any).tracks?.find((t: any) => t.guid === guid);
-        return { contents: [{ uri: `reaper://track/${guid}`, text: JSON.stringify(track || { error: 'Track not found' }, null, 2) }] };
+        return { contents: [{ uri: uri.href, text: JSON.stringify(track || { error: 'Track not found' }, null, 2) }] };
       }
-      return { contents: [{ uri: `reaper://track/${guid}`, text: JSON.stringify({ error: result.error }) }] };
+      return { contents: [{ uri: uri.href, text: JSON.stringify({ error: result.error }) }] };
     } catch (err: any) {
-      return { contents: [{ uri: `reaper://track/${guid}`, text: JSON.stringify({ error: err.message }) }] };
+      return { contents: [{ uri: uri.href, text: JSON.stringify({ error: err.message }) }] };
     }
   }
 );
