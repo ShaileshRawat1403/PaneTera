@@ -5,7 +5,7 @@
 //
 // Launch with: tsx server/mcp/reaperMcpServer.ts
 
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { sendReaperCommand } from '../creative/reaperClient.js';
@@ -132,7 +132,7 @@ server.tool(
     trackGuid: z.string().describe('Track GUID'),
     fxName: z.string().describe('Plugin name, e.g. ReaEQ, ReaComp, ReaDelay'),
     presetName: z.string().optional().describe('Optional preset name'),
-    initialParameters: z.record(z.number()).optional().default({}).describe('Initial FX parameters'),
+    initialParameters: z.record(z.string(), z.number()).optional().default({}).describe('Initial FX parameters'),
     expectedStateDigest: z.string().optional().describe('Precondition state digest hash'),
   },
   async (args) => {
@@ -214,7 +214,7 @@ server.tool(
 // ── Resource: reaper://project/{id} ────────────────────────────
 server.resource(
   'reaper-project',
-  new URL('reaper://project/current'),
+  'reaper://project/current',
   async () => {
     try {
       const result = await sendReaperCommand('reaper.get_project_summary', {});
@@ -231,7 +231,7 @@ server.resource(
 // ── Resource: reaper://track/{guid} ────────────────────────────
 server.resource(
   'reaper-track',
-  new URL('reaper://track/{guid}'),
+  new ResourceTemplate('reaper://track/{guid}', { list: undefined }),
   async (uri) => {
     const guid = uri.pathname.split('/').pop() || '';
     try {

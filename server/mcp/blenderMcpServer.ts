@@ -6,7 +6,7 @@
 // Launch with: tsx server/mcp/blenderMcpServer.ts
 // Or register as a stdio MCP connection in the PaneTera Rig.
 
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { sendBlenderCommand } from '../creative/blenderClient.js';
@@ -146,7 +146,7 @@ server.tool(
     objectId: z.string().describe('Target object name'),
     modifierType: z.enum(['BEVEL', 'SUBSURF', 'BOOLEAN', 'SOLIDIFY', 'MIRROR']).describe('Modifier type'),
     name: z.string().optional().describe('Modifier name'),
-    parameters: z.record(z.unknown()).optional().default({}).describe('Modifier parameters'),
+    parameters: z.record(z.string(), z.unknown()).optional().default({}).describe('Modifier parameters'),
     expectedStateDigest: z.string().optional().describe('Precondition state digest hash for governed approval'),
   },
   async (args) => {
@@ -186,7 +186,7 @@ server.tool(
     objectId: z.string().describe('Target object name'),
     materialName: z.string().describe('Material name'),
     shaderType: z.enum(['PrincipledBSDF', 'Emission', 'Glass']).optional().default('PrincipledBSDF').describe('Shader type'),
-    parameters: z.record(z.unknown()).optional().default({}).describe('Material parameters (baseColor, metallic, roughness, etc.)'),
+    parameters: z.record(z.string(), z.unknown()).optional().default({}).describe('Material parameters (baseColor, metallic, roughness, etc.)'),
     expectedStateDigest: z.string().optional().describe('Precondition state digest hash for governed approval'),
   },
   async (args) => {
@@ -295,7 +295,7 @@ server.tool(
 // ── Resource: blender://scene/{id} ─────────────────────────────
 server.resource(
   'blender-scene',
-  new URL('blender://scene/current'),
+  'blender://scene/current',
   async () => {
     try {
       const result = await sendBlenderCommand('blender.get_scene_summary', {});
@@ -314,7 +314,7 @@ server.resource(
 // ── Resource: blender://object/{id} ────────────────────────────
 server.resource(
   'blender-object',
-  new URL('blender://object/{objectId}'),
+  new ResourceTemplate('blender://object/{objectId}', { list: undefined }),
   async (uri) => {
     const objectId = uri.pathname.split('/').pop() || '';
     try {
