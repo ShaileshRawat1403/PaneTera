@@ -13,12 +13,13 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { RigRegistry } from '../server/rig/registry';
+import { verifyStdioSpec } from '../server/rig/transportSecurity';
 import { APP_CONNECTIONS, ensureAppConnections, expectedAppTransport } from '../server/rig/appConnectionRegistry';
 import type { StdioTransportSpec } from '../server/rig/types';
 
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 const AUDIT_LOG = fileURLToPath(new URL('../server/audit.log', import.meta.url));
-const ENV = { PATH: '/usr/bin:/bin', NODE_ENV: 'test', PORTAL_TOKEN: 'test-portal-token' } as NodeJS.ProcessEnv;
+const ENV = { PATH: '/usr/bin:/bin', NODE_ENV: 'test', PORTAL_TOKEN: 'ambient-token-must-not-be-bound' };
 const [BLENDER, REAPER] = APP_CONNECTIONS;
 
 function auditCount(event: string, connectionId: string): number {
@@ -91,6 +92,65 @@ describe('ensureAppConnections', () => {
     assert.equal(record.state, 'approval-required');
     assert.equal(record.launchSpecDigest, null);
     assert.equal(record.connectionApprovalId, null);
+  });
+
+  it('binds no PaneTera credential into a managed child', () => {
+    for (const app of APP_CONNECTIONS) {
+      const names = expectedAppTransport(app, ENV).environment.map((binding) => binding.name);
+      assert.deepEqual(names, ['NODE_ENV', 'PATH']);
+      assert.ok(!JSON.stringify(expectedAppTransport(app, ENV)).includes('ambient-token-must-not-be-bound'));
+    }
+  });
+
+  it('removes a persisted PORTAL_TOKEN binding without recording its value', async () => {
+    const registry = freshRegistry();
+    await ensureAppConnections(registry, ENV);
+    const secret = `legacy-secret-${Date.now()}`;
+    for (const connectionId of ['blender', 'reaper']) {
+      await registry.update(connectionId, (record) => {
+        const transport = record.transport as StdioTransportSpec;
+        return {
+          ...record,
+          state: 'stopped',
+          transport: {
+            ...transport,
+            environment: [
+              transport.environment[0],
+              { name: 'PORTAL_TOKEN', source: 'literal', value: secret },
+              ...transport.environment.slice(1),
+            ],
+          },
+        };
+      });
+    }
+
+    const results = await ensureAppConnections(registry, ENV);
+    assert.deepEqual(results, [
+      { connectionId: 'blender', outcome: 'reconciled', changedFields: ['environment:PORTAL_TOKEN:removed'] },
+      { connectionId: 'reaper', outcome: 'reconciled', changedFields: ['environment:PORTAL_TOKEN:removed'] },
+    ]);
+    for (const connectionId of ['blender', 'reaper']) {
+      const record = registry.get(connectionId)!;
+      assert.deepEqual((record.transport as StdioTransportSpec).environment.map((binding) => binding.name), ['NODE_ENV', 'PATH']);
+      assert.equal(record.state, 'approval-required');
+    }
+    const persisted = fs.readFileSync(path.join(dirs.at(-1)!, 'rig', 'connections.json'), 'utf8');
+    assert.ok(!persisted.includes(secret), 'the persisted registry no longer holds the value');
+    assert.ok(!fs.readFileSync(AUDIT_LOG, 'utf8').includes(secret), 'the audit never records the value');
+  });
+
+  it('passes launch verification now that no credential is bound, where the old binding was rejected', async () => {
+    for (const app of APP_CONNECTIONS) {
+      const expected = expectedAppTransport(app, { ...ENV, PATH: process.env.PATH });
+      const verified = await verifyStdioSpec(expected);
+      assert.deepEqual(Object.keys(verified.env).sort(), ['LANG', 'NODE_ENV', 'PATH']);
+
+      const legacy: StdioTransportSpec = {
+        ...expected,
+        environment: [...expected.environment, { name: 'PORTAL_TOKEN', source: 'literal', value: 'x' }],
+      };
+      await assert.rejects(verifyStdioSpec(legacy), /Environment binding PORTAL_TOKEN is not permitted/);
+    }
   });
 
   it('refuses to overwrite a connection it does not manage, or one that is running, and records the failure', async () => {

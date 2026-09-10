@@ -30,6 +30,9 @@ import { digest } from './canonical';
 import { connectionIdForName, type RigRegistry } from './registry';
 import type { McpTransportSpec, StdioTransportSpec } from './types';
 
+/** The process environment a launch specification is derived from. */
+type Environment = Readonly<Record<string, string | undefined>>;
+
 const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
 const TSX_PATH = path.join(PROJECT_ROOT, 'node_modules', '.bin', 'tsx');
 
@@ -45,15 +48,17 @@ export const APP_CONNECTIONS: readonly AppMcpConnection[] = [
 ];
 
 /** The launch specification a managed application connection must have. */
-export function expectedAppTransport(app: AppMcpConnection, env: NodeJS.ProcessEnv = process.env): StdioTransportSpec {
+export function expectedAppTransport(app: AppMcpConnection, env: Environment = process.env): StdioTransportSpec {
   return {
     kind: 'stdio',
     executablePath: TSX_PATH,
     argv: [app.entryPoint],
     cwd: PROJECT_ROOT,
+    // No PaneTera credential is bound: the Blender and REAPER MCP servers read
+    // none. An earlier version bound PORTAL_TOKEN here; reconciliation removes
+    // that persisted binding, and launch verification rejects it anyway.
     environment: [
       { name: 'NODE_ENV', source: 'literal', value: env.NODE_ENV || 'development' },
-      { name: 'PORTAL_TOKEN', source: 'literal', value: env.PORTAL_TOKEN || '' },
       { name: 'PATH', source: 'literal', value: env.PATH || '/usr/local/bin:/usr/bin:/bin' },
     ],
     isolationMode: 'none',
@@ -101,14 +106,14 @@ let registrationQueue: Promise<unknown> = Promise.resolve();
  */
 export function ensureAppConnections(
   registry: RegistryAccess,
-  env: NodeJS.ProcessEnv = process.env,
+  env: Environment = process.env,
 ): Promise<AppConnectionRegistration[]> {
   const run = registrationQueue.then(() => declareAll(registry, env));
   registrationQueue = run.then(() => undefined, () => undefined);
   return run;
 }
 
-async function declareAll(registry: RegistryAccess, env: NodeJS.ProcessEnv): Promise<AppConnectionRegistration[]> {
+async function declareAll(registry: RegistryAccess, env: Environment): Promise<AppConnectionRegistration[]> {
   const results: AppConnectionRegistration[] = [];
   for (const app of APP_CONNECTIONS) {
     try {
@@ -127,7 +132,7 @@ async function declareAll(registry: RegistryAccess, env: NodeJS.ProcessEnv): Pro
   return results;
 }
 
-async function declare(registry: RegistryAccess, app: AppMcpConnection, env: NodeJS.ProcessEnv): Promise<AppConnectionRegistration> {
+async function declare(registry: RegistryAccess, app: AppMcpConnection, env: Environment): Promise<AppConnectionRegistration> {
   const expected = expectedAppTransport(app, env);
   const existing = registry.get(app.connectionId);
 

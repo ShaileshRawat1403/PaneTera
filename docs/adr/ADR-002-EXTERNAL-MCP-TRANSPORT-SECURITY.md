@@ -376,3 +376,56 @@ teaches the wrong default to every future one.
 
 The Browser Operator façade is unaffected. It is in-process and inbound, and
 remains governed by ADR-001.
+
+## Amendment 2026-09-10: Managed Process Lifecycle
+
+Accepted during stabilisation of the Blender and REAPER integration. It
+hardens the existing stdio lifecycle; it does not redesign it, and it does
+not introduce sandboxing.
+
+### Ownership
+
+- `RigRuntime` owns every child it starts, from approved launch to
+  disconnect or shutdown.
+- One connection attempt runs at a time per connection. A concurrent attempt
+  is refused rather than starting a second child.
+- A transport fault is attributed only while that transport is still the
+  active one, so a late close from a replaced child cannot evict or fault its
+  successor.
+- An unexpected exit records `rig.connection.transport-failed` and marks the
+  connection `unreachable`.
+- Parent shutdown calls `disconnectAll()`, which terminates each child's
+  process group (SIGTERM, then SIGKILL) and refuses new connections. Exit is
+  bounded by a fallback timer.
+
+### Managed connection declarations
+
+- PaneTera-managed connections are declared by `ensureAppConnections`.
+  Declaring starts no process.
+- The expected launch specification is derived from the module location, not
+  the working directory. A managed record whose transport differs is
+  reconciled to it and returned to `approval-required`, with digests and the
+  prior connection approval cleared, so a changed specification never runs
+  under an earlier approval.
+- Reconciliation, registration, and registration failure are audited
+  (`rig.connection.reconciled`, `rig.connection.registered`,
+  `rig.connection.registration-failed`). Changed fields are reported by name
+  only; binding values are never recorded.
+- A record that is not PaneTera-managed, or that is running, is never
+  overwritten; the attempt is recorded as a registration failure.
+- An application that is not running is a normal disconnected state and is
+  never a registration failure.
+
+### Credentials
+
+Managed children receive no ambient PaneTera credentials. The Blender and
+REAPER MCP servers read none, and `PORTAL_TOKEN` is not bound into their
+environment. A binding persisted by an earlier version is removed by
+reconciliation without its value being read into any report.
+
+### Isolation
+
+These children run with `isolationMode: 'none'`. That is a declared runtime
+limitation, not isolation: Rig continues to report memory, CPU,
+file-descriptor, and filesystem limits as unenforced for such connections.
+Sandboxed execution remains future work and is not implied by this amendment.
