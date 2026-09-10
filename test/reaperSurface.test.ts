@@ -181,15 +181,10 @@ describe('projectReaperSurface', () => {
     }
   });
 
-  it('offers only governed propose actions while connected', () => {
+  it('offers no actions while connected: none can supply valid arguments yet (ADR-005)', () => {
     const d = projectReaperSurface(makeReaperSource());
-    assert.deepStrictEqual(d.actions.map((a) => a.behavior), ['propose', 'propose']);
-    const setGain = d.actions.find((a) => a.id === 'set-track-gain');
-    assert.ok(setGain);
-    assert.deepStrictEqual(setGain.capabilityRef, {
-      connectionId: 'reaper',
-      capabilityId: 'reaper.set_track_gain',
-    });
+    assert.strictEqual(d.state.presence, 'live');
+    assert.deepStrictEqual(d.actions, []);
   });
 
   it("applies a successful observation and discards the bridge's own connectivity claim", () => {

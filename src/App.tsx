@@ -66,6 +66,7 @@ import { projectBrowserSurface, projectLocalAppSurface, projectWorkspaceSurface 
 import { projectBlenderSurface, applyBlenderObservation, type BlenderSourceState } from './surfaces/blenderSurface';
 import { projectReaperSurface, applyReaperObservation, type ReaperSourceState } from './surfaces/reaperSurface';
 import { fetchAppObservation } from './utils/appObservation';
+import { proposeAppOperation } from './utils/appOperationProposal';
 import { AppConnectionNotice } from './components/workbench/AppConnectionNotice';
 import { BlenderStateCanvas } from './components/workbench/BlenderStateCanvas';
 import { ReaperStateCanvas } from './components/workbench/ReaperStateCanvas';
@@ -1258,6 +1259,26 @@ const App: React.FC = () => {
    */
   const planExecutors: PlanExecutors = {
     openRig: () => setRigRequestKey((value) => value + 1),
+    // A resolved application operation becomes a Rig proposal with exactly the
+    // values the person gave (ADR-005). Nothing runs here: the stored proposal
+    // is reviewed and approved in Rig, which opens so it can be.
+    proposeAppOperation: async (plan) => {
+      const outcome = await proposeAppOperation(plan, token);
+      if (outcome.kind === 'proposed') {
+        addMessage({
+          role: 'assistant',
+          content: `I proposed **${plan.operation}** with \`${JSON.stringify(outcome.arguments)}\`. Nothing has run yet. Review the stored arguments in Rig and approve them there.`,
+          intent: 'needs_approval',
+        });
+        setRigRequestKey((value) => value + 1);
+        return;
+      }
+      addMessage({
+        role: 'assistant',
+        content: outcome.message,
+        intent: outcome.kind === 'needs-capability' ? 'needs_capability' : 'needs_clarification',
+      });
+    },
     openHeadroom: () => setHeadroomRequestKey((value) => value + 1),
     openEvidence: () => { setShowEvidenceCanvas(true); setActiveComponent(null); },
     webOpen: (plan) => {
@@ -1433,60 +1454,6 @@ const App: React.FC = () => {
     },
     chat: async (plan) => {
       setLoading(true);
-
-      const queryLower = (plan.rawInput || plan.message || '').toLowerCase();
-      if (queryLower.includes('blender') && (queryLower.includes('show') || queryLower.includes('open') || queryLower.includes('inspect') || queryLower.includes('scene') || queryLower.includes('3d') || queryLower.includes('cube') || queryLower.includes('add') || queryLower.includes('connect'))) {
-        setActiveReaperSource(null);
-        setWebPreview(null);
-        setActiveComponent(null);
-        setActiveBlenderSource({ connection: 'connecting' });
-        addMessage({
-          role: 'assistant',
-          content: 'Opened the Blender surface. It shows scene state only once the PaneTera bridge in Blender responds; until then it reports the connection state.',
-          intent: 'live_app',
-        });
-        setLoading(false);
-        return;
-      }
-
-      if (queryLower.includes('reaper') && (queryLower.includes('show') || queryLower.includes('open') || queryLower.includes('inspect') || queryLower.includes('project') || queryLower.includes('audio') || queryLower.includes('mix') || queryLower.includes('vocal'))) {
-        setActiveBlenderSource(null);
-        setWebPreview(null);
-        setActiveComponent(null);
-        setActiveReaperSource({ connection: 'connecting' });
-        addMessage({
-          role: 'assistant',
-          content: 'Opened the REAPER surface. It shows project state only once the PaneTera bridge in REAPER responds; until then it reports the connection state.',
-          intent: 'live_app',
-        });
-        setLoading(false);
-        return;
-      }
-
-      if (queryLower.includes('bevel') || (queryLower.includes('modifier') && queryLower.includes('add'))) {
-        const targetObj = activeBlenderSource?.scene?.objects.find((o: any) => o.type === 'MESH') || activeBlenderSource?.scene?.objects[0];
-        const targetName = targetObj?.name || 'Cube';
-        const targetId = targetObj?.id || 'Cube';
-
-        setActiveComponent({
-          type: 'ProposedAction',
-          data: {
-            id: `blender-bevel-${Date.now()}`,
-            command: `blender.add_modifier(objectId='${targetId}', modifierType='BEVEL', width=0.1, segments=3)`,
-            description: `Add Bevel Modifier to ${targetName} (width: 0.1m, segments: 3)`,
-            workspaceName: 'Blender 5.2',
-            mode: 'safe',
-            evidence: `Precondition digest: ${targetObj?.stateDigest || 'sha256:current'}`,
-          },
-        });
-        addMessage({
-          role: 'assistant',
-          content: `I prepared a governed proposal to add a **Bevel modifier** to **${targetName}** (width: 0.1m, 3 segments). Click **Approve** on the proposal card to execute this on your live Blender session.`,
-          intent: 'needs_approval',
-        });
-        setLoading(false);
-        return;
-      }
 
       const useWorkspaceOrchestrator = plan.endpoint === 'orchestrator';
       // H3b: the standard chat path runs as a streaming governed run. The
@@ -1815,83 +1782,6 @@ const App: React.FC = () => {
   };
 
   const handleApproveAction = async (procId: string, workspaceName: string, command: string) => {
-    if (command.startsWith('blender.')) {
-      // Route through the governed Rig proposal → approval → invocation path
-      try {
-        let action = 'blender.add_modifier';
-        let params: Record<string, unknown> = { objectId: 'Cube', modifierType: 'BEVEL', parameters: { width: 0.1, segments: 3 } };
-        if (command.includes('create_primitive')) {
-          action = 'blender.create_primitive';
-          params = { type: 'CYLINDER', name: 'Cylinder' };
-        }
-        // Step 1: Create a governed proposal
-        const propResp = await fetch('/api/rig/proposals', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({
-            connectionId: 'blender',
-            capabilityId: action,
-            arguments: params,
-            displayArguments: params,
-          }),
-        });
-        if (!propResp.ok) {
-          const err = await propResp.json().catch(() => ({}));
-          addMessage({ role: 'assistant', content: `Proposal failed: ${err.error || propResp.statusText}`, intent: 'needs_capability' });
-          return;
-        }
-        const propData = await propResp.json();
-        const proposalId = propData.proposal?.proposalId;
-        if (!proposalId) {
-          addMessage({ role: 'assistant', content: 'Failed to create proposal.', intent: 'needs_capability' });
-          return;
-        }
-        // Step 2: Approve the proposal
-        const apprResp = await fetch(`/api/rig/proposals/${proposalId}/approve`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ reviewDigest: '' }),
-        });
-        if (!apprResp.ok) {
-          const err = await apprResp.json().catch(() => ({}));
-          addMessage({ role: 'assistant', content: `Approval failed: ${err.error || apprResp.statusText}`, intent: 'needs_capability' });
-          return;
-        }
-        const apprData = await apprResp.json();
-        const approvalId = apprData.approval?.approvalId;
-        if (!approvalId) {
-          addMessage({ role: 'assistant', content: 'Failed to approve proposal.', intent: 'needs_capability' });
-          return;
-        }
-        // Step 3: Invoke through the governed path
-        const invResp = await fetch('/api/rig/invocations', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({
-            connectionId: 'blender',
-            capabilityId: action,
-            approvalId,
-            arguments: params,
-          }),
-        });
-        if (!invResp.ok) {
-          const err = await invResp.json().catch(() => ({}));
-          addMessage({ role: 'assistant', content: `Execution failed: ${err.error || invResp.statusText}`, intent: 'needs_capability' });
-          return;
-        }
-        const invData = await invResp.json();
-        addMessage({
-          role: 'assistant',
-          content: `✓ Executed **${action}** on your live Blender session via governed path.`,
-        });
-        const observation = await fetchAppObservation('/api/blender/scene', token);
-        setActiveBlenderSource((prev) => (prev ? applyBlenderObservation(prev, observation) : prev));
-      } catch (err: any) {
-        addMessage({ role: 'assistant', content: `Blender execution error: ${err.message}`, intent: 'needs_capability' });
-      }
-      return;
-    }
-
     // Also update right feed item
     setPreviewFeed(prev => prev.map(item => item.id === procId ? {
       ...item,

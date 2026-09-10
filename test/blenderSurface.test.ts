@@ -154,15 +154,10 @@ describe('projectBlenderSurface', () => {
     }
   });
 
-  it('offers only governed propose actions while connected', () => {
+  it('offers no actions while connected: none can supply valid arguments yet (ADR-005)', () => {
     const d = projectBlenderSurface(makeBlenderSource());
-    assert.deepStrictEqual(d.actions.map((a) => a.behavior), ['propose', 'propose']);
-    const addMod = d.actions.find((a) => a.id === 'add-modifier');
-    assert.ok(addMod);
-    assert.deepStrictEqual(addMod.capabilityRef, {
-      connectionId: 'blender',
-      capabilityId: 'blender.add_modifier',
-    });
+    assert.strictEqual(d.state.presence, 'live');
+    assert.deepStrictEqual(d.actions, []);
   });
 
   it("applies a successful observation and discards the bridge's own connectivity claim", () => {

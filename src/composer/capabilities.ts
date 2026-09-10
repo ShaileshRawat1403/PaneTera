@@ -22,6 +22,7 @@ export type CapabilityKey =
   | 'headroom:clear'
   | 'run'
   | 'proposal'
+  | 'proposal:propose'
   | 'rig'
   | 'evidence';
 
@@ -41,6 +42,7 @@ export interface PlanExecutors {
   webReload?: (plan: PlanOf<'web-reload'>) => void | Promise<void>;
   selectProject?: (plan: PlanOf<'select-project'>) => void | Promise<void>;
   openLiveApp?: (plan: PlanOf<'open-live-app'>) => void | Promise<void>;
+  proposeAppOperation?: (plan: PlanOf<'propose-app-operation'>) => void | Promise<void>;
   clearContext?: (plan: PlanOf<'clear-context'>) => void | Promise<void>;
   openHeadroom?: (plan: PlanOf<'open-headroom'>) => void | Promise<void>;
   openRig?: (plan: PlanOf<'open-rig'>) => void | Promise<void>;
@@ -64,6 +66,7 @@ export function capabilitiesFrom(executors: PlanExecutors): CapabilityKey[] {
   }
   if (executors.selectProject) claimed.push('project');
   if (executors.openLiveApp) claimed.push('live-app');
+  if (executors.proposeAppOperation) claimed.push('proposal:propose');
   if (executors.clearContext) claimed.push('headroom:clear');
   if (executors.openHeadroom) claimed.push('headroom');
   if (executors.openRig) claimed.push('rig');
@@ -110,6 +113,8 @@ export async function executePlan(
       return run(executors.selectProject);
     case 'open-live-app':
       return run(executors.openLiveApp);
+    case 'propose-app-operation':
+      return run(executors.proposeAppOperation);
     case 'clear-context':
       return run(executors.clearContext);
     case 'open-headroom':

@@ -10,10 +10,7 @@
 //   - Never executes capabilities, makes network calls, or accesses stores.
 //   - Never imports React or returns ReactNode values.
 
-import type {
-  SurfaceDescriptor,
-  SurfaceAction,
-} from './types';
+import type { SurfaceDescriptor } from './types';
 import {
   describeAppConnection,
   isRecord,
@@ -115,36 +112,6 @@ export interface ReaperSourceState {
 
 // ─── Projection ───────────────────────────────────────────────────
 
-function deriveReaperActions(live: boolean): SurfaceAction[] {
-  if (!live) return [];
-
-  // Observe actions (read peaks, check LUFS) were removed: nothing performed
-  // them, and an affordance without an implementation implies a capability
-  // PaneTera does not have.
-  return [
-    {
-      id: 'set-track-gain',
-      label: 'Adjust Gain',
-      icon: 'sliders',
-      behavior: 'propose',
-      capabilityRef: {
-        connectionId: 'reaper',
-        capabilityId: 'reaper.set_track_gain',
-      },
-    },
-    {
-      id: 'add-fx',
-      label: 'Insert FX',
-      icon: 'plus',
-      behavior: 'propose',
-      capabilityRef: {
-        connectionId: 'reaper',
-        capabilityId: 'reaper.add_fx',
-      },
-    },
-  ];
-}
-
 /**
  * Projects REAPER source state into a SurfaceDescriptor.
  *
@@ -188,7 +155,10 @@ export function projectReaperSurface(source: ReaperSourceState): SurfaceDescript
       presence: presenceForAppConnection(source.connection, project !== undefined),
     },
 
-    actions: deriveReaperActions(live),
+    // No actions yet. Every governed REAPER operation needs arguments this
+    // surface cannot collect, and a proposal without them is invalid (ADR-005).
+    // Observe actions were removed earlier because nothing performed them.
+    actions: [],
 
     view: {
       mode: viewMode,

@@ -40,6 +40,7 @@ export type SubmissionPlan =
   | { kind: 'web-reload' }
   | { kind: 'select-project'; target: string }
   | { kind: 'open-live-app'; target: string }
+  | { kind: 'propose-app-operation'; appId: string; operation: string; parameters: Record<string, unknown> }
   | { kind: 'clear-context' }
   | { kind: 'open-headroom' }
   | { kind: 'open-rig' }
@@ -214,6 +215,15 @@ export function planSubmission(input: SubmissionInput): SubmissionPlan {
         context: describeContext(context),
       };
     case 'proposal':
+      if (action === 'propose' && intent.args.appId && intent.args.operation) {
+        return {
+          kind: 'propose-app-operation',
+          appId: intent.args.appId,
+          operation: intent.args.operation,
+          parameters: intent.args.parameters ?? {},
+        };
+      }
+      return { kind: 'open-rig' };
     case 'rig':
       return { kind: 'open-rig' };
     case 'evidence':

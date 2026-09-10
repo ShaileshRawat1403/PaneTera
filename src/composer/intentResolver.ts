@@ -21,6 +21,7 @@ import {
   matchProjectPhrase,
   matchRunPhrase,
 } from './naturalLanguageSelectors';
+import { matchAppOperationPhrase, missingOperationFields, operationFieldPrompt } from './appOperationIntent';
 import type { CapabilityKey } from './capabilities';
 import type {
   AssertedBy,
@@ -165,6 +166,18 @@ function evaluateReadiness(
     }
 
     case 'proposal': {
+      if (args.action === 'propose' && args.operation) {
+        const missingFields = missingOperationFields(args.operation, args.parameters ?? {});
+        if (missingFields.length > 0) {
+          for (const field of missingFields) {
+            missing.push({ kind: 'target', prompt: operationFieldPrompt(args.operation, field) });
+          }
+          return { readiness: 'needs-clarification', missing, surface: null };
+        }
+        // Creating a proposal runs nothing: the stored proposal still waits
+        // for review and approval in Rig (ADR-005).
+        return { readiness: 'ready', missing, surface: SURFACE_BY_FAMILY[family] };
+      }
       missing.push({ kind: 'approval', prompt: 'This needs your approval before it runs.' });
       return { readiness: 'needs-approval', missing, surface: SURFACE_BY_FAMILY[family] };
     }
@@ -335,6 +348,22 @@ function selectFromNaturalLanguage(input: string, context: ResolverContext): Fam
   const projectMatch = matchProjectPhrase(input);
   if (projectMatch) {
     return { family: 'project', args: { target: projectMatch.target } };
+  }
+
+  // A named operation on a registered application becomes structured intent
+  // for a proposal (ADR-005). The matcher accepts only explicit phrasings and
+  // never supplies a value the person did not give.
+  const appOperation = matchAppOperationPhrase(input);
+  if (appOperation) {
+    return {
+      family: 'proposal',
+      args: {
+        action: 'propose',
+        appId: appOperation.appId,
+        operation: appOperation.operation,
+        parameters: appOperation.parameters,
+      },
+    };
   }
 
   // A request to start a named live preview is presentation intent, not a

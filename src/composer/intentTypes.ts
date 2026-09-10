@@ -73,6 +73,12 @@ export interface IntentArgs {
   label?: string;
   target?: string;
   action?: string;
+  /** Application operation (ADR-005): the registered application. */
+  appId?: string;
+  /** Application operation: the capability operation, e.g. blender.add_modifier. */
+  operation?: string;
+  /** Application operation: only values the person actually gave. */
+  parameters?: Record<string, unknown>;
 }
 
 export interface IntentEnvelope {
