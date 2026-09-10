@@ -108,12 +108,18 @@ const focusRing = {
 
 const topBarButton = {
   color: ink.secondary,
-  px: 1.25,
-  minHeight: 34,
-  borderRadius: `${radius.sm}px`,
-  border: '1px solid transparent',
-  transition: transition(['background-color', 'color', 'border-color']),
-  '&:hover': { color: ink.primary, backgroundColor: surface.overlay },
+  px: 1.35,
+  minHeight: 32,
+  borderRadius: `${radius.pill}px`,
+  border: `1px solid ${surface.border}`,
+  backgroundColor: surface.sunken,
+  transition: transition(['background-color', 'color', 'border-color', 'box-shadow']),
+  '&:hover': {
+    color: ink.primary,
+    backgroundColor: surface.raised,
+    borderColor: surface.borderStrong,
+    boxShadow: `0 2px 8px rgba(var(--panetera-glass-raised-rgb), 0.04), ${elevation.raised}`,
+  },
   // A practical 44px target on touch, where a hairline control is hard to hit.
   '@media (pointer: coarse)': { minHeight: 44 },
   ...focusRing,
@@ -440,16 +446,19 @@ export function WorkstationShell({
                 ...topBarButton,
                 display: 'flex',
                 alignItems: 'center',
-                gap: 0.75,
-                py: 0.625,
+                gap: 0.85,
+                px: 1.4,
+                py: 0.5,
                 minWidth: 0,
-                // The project selector is the current workspace context, so it
-                // reads as a filled control rather than a bare label. Grouped
-                // with the identity to its left, the two form one context block;
-                // the utilities on the right stay quieter by comparison.
                 backgroundColor: surface.sunken,
-                borderColor: surface.border,
-                '&:hover': { color: ink.primary, backgroundColor: surface.overlay, borderColor: surface.borderStrong },
+                border: `1px solid ${surface.border}`,
+                boxShadow: `0 1px 3px rgba(var(--panetera-glass-raised-rgb), 0.02), ${elevation.raised}`,
+                '&:hover': {
+                  color: ink.primary,
+                  backgroundColor: surface.raised,
+                  borderColor: surface.borderStrong,
+                  boxShadow: `0 2px 8px rgba(var(--panetera-glass-raised-rgb), 0.04), ${elevation.raised}`,
+                },
               }}
             >
               <AccountTreeIcon sx={{ fontSize: 16, color: ink.muted }} />
@@ -650,6 +659,8 @@ export function WorkstationShell({
                 minHeight: 0,
                 position: 'relative',
                 flexGrow: 1,
+                overflowY: 'auto',
+                overflowX: 'hidden',
                 // Deliberately flat. The canvas is the authoritative surface, so
                 // whatever it holds should be the only thing competing for
                 // attention. The former grid and violet bloom carried no

@@ -98,6 +98,43 @@ describe('the start actions invoke their handlers', () => {
     assert.strictEqual(described, 1, 'the third start moves focus to the composer');
     await act(async () => { root.unmount(); });
   });
+
+  it('routes integrated capability chips to dedicated workbench launchers', async () => {
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    const win = installDom();
+    const { createRoot } = await import('react-dom/client');
+    const { act } = await import('react');
+
+    let blender = 0;
+    let reaper = 0;
+    let ast = 0;
+    let chose = 0;
+    const container = win.document.createElement('div');
+    win.document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(React.createElement(CanvasStart, {
+        onChooseProject: () => { chose += 1; },
+        onConnectCapability: () => {},
+        onDescribeGoal: () => {},
+        onOpenBlender: () => { blender += 1; },
+        onOpenReaper: () => { reaper += 1; },
+        onOpenAst: () => { ast += 1; },
+      }));
+    });
+    const blenderChip = container.querySelector('[aria-label*="Blender"]') as HTMLElement;
+    const reaperChip = container.querySelector('[aria-label*="REAPER"]') as HTMLElement;
+    const astChip = container.querySelector('[aria-label*="AST"]') as HTMLElement;
+    assert.ok(blenderChip && reaperChip && astChip, 'all plugin chips render with accessible labels');
+    await act(async () => { blenderChip.dispatchEvent(new win.MouseEvent('click', { bubbles: true })); });
+    await act(async () => { reaperChip.dispatchEvent(new win.MouseEvent('click', { bubbles: true })); });
+    await act(async () => { astChip.dispatchEvent(new win.MouseEvent('click', { bubbles: true })); });
+    assert.strictEqual(blender, 1, 'blender chip fired its own launcher');
+    assert.strictEqual(reaper, 1, 'reaper chip fired its own launcher');
+    assert.strictEqual(ast, 1, 'ast chip fired its own launcher');
+    assert.strictEqual(chose, 0, 'clicking plugin chips stopped propagation to choose project');
+    await act(async () => { root.unmount(); });
+  });
 });
 
 describe('the workstation slice stays on theme tokens', () => {

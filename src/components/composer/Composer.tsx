@@ -390,16 +390,20 @@ export const Composer: React.FC<Props> = ({
           submit();
         }}
         sx={{
-          p: 1,
-          borderRadius: `${radius.lg}px`,
+          p: 1.5,
+          borderRadius: `${radius.lg + 8}px`,
           backgroundColor: surface.raised,
           border: `1px solid ${surface.border}`,
-          boxShadow: elevation.raised,
-          transition: transition(['border-color', 'box-shadow']),
-          '&:hover': { borderColor: surface.borderStrong },
+          boxShadow: `0 8px 32px rgba(var(--panetera-glass-raised-rgb), 0.08), 0 2px 8px rgba(var(--panetera-glass-raised-rgb), 0.04), ${elevation.raised}`,
+          transition: transition(['border-color', 'box-shadow', 'background-color']),
+          '&:hover': {
+            borderColor: surface.borderStrong,
+            boxShadow: `0 12px 36px rgba(var(--panetera-glass-raised-rgb), 0.12), ${elevation.raised}`,
+          },
           '&:focus-within': {
-            borderColor: accent.violetBorder,
-            boxShadow: elevation.focusRing,
+            borderColor: accent.violet,
+            boxShadow:
+              '0 0 0 3.5px rgba(var(--panetera-glass-violet-rgb), 0.2), 0 12px 36px rgba(var(--panetera-glass-violet-rgb), 0.12)',
           },
         }}
       >
@@ -418,7 +422,8 @@ export const Composer: React.FC<Props> = ({
           InputProps={{
             disableUnderline: true,
             sx: {
-              px: 0.5,
+              px: 0.75,
+              py: 0.25,
               fontSize: '0.9375rem',
               lineHeight: 1.6,
               color: ink.primary,
@@ -427,6 +432,11 @@ export const Composer: React.FC<Props> = ({
               // signal that the composer is in command mode.
               fontFamily: state.value.startsWith('/') ? typography.mono : typography.sans,
               transition: transition(['font-family']),
+              '& textarea': {
+                outline: 'none !important',
+                boxShadow: 'none !important',
+                border: 'none !important',
+              },
               '& textarea::placeholder': { color: ink.muted, opacity: 1 },
             },
             inputProps: {
@@ -490,18 +500,34 @@ export const Composer: React.FC<Props> = ({
                 onClick={submit}
                 disabled={!canSend}
                 sx={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: `${radius.pill}px`,
                   backgroundColor: canSend ? accent.violet : 'transparent',
                   color: canSend ? ink.onAccent : ink.disabled,
-                  transition: transition(['background-color', 'color']),
+                  boxShadow: canSend
+                    ? '0 2px 10px rgba(var(--panetera-glass-violet-rgb), 0.35)'
+                    : 'none',
+                  transition: transition([
+                    'background-color',
+                    'color',
+                    'transform',
+                    'box-shadow',
+                  ]),
                   '&:hover': {
                     backgroundColor: canSend ? accent.violet : surface.sunken,
                     color: canSend ? ink.onAccent : ink.secondary,
                     filter: canSend ? 'brightness(1.08)' : 'none',
+                    transform: canSend ? 'scale(1.06)' : 'none',
+                    boxShadow: canSend
+                      ? '0 4px 14px rgba(var(--panetera-glass-violet-rgb), 0.45)'
+                      : 'none',
                   },
+                  '&:active': canSend ? { transform: 'scale(0.92)' } : {},
                   '&.Mui-disabled': { color: ink.disabled },
                 }}
               >
-                <SendIcon sx={{ fontSize: 17 }} />
+                <SendIcon sx={{ fontSize: 16 }} />
               </IconButton>
             </span>
           </Tooltip>

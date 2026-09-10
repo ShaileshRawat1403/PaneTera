@@ -186,6 +186,23 @@ describe('honest degraded states', () => {
     assert.strictEqual(envelope.readiness, 'ready');
   });
 
+  it('opens Blender, REAPER, and Browser Operator directly from natural language', () => {
+    const blenderEnv = resolveIntent('open blender in brower operator');
+    assert.strictEqual(blenderEnv.family, 'live-app');
+    assert.strictEqual(blenderEnv.args.target, 'blender');
+    assert.strictEqual(blenderEnv.readiness, 'ready');
+
+    const reaperEnv = resolveIntent('open reaper');
+    assert.strictEqual(reaperEnv.family, 'live-app');
+    assert.strictEqual(reaperEnv.args.target, 'reaper');
+    assert.strictEqual(reaperEnv.readiness, 'ready');
+
+    const browserEnv = resolveIntent('open browser operator');
+    assert.strictEqual(browserEnv.family, 'live-app');
+    assert.strictEqual(browserEnv.args.target, 'browser');
+    assert.strictEqual(browserEnv.readiness, 'ready');
+  });
+
   it('asks which application when a live preview request has no target', () => {
     const envelope = resolveIntent('open live preview');
     assert.strictEqual(envelope.family, 'live-app');

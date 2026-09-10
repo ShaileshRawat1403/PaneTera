@@ -89,11 +89,16 @@ export function CockpitReadout({ summary }: { summary: CockpitSummary }): React.
       role="status"
       aria-label="Cockpit status"
       sx={{
-        display: 'flex',
+        display: 'inline-flex',
         alignItems: 'center',
-        gap: 1.25,
+        gap: 1.1,
         minWidth: 0,
         overflow: 'hidden',
+        px: 1.25,
+        py: 0.35,
+        backgroundColor: surface.sunken,
+        border: `1px solid ${surface.border}`,
+        borderRadius: `${radius.pill}px`,
       }}
     >
       {/* Session. First to go when the bar is tight: an identifier, not a state. */}

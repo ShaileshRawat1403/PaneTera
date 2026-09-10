@@ -89,7 +89,9 @@ export type SurfaceRendererType =
   | 'rig-structured-view'
   | 'markdown-artifact'
   | 'diff-viewer'
-  | 'workspace-catalog';
+  | 'workspace-catalog'
+  | 'blender-scene-state'
+  | 'reaper-project-state';
 
 // ─── Surface Descriptor ───────────────────────────────────────────
 
@@ -110,7 +112,7 @@ export interface SurfaceDescriptor {
   id: string;
 
   /** What kind of upstream source this surface projects. */
-  kind: 'browser' | 'local-app' | 'mcp' | 'artifact' | 'workspace';
+  kind: 'browser' | 'local-app' | 'mcp' | 'artifact' | 'workspace' | 'blender' | 'reaper';
 
   /** Zone 1: Identity & Context. */
   identity: {

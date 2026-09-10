@@ -12,6 +12,7 @@ import { useEvidencePanel, EvidenceSourceItem } from './useEvidencePanel';
 import { EvidenceTabs } from './EvidenceTabs';
 import { EvidenceContent } from './EvidenceContent';
 import { accent, ink, radius, status, surface, typography } from '../../theme/cssTokens';
+import { transition } from '../../theme/motion';
 
 interface EvidencePanelProps {
   initialSources?: EvidenceSourceItem[];
@@ -125,7 +126,7 @@ export const EvidencePanel: React.FC<EvidencePanelProps> = ({ initialSources }) 
           </Box>
 
           {!isExpanded && (
-            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ display: { xs: 'none', sm: 'flex' } }}>
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ display: { xs: 'none', sm: 'flex' } }}>
               {summary.map((item) => (
                 <Chip
                   key={item.id}
@@ -134,11 +135,17 @@ export const EvidencePanel: React.FC<EvidencePanelProps> = ({ initialSources }) 
                   size="small"
                   sx={{
                     height: 22,
-                    fontSize: '0.68rem',
+                    fontSize: '0.6875rem',
                     fontFamily: typography.mono,
+                    borderRadius: `${radius.pill}px`,
                     backgroundColor: surface.sunken,
                     color: item.type === 'alert' ? status.brass : ink.secondary,
                     border: `1px solid ${item.type === 'alert' ? status.brassMuted : surface.border}`,
+                    transition: transition(['background-color', 'border-color', 'color']),
+                    '&:hover': {
+                      borderColor: surface.borderStrong,
+                      backgroundColor: surface.raised,
+                    },
                   }}
                 />
               ))}
@@ -157,18 +164,18 @@ export const EvidencePanel: React.FC<EvidencePanelProps> = ({ initialSources }) 
             }}
             endIcon={isExpanded ? <KeyboardArrowDownIcon sx={{ fontSize: 16 }} /> : <KeyboardArrowUpIcon sx={{ fontSize: 16 }} />}
             sx={{
-              fontSize: '0.7rem',
+              fontSize: '0.72rem',
               fontWeight: 600,
-              fontFamily: typography.mono,
               color: ink.secondary,
               textTransform: 'none',
-              borderRadius: `${radius.sm}px`,
+              borderRadius: `${radius.pill}px`,
               px: 1.5,
-              py: 0.25,
+              py: 0.3,
               backgroundColor: surface.sunken,
               border: `1px solid ${surface.border}`,
+              transition: transition(['background-color', 'border-color', 'color']),
               '&:hover': {
-                backgroundColor: surface.overlay,
+                backgroundColor: surface.raised,
                 borderColor: surface.borderStrong,
                 color: ink.primary,
               },

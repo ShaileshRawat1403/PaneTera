@@ -49,10 +49,9 @@ import { runOperatorAsRun, type OperatorRunResult } from './operatorRun';
 import { readOpenAIStream, normalizeUsage } from './openaiStream';
 import { modelRouter } from './modelRoutes';
 import { schemaRouter } from './schema/routes';
+import { blenderRouter } from './creative/blenderRoutes';
+import { reaperRouter } from './creative/reaperRoutes';
 import { registerItOpsDomain } from './domains/itops/tools';
-
-// Register IT Ops domain schemas on startup
-registerItOpsDomain();
 import { LocalScopeStore, type LocalSelectionKind, type LocalSelectionGrant } from './headroom/localScopeStore';
 import { PANETERA_ASSISTANT_INSTRUCTION } from './assistantInstruction';
 import { geminiGenerateContentUrl, DEFAULT_GEMINI_MODEL } from './modelConfig';
@@ -170,6 +169,23 @@ app.use('/api/tessera', tesseraRouter);
 app.use('/api/agent', agentRouter);
 app.use('/api/models', modelRouter);
 app.use('/api/schemas', schemaRouter);
+app.use('/api/blender', blenderRouter);
+app.use('/api/reaper', reaperRouter);
+
+// ── Rig MCP Connections: Blender & Reaper ──────────────────────
+// Register Blender and REAPER as stdio MCP connections in the Rig.
+// These connections are gated by approval and governed invocation.
+
+import { registerAppMcpConnection } from './rig/appConnectionRegistry';
+
+// Register IT Ops domain schemas on startup
+registerItOpsDomain();
+
+// Register Blender MCP connection (uses tsx to launch the MCP server)
+registerAppMcpConnection('blender', rigRegistry, rigRuntime);
+
+// Register REAPER MCP connection
+registerAppMcpConnection('reaper', rigRegistry, rigRuntime);
 
 // ── Rook MCP Memory Bridge (optional) ────────────────────────────────────────
 // Spawns `rook mcp memory` as a child process and communicates over stdio

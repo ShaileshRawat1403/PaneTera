@@ -252,7 +252,21 @@ function looksLikeUrlAttempt(value: string): boolean {
 }
 
 function matchLiveApplicationPhrase(input: string): { target?: string } | null {
-  const match = input.trim().match(/^(?:open|show|start|launch)\s+(?:the\s+)?(?:live\s+)?(?:app|application|preview)(?:\s+(?:for|of))?(?:\s+(.+))?$/i);
+  const trimmed = input.trim();
+
+  // Direct named studio and application phrases (e.g. "open blender", "open blender in brower operator", "launch reaper")
+  const directMatch = trimmed.match(
+    /^(?:open|show|start|launch|inspect|view)?\s*(?:the\s+)?(blender|reaper|browser\s+operator|soothsayer)(?:\s+3d)?(?:\s+studio)?(?:\s+daw|\s+audio)?(?:\s+(?:in|via|on|with|for)\s+(?:.+))?$/i,
+  );
+  if (directMatch) {
+    const rawTarget = directMatch[1]?.trim() || '';
+    if (/blender/i.test(rawTarget)) return { target: 'blender' };
+    if (/reaper/i.test(rawTarget)) return { target: 'reaper' };
+    if (/browser/i.test(rawTarget)) return { target: 'browser' };
+    if (/soothsayer/i.test(rawTarget)) return { target: 'soothsayer' };
+  }
+
+  const match = trimmed.match(/^(?:open|show|start|launch)\s+(?:the\s+)?(?:live\s+)?(?:app|application|preview)(?:\s+(?:for|of))?(?:\s+(.+))?$/i);
   if (!match) return null;
   const target = match[1]?.trim();
   return target ? { target } : {};

@@ -85,6 +85,7 @@ export function BrowserOperatorConnection({ token }: Props): React.ReactElement 
       offeredPairingCodeRef.current = null;
       setPairingCode(null);
       setOfferDelivered(false);
+      setNotice(null);
     } else if (!value.pending && pairingCodeRef.current) {
       pairingCodeRef.current = null;
       offeredPairingCodeRef.current = null;

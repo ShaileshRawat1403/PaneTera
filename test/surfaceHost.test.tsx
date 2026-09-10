@@ -456,7 +456,7 @@ describe('the migration is one branch, not a rewrite', () => {
     }
 
     const hosts = appSource.split('<SurfaceHost').length - 1;
-    assert.strictEqual(hosts, 3, 'browser, local app and workspace have migrated; the rest have not');
+    assert.strictEqual(hosts, 5, 'browser, local app, workspace, blender, and reaper have migrated');
     assert.ok(
       !appSource.includes('LiveWorkbenchToolbar'),
       'the local app bespoke toolbar is gone, replaced rather than stacked',

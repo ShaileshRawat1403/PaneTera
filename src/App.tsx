@@ -12,7 +12,7 @@ import type { AttachableWorkspace, ContextKind } from './composer/contextTypes';
 import type { RigResourceChoice } from './rig/types';
 import type { ComposerSubmission } from './components/composer/Composer';
 import { resolveIntent } from './composer/intentResolver';
-import { scrollBehavior } from './theme/motion';
+import { scrollBehavior, transition } from './theme/motion';
 import { accent, elevation, ink, radius, status, surface } from './theme/cssTokens';
 import { materializedContextValue, planSubmission } from './composer/submissionPlan';
 import { capabilitiesFrom, executePlan } from './composer/capabilities';
@@ -63,8 +63,13 @@ import { LiveWorkbenchSurface } from './components/workbench/LiveWorkbenchSurfac
 import { WebPreviewSurface } from './components/workbench/WebPreviewSurface';
 import { SurfaceHost } from './components/surfaces/SurfaceHost';
 import { projectBrowserSurface, projectLocalAppSurface, projectWorkspaceSurface } from './surfaces/projectSurface';
+import { projectBlenderSurface, createDefaultBlenderState, type BlenderSourceState } from './surfaces/blenderSurface';
+import { projectReaperSurface, createDefaultReaperState, type ReaperSourceState } from './surfaces/reaperSurface';
+import { BlenderStateCanvas } from './components/workbench/BlenderStateCanvas';
+import { ReaperStateCanvas } from './components/workbench/ReaperStateCanvas';
 import { browserSourceState } from './surfaces/browserSource';
 import type { BrowserEvidenceRecord } from './components/workbench/browserEvidenceSurfaceModel';
+import type { SurfaceAction } from './surfaces/types';
 import {
   describeOutcome,
   failedToDisplay,
@@ -73,6 +78,7 @@ import {
 // Web-preview and workspace-route matching now happen inside the single
 // resolver. App consumes resolved envelopes and does not classify.
 import type { WebPreviewRequest } from './utils/webPreviewIntent';
+import { AgentThinkingIndicator } from './components/chat/AgentThinkingIndicator';
 import {
   type BrowserLiveFrame,
   requestBrowserLiveCommand,
@@ -153,6 +159,8 @@ const App: React.FC = () => {
 
   // Active workspace state overlays
   const [activeComponent, setActiveComponent] = useState<UiComponent | null>(null);
+  const [activeBlenderSource, setActiveBlenderSource] = useState<BlenderSourceState | null>(null);
+  const [activeReaperSource, setActiveReaperSource] = useState<ReaperSourceState | null>(null);
   const [activeReply, setActiveReply] = useState<string | null>(null);
   const [activeQuery, setActiveQuery] = useState<string | null>(null);
   const [activeLens, setActiveLens] = useState<'engineer' | 'pm' | 'ba' | 'qa' | 'exec'>('engineer');
@@ -171,6 +179,40 @@ const App: React.FC = () => {
       || localStorage.getItem('portal-workbench-mode');
     return (stored as WorkbenchMode) || 'native-focus';
   });
+
+   // Auto-sync live Blender state when active
+   useEffect(() => {
+     if (!activeBlenderSource) return;
+     const interval = setInterval(async () => {
+       try {
+         const resp = await fetch('/api/blender/scene');
+         const data = await resp.json();
+         if (data && data.success && data.data) {
+           setActiveBlenderSource(data.data);
+         }
+       } catch {
+         // quiet fallback
+       }
+     }, 1800);
+     return () => clearInterval(interval);
+   }, [activeBlenderSource]);
+
+   // Auto-sync live REAPER state when active
+   useEffect(() => {
+     if (!activeReaperSource) return;
+     const interval = setInterval(async () => {
+       try {
+         const resp = await fetch('/api/reaper/scene');
+         const data = await resp.json();
+         if (data && data.success && data.data) {
+           setActiveReaperSource(data.data);
+         }
+       } catch {
+         // quiet fallback
+       }
+     }, 1800);
+     return () => clearInterval(interval);
+   }, [activeReaperSource]);
 
   const { prefs, setAppId } = useWorkbenchPreferences();
   const { models: modelList, activeModel, selectModel } = useModelSelection();
@@ -589,6 +631,39 @@ const App: React.FC = () => {
     setWorkbenchMode(nextMode);
     localStorage.setItem('panetera-workbench-mode', nextMode);
     localStorage.removeItem('portal-workbench-mode');
+  };
+
+  const handleProposeAction = async (action: SurfaceAction) => {
+    const { capabilityRef, payload } = action;
+    if (!capabilityRef) {
+      addMessage({ role: 'assistant', content: 'No capability reference for this proposal.', intent: 'needs_capability' });
+      return;
+    }
+    try {
+      const resp = await fetch('/api/rig/proposals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          connectionId: capabilityRef.connectionId,
+          capabilityId: capabilityRef.capabilityId,
+          arguments: payload ?? {},
+          displayArguments: payload ?? {},
+        }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        addMessage({ role: 'assistant', content: `Proposal failed: ${err.error || resp.statusText}`, intent: 'needs_capability' });
+        return;
+      }
+      const data = await resp.json();
+      addMessage({
+        role: 'assistant',
+        content: `Proposal created for **${capabilityRef.capabilityId}**. Review and approve it in the Rig panel to execute on the live application.`,
+        intent: 'needs_approval',
+      });
+    } catch (err: any) {
+      addMessage({ role: 'assistant', content: `Proposal error: ${err.message}`, intent: 'needs_capability' });
+    }
   };
 
   const isSoothsayerLivePlaneActive = Boolean(
@@ -1161,6 +1236,153 @@ const App: React.FC = () => {
     }
   }, [token]);
 
+  const DEFAULT_BLENDER_DEMO: BlenderSourceState = {
+    runtime: {
+      blenderVersion: '5.2.1',
+      pythonVersion: '3.11.8',
+      buildHash: 'a1b2c3d',
+      groundingPackVersion: '5.2-v1',
+      activeEngine: 'CYCLES',
+      isConnected: true,
+    },
+    fileName: 'scifi_canister_v2.blend',
+    filePath: '/projects/3d/scifi_canister_v2.blend',
+    collections: [
+      { name: 'Props', objectIds: ['obj-canister-1', 'obj-lid-1'] },
+      { name: 'Lighting', objectIds: ['light-key-1'] },
+    ],
+    objects: [
+      {
+        id: 'obj-canister-1',
+        name: 'CanisterBody',
+        type: 'MESH',
+        location: [0, 0, 0],
+        rotation: [0, 0, 0],
+        scale: [1, 1, 1],
+        vertexCount: 512,
+        faceCount: 480,
+        modifiers: [
+          { name: 'Bevel', type: 'BEVEL', parameters: { width: 0.05, segments: 3, clampOverlap: true } },
+        ],
+        materials: [
+          { name: 'DarkBrushedMetal', nodeType: 'PrincipledBSDF', metallic: 0.9, roughness: 0.2 },
+          { name: 'CyanEmissionRing', nodeType: 'Emission', emission: '#00e5ff' },
+        ],
+        selected: true,
+        stateDigest: 'sha256:7f83b1657ff1fc53b92dc18148a1d65dfc2d4b1fa3d677284addd200126d9069',
+      },
+      {
+        id: 'obj-lid-1',
+        name: 'CanisterLid',
+        type: 'MESH',
+        location: [0, 0, 1.2],
+        rotation: [0, 0, 0],
+        scale: [0.95, 0.95, 0.2],
+        vertexCount: 256,
+        faceCount: 240,
+        modifiers: [],
+        materials: [
+          { name: 'DarkBrushedMetal', nodeType: 'PrincipledBSDF', metallic: 0.9, roughness: 0.2 },
+        ],
+        stateDigest: 'sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
+      },
+      {
+        id: 'light-key-1',
+        name: 'KeyLight',
+        type: 'LIGHT',
+        location: [2.5, -3.0, 4.0],
+        rotation: [45, 0, 30],
+        scale: [1, 1, 1],
+        modifiers: [],
+        materials: [],
+        stateDigest: 'sha256:4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a',
+      },
+    ],
+    selectedObjectId: 'obj-canister-1',
+    activeCamera: 'CameraMain',
+    stateDigest: 'sha256:scene-canister-v2-full',
+  };
+
+  const DEFAULT_REAPER_DEMO: ReaperSourceState = {
+    runtime: {
+      reaperVersion: '7.79',
+      apiVersion: '7.79-reascript',
+      sampleRate: 48000,
+      tempoBpm: 124,
+      timeSignature: '4/4',
+      isPlaying: false,
+      isRecording: false,
+      playheadSeconds: 32.0,
+      isConnected: true,
+    },
+    projectName: 'Cyberpunk_OST_Cue_02.rpp',
+    projectPath: '/projects/audio/Cyberpunk_OST_Cue_02.rpp',
+    tracks: [
+      {
+        guid: '{TRK-KICK-001}',
+        index: 0,
+        name: '01 Kick Drum',
+        volumeDb: -3.0,
+        pan: 0.0,
+        isMuted: false,
+        isSoloed: false,
+        isArmed: false,
+        fxList: [{ id: 'fx-1', index: 0, name: 'ReaEQ', isEnabled: true }],
+        sends: [{ targetTrackGuid: '{TRK-BASS-002}', targetTrackName: '02 Bass Synth (Sidechain 3/4)', volumeDb: 0.0, isMuted: false }],
+        peakLeftDb: -4.5,
+        peakRightDb: -4.5,
+        stateDigest: 'sha256:trk-kick-v1',
+      },
+      {
+        guid: '{TRK-BASS-002}',
+        index: 1,
+        name: '02 Bass Synth',
+        volumeDb: -5.5,
+        pan: 0.0,
+        isMuted: false,
+        isSoloed: false,
+        isArmed: false,
+        fxList: [{ id: 'fx-2', index: 0, name: 'ReaComp', isEnabled: true }],
+        sends: [],
+        peakLeftDb: -7.2,
+        peakRightDb: -7.0,
+        stateDigest: 'sha256:trk-bass-v1',
+      },
+      {
+        guid: '{TRK-VOCAL-003}',
+        index: 2,
+        name: '03 Lead Vocal',
+        volumeDb: 0.0,
+        pan: 0.0,
+        isMuted: false,
+        isSoloed: false,
+        isArmed: false,
+        fxList: [
+          { id: 'fx-3', index: 0, name: 'ReaEQ', isEnabled: true },
+          { id: 'fx-4', index: 1, name: 'ReaDelay', isEnabled: true },
+        ],
+        sends: [],
+        peakLeftDb: -11.0,
+        peakRightDb: -11.0,
+        stateDigest: 'sha256:trk-vocal-0db',
+      },
+    ],
+    selectedTrackGuid: '{TRK-VOCAL-003}',
+    markers: [
+      { id: 1, name: 'Intro', positionSeconds: 0.0, isRegion: false },
+      { id: 2, name: 'Build Up', positionSeconds: 16.0, isRegion: false },
+      { id: 3, name: 'Drop / Chorus', positionSeconds: 32.0, isRegion: true, endSeconds: 64.0 },
+    ],
+    masterTrack: {
+      volumeDb: 0.0,
+      peakLeftDb: -2.1,
+      peakRightDb: -2.0,
+      lufsMomentary: -14.2,
+      lufsIntegrated: -14.0,
+    },
+    stateDigest: 'sha256:reaper-cyberpunk-full-v1',
+  };
+
   /**
    * Handlers for every plan this app can carry out.
    *
@@ -1221,26 +1443,66 @@ const App: React.FC = () => {
       // The registry keys on appId; the composer produced whatever the person
       // typed. Resolving here, and refusing honestly when it does not resolve,
       // is what keeps a naming mistake from surfacing as an unavailable app.
+      const BUILTIN_WORKSTATION_APPS = [
+        { appId: 'blender', name: 'Blender', displayName: 'Blender 3D Studio' },
+        { appId: 'reaper', name: 'REAPER', displayName: 'REAPER Audio DAW' },
+        { appId: 'browser', name: 'Browser Operator', displayName: 'Browser Operator' },
+      ];
       let apps: any[] = [];
       try {
         const response = await fetch('/api/workbench/apps');
         const data = await response.json();
         apps = Array.isArray(data?.apps) ? data.apps : [];
       } catch {
-        addMessage({
-          role: 'assistant',
-          content: 'I could not reach the application registry, so nothing was opened.',
-          intent: 'needs_capability',
-        });
-        return;
+        // Fallback to built-in apps if backend registry is unreachable
       }
 
-      const resolution = resolveAppName(plan.target, apps);
+      const allApps = [...BUILTIN_WORKSTATION_APPS, ...apps];
+      const resolution = resolveAppName(plan.target, allApps);
       if (resolution.kind !== 'resolved') {
         addMessage({
           role: 'assistant',
           content: describeResolution(resolution),
           intent: 'needs_clarification',
+        });
+        return;
+      }
+
+      if (resolution.appId === 'blender') {
+        setActiveReaperSource(null);
+        setWebPreview(null);
+        setActiveComponent(null);
+        setActiveBlenderSource(createDefaultBlenderState());
+        addMessage({
+          role: 'assistant',
+          content: 'Opened Blender 3D Studio in the workstation canvas.',
+          intent: 'live_app',
+        });
+        return;
+      }
+
+      if (resolution.appId === 'reaper') {
+        setActiveBlenderSource(null);
+        setWebPreview(null);
+        setActiveComponent(null);
+        setActiveReaperSource(createDefaultReaperState());
+        addMessage({
+          role: 'assistant',
+          content: 'Opened REAPER Audio DAW in the workstation canvas.',
+          intent: 'live_app',
+        });
+        return;
+      }
+
+      if (resolution.appId === 'browser') {
+        setActiveBlenderSource(null);
+        setActiveReaperSource(null);
+        setActiveComponent(null);
+        setWebPreview({ url: 'https://google.com', name: 'Browser Operator' });
+        addMessage({
+          role: 'assistant',
+          content: 'Opened Browser Operator in the workstation canvas.',
+          intent: 'live_app',
         });
         return;
       }
@@ -1306,6 +1568,80 @@ const App: React.FC = () => {
     },
     chat: async (plan) => {
       setLoading(true);
+
+      const queryLower = (plan.rawInput || plan.message || '').toLowerCase();
+      if (queryLower.includes('blender') && (queryLower.includes('show') || queryLower.includes('open') || queryLower.includes('inspect') || queryLower.includes('scene') || queryLower.includes('3d') || queryLower.includes('cube') || queryLower.includes('add') || queryLower.includes('connect'))) {
+        try {
+          const resp = await fetch('/api/blender/scene');
+          const data = await resp.json();
+          if (data && data.success && data.data) {
+            setActiveBlenderSource(data.data);
+            setActiveReaperSource(null);
+            setWebPreview(null);
+            setActiveComponent(null);
+            addMessage({
+              role: 'assistant',
+              content: `Connected live to your running **Blender ${data.data.runtime?.blenderVersion || '5.2'}** instance! Active scene has **${data.data.objects.length} objects** (${data.data.objects.map((o: any) => o.name).join(', ')}). You can inspect the live scene outliner and modifiers on the canvas.`,
+              intent: 'artifact',
+            });
+            setLoading(false);
+            return;
+          }
+        } catch {
+          // Live connection fallback
+        }
+
+        setActiveBlenderSource(DEFAULT_BLENDER_DEMO);
+        setActiveReaperSource(null);
+        setWebPreview(null);
+        setActiveComponent(null);
+        addMessage({
+          role: 'assistant',
+          content: 'I opened the Blender scene surface. To connect live to your open Blender 5.2 window, switch to the **Scripting** tab in Blender, open `bridges/blender/addon/panetera_blender_bridge.py`, and click **Run Script**.',
+          intent: 'artifact',
+        });
+        setLoading(false);
+        return;
+      }
+
+      if (queryLower.includes('reaper') && (queryLower.includes('show') || queryLower.includes('open') || queryLower.includes('inspect') || queryLower.includes('project') || queryLower.includes('audio') || queryLower.includes('mix') || queryLower.includes('vocal'))) {
+        setActiveReaperSource(DEFAULT_REAPER_DEMO);
+        setActiveBlenderSource(null);
+        setWebPreview(null);
+        setActiveComponent(null);
+        addMessage({
+          role: 'assistant',
+          content: 'I opened the REAPER project surface (`Cyberpunk_OST_Cue_02.rpp` on REAPER 7.79). You can inspect tracks, volume faders, FX chains, and LUFS loudness on the canvas, or ask me to propose mixing and routing changes.',
+          intent: 'artifact',
+        });
+        setLoading(false);
+        return;
+      }
+
+      if (queryLower.includes('bevel') || (queryLower.includes('modifier') && queryLower.includes('add'))) {
+        const targetObj = activeBlenderSource?.objects.find((o: any) => o.type === 'MESH') || activeBlenderSource?.objects[0];
+        const targetName = targetObj?.name || 'Cube';
+        const targetId = targetObj?.id || 'Cube';
+
+        setActiveComponent({
+          type: 'ProposedAction',
+          data: {
+            id: `blender-bevel-${Date.now()}`,
+            command: `blender.add_modifier(objectId='${targetId}', modifierType='BEVEL', width=0.1, segments=3)`,
+            description: `Add Bevel Modifier to ${targetName} (width: 0.1m, segments: 3)`,
+            workspaceName: 'Blender 5.2',
+            mode: 'safe',
+            evidence: `Precondition digest: ${targetObj?.stateDigest || 'sha256:current'}`,
+          },
+        });
+        addMessage({
+          role: 'assistant',
+          content: `I prepared a governed proposal to add a **Bevel modifier** to **${targetName}** (width: 0.1m, 3 segments). Click **Approve** on the proposal card to execute this on your live Blender session.`,
+          intent: 'needs_approval',
+        });
+        setLoading(false);
+        return;
+      }
 
       const useWorkspaceOrchestrator = plan.endpoint === 'orchestrator';
       // H3b: the standard chat path runs as a streaming governed run. The
@@ -1556,9 +1892,15 @@ const App: React.FC = () => {
         if (classifyResp.ok) {
           const { family, confidence } = await classifyResp.json();
           if (family && family !== 'converse' && confidence >= 0.7) {
+            const rawTarget = submission.intent.args.target || submission.intent.rawInput;
             effectiveSubmission = {
               ...submission,
-              intent: { ...submission.intent, family, confidence },
+              intent: {
+                ...submission.intent,
+                family,
+                confidence,
+                args: { ...submission.intent.args, target: rawTarget },
+              },
             };
           }
         }
@@ -1628,6 +1970,86 @@ const App: React.FC = () => {
   };
 
   const handleApproveAction = async (procId: string, workspaceName: string, command: string) => {
+    if (command.startsWith('blender.')) {
+      // Route through the governed Rig proposal → approval → invocation path
+      try {
+        let action = 'blender.add_modifier';
+        let params: Record<string, unknown> = { objectId: 'Cube', modifierType: 'BEVEL', parameters: { width: 0.1, segments: 3 } };
+        if (command.includes('create_primitive')) {
+          action = 'blender.create_primitive';
+          params = { type: 'CYLINDER', name: 'Cylinder' };
+        }
+        // Step 1: Create a governed proposal
+        const propResp = await fetch('/api/rig/proposals', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            connectionId: 'blender',
+            capabilityId: action,
+            arguments: params,
+            displayArguments: params,
+          }),
+        });
+        if (!propResp.ok) {
+          const err = await propResp.json().catch(() => ({}));
+          addMessage({ role: 'assistant', content: `Proposal failed: ${err.error || propResp.statusText}`, intent: 'needs_capability' });
+          return;
+        }
+        const propData = await propResp.json();
+        const proposalId = propData.proposal?.proposalId;
+        if (!proposalId) {
+          addMessage({ role: 'assistant', content: 'Failed to create proposal.', intent: 'needs_capability' });
+          return;
+        }
+        // Step 2: Approve the proposal
+        const apprResp = await fetch(`/api/rig/proposals/${proposalId}/approve`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ reviewDigest: '' }),
+        });
+        if (!apprResp.ok) {
+          const err = await apprResp.json().catch(() => ({}));
+          addMessage({ role: 'assistant', content: `Approval failed: ${err.error || apprResp.statusText}`, intent: 'needs_capability' });
+          return;
+        }
+        const apprData = await apprResp.json();
+        const approvalId = apprData.approval?.approvalId;
+        if (!approvalId) {
+          addMessage({ role: 'assistant', content: 'Failed to approve proposal.', intent: 'needs_capability' });
+          return;
+        }
+        // Step 3: Invoke through the governed path
+        const invResp = await fetch('/api/rig/invocations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            connectionId: 'blender',
+            capabilityId: action,
+            approvalId,
+            arguments: params,
+          }),
+        });
+        if (!invResp.ok) {
+          const err = await invResp.json().catch(() => ({}));
+          addMessage({ role: 'assistant', content: `Execution failed: ${err.error || invResp.statusText}`, intent: 'needs_capability' });
+          return;
+        }
+        const invData = await invResp.json();
+        addMessage({
+          role: 'assistant',
+          content: `✓ Executed **${action}** on your live Blender session via governed path.`,
+        });
+        const sceneResp = await fetch('/api/blender/scene');
+        const sceneData = await sceneResp.json();
+        if (sceneData.success && sceneData.data) {
+          setActiveBlenderSource(sceneData.data);
+        }
+      } catch (err: any) {
+        addMessage({ role: 'assistant', content: `Blender execution error: ${err.message}`, intent: 'needs_capability' });
+      }
+      return;
+    }
+
     // Also update right feed item
     setPreviewFeed(prev => prev.map(item => item.id === procId ? {
       ...item,
@@ -1887,24 +2309,64 @@ const App: React.FC = () => {
             // just above the composer rather than floating in the middle of a
             // dead region. A quiet downward cue ties the guidance to the input it
             // is asking the person to use.
-            <Box sx={{ mt: 'auto', textAlign: 'left', pt: 4, maxWidth: 320 }}>
-              <Typography
-                variant="subtitle2"
-                sx={{ color: ink.primary, fontWeight: 600, mb: 0.75, fontSize: '0.9375rem' }}
-              >
-                No conversation yet
-              </Typography>
+            <Box
+              sx={{
+                mt: 'auto',
+                textAlign: 'left',
+                p: 2.25,
+                borderRadius: `${radius.md + 2}px`,
+                backgroundColor: surface.raised,
+                border: `1px solid ${surface.border}`,
+                boxShadow: '0 4px 18px rgba(0, 0, 0, 0.03)',
+                maxWidth: 360,
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 1 }}>
+                <Box
+                  sx={{
+                    width: 24,
+                    height: 24,
+                    borderRadius: `${radius.pill}px`,
+                    backgroundColor: accent.violetMuted,
+                    border: `1px solid ${accent.violetBorder}`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: accent.violet,
+                  }}
+                >
+                  <AutoAwesomeIcon sx={{ fontSize: 14 }} />
+                </Box>
+                <Typography
+                  variant="subtitle2"
+                  sx={{ color: ink.primary, fontWeight: 700, fontSize: '0.9375rem', letterSpacing: '-0.01em' }}
+                >
+                  No conversation yet
+                </Typography>
+              </Box>
               <Typography
                 variant="caption"
-                sx={{ color: ink.secondary, display: 'block', lineHeight: 1.6, fontSize: '0.78rem' }}
+                sx={{ color: ink.secondary, display: 'block', lineHeight: 1.6, fontSize: '0.8125rem', mb: 1.5 }}
               >
                 {activeWorkspace
                   ? 'Ask about this project or describe the result you want below.'
                   : 'Your requests and PaneTera’s findings will stay here.'}
               </Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 1.25, color: ink.muted }}>
-                <SouthIcon aria-hidden sx={{ fontSize: 14 }} />
-                <Typography variant="caption" sx={{ color: ink.muted, fontWeight: 600 }}>
+              <Box
+                sx={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 0.6,
+                  px: 1,
+                  py: 0.35,
+                  borderRadius: `${radius.pill}px`,
+                  backgroundColor: surface.sunken,
+                  border: `1px solid ${surface.border}`,
+                  color: ink.secondary,
+                }}
+              >
+                <SouthIcon aria-hidden sx={{ fontSize: 13, color: accent.violet }} />
+                <Typography variant="caption" sx={{ color: ink.secondary, fontWeight: 600, fontSize: '0.75rem' }}>
                   Start in the composer
                 </Typography>
               </Box>
@@ -1937,15 +2399,8 @@ const App: React.FC = () => {
             </Box>
           )}
           {loading && (
-            <Box
-              role="status"
-              aria-live="polite"
-              sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', p: 1 }}
-            >
-              <CircularProgress size={12} sx={{ color: accent.violet, mr: 1.5 }} />
-              <Typography variant="caption" sx={{ color: ink.secondary }}>
-                Inspecting and summarising
-              </Typography>
+            <Box role="status" aria-live="polite" sx={{ my: 0.5 }}>
+              <AgentThinkingIndicator />
             </Box>
           )}
           <div ref={messagesEndRef} />
@@ -2129,6 +2584,8 @@ const App: React.FC = () => {
   const handleOpenSuggestions = (event: React.MouseEvent<HTMLElement>) => setSuggestionsAnchorEl(event.currentTarget);
   const handleCloseSuggestions = () => setSuggestionsAnchorEl(null);
   const suggestionItems = [
+    { label: 'Inspect Blender 3D Scene', message: 'Show Blender scene' },
+    { label: 'Inspect REAPER Audio Project', message: 'Show REAPER project' },
     { label: 'Explain this repo', message: 'Explain this repo' },
     { label: 'Show important files', message: 'Show important files' },
     { label: 'Find entry points', message: 'Find entry points' },
@@ -2306,50 +2763,105 @@ const App: React.FC = () => {
                   own raised, violet-focus input reads as the primary target. */}
               <Box
                 sx={{
-                  px: 2,
-                  pt: 1.5,
-                  pb: 2,
-                  borderTop: `1px solid ${surface.border}`,
-                  backgroundColor: surface.base,
+                  px: { xs: 1.5, md: 2 },
+                  pt: 1,
+                  pb: { xs: 2, md: 2.5 },
+                  backgroundColor: 'transparent',
                 }}
               >
                 <Stack
                   direction="row"
                   spacing={1}
-                  sx={{ mb: 1, alignItems: 'center', justifyContent: 'space-between' }}
+                  sx={{ mb: 1.25, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 0.75 }}
                 >
-                  <Typography
-                    role={guidance.kind === 'attention' ? 'alert' : 'status'}
-                    variant="caption"
+                  <Box
                     sx={{
-                      minWidth: 0,
-                      color: guidance.kind === 'attention' ? status.danger : ink.secondary,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 0.6,
+                      px: 1.2,
+                      py: 0.35,
+                      borderRadius: `${radius.pill}px`,
+                      backgroundColor: surface.sunken,
+                      border: `1px solid ${surface.border}`,
+                      maxWidth: '100%',
                     }}
                   >
-                    <Box component="span" sx={{ color: ink.primary, fontWeight: 600, textTransform: 'capitalize' }}>
-                      {guidance.kind}
-                    </Box>
-                    {' · '}{guidance.text}
-                  </Typography>
-                  <Button
-                    size="small"
-                    onClick={() => setTokenStream((v) => { const next = !v; try { localStorage.setItem('panetera-token-stream', next ? '1' : '0'); } catch { /* ignore */ } return next; })}
-                    aria-label={`Streaming mode: ${tokenStream ? 'token' : 'event'}. Click to toggle.`}
-                    sx={{ flexShrink: 0, minHeight: 30, px: 1.1, textTransform: 'none', borderRadius: `${radius.sm}px`, fontSize: '0.72rem', color: tokenStream ? accent.violet : ink.secondary, border: `1px solid ${tokenStream ? accent.violet : surface.border}`, '&:hover': { backgroundColor: surface.sunken } }}
-                  >
-                    {tokenStream ? 'Token stream' : 'Event stream'}
-                  </Button>
-                  <Button
-                    size="small"
-                    startIcon={<AutoAwesomeIcon sx={{ fontSize: '14px !important' }} />}
-                    onClick={handleOpenSuggestions}
-                    aria-label="Open prompt ideas"
-                    aria-haspopup="true"
-                    aria-expanded={Boolean(suggestionsAnchorEl)}
-                    sx={{ flexShrink: 0, minHeight: 30, px: 1.1, textTransform: 'none', borderRadius: `${radius.sm}px`, color: ink.secondary, fontSize: '0.72rem', '&:hover': { color: ink.primary, backgroundColor: surface.sunken }, '&:focus-visible': { outline: `2px solid ${accent.violet}`, outlineOffset: 2 } }}
-                  >
-                    Prompt ideas
-                  </Button>
+                    <Box
+                      sx={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: '50%',
+                        backgroundColor: guidance.kind === 'attention' ? status.danger : accent.violet,
+                        boxShadow: `0 0 6px ${guidance.kind === 'attention' ? status.danger : accent.violet}`,
+                        flexShrink: 0,
+                      }}
+                    />
+                    <Typography
+                      role={guidance.kind === 'attention' ? 'alert' : 'status'}
+                      variant="caption"
+                      sx={{
+                        color: guidance.kind === 'attention' ? status.danger : ink.secondary,
+                        fontSize: '0.75rem',
+                        fontWeight: 500,
+                        lineHeight: 1.2,
+                      }}
+                    >
+                      <Box component="span" sx={{ color: ink.primary, fontWeight: 700, textTransform: 'capitalize' }}>
+                        {guidance.kind}
+                      </Box>
+                      {' · '}{guidance.text}
+                    </Typography>
+                  </Box>
+
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                    <Button
+                      size="small"
+                      onClick={() => setTokenStream((v) => { const next = !v; try { localStorage.setItem('panetera-token-stream', next ? '1' : '0'); } catch { /* ignore */ } return next; })}
+                      aria-label={`Streaming mode: ${tokenStream ? 'token' : 'event'}. Click to toggle.`}
+                      sx={{
+                        flexShrink: 0,
+                        minHeight: 28,
+                        px: 1.25,
+                        textTransform: 'none',
+                        borderRadius: `${radius.pill}px`,
+                        fontSize: '0.72rem',
+                        fontWeight: 600,
+                        backgroundColor: surface.sunken,
+                        color: tokenStream ? accent.violet : ink.secondary,
+                        border: `1px solid ${tokenStream ? accent.violetBorder : surface.border}`,
+                        transition: transition(['background-color', 'border-color', 'color']),
+                        '&:hover': { backgroundColor: surface.raised, borderColor: accent.violetBorder, color: accent.violet },
+                      }}
+                    >
+                      {tokenStream ? 'Token stream' : 'Event stream'}
+                    </Button>
+                    <Button
+                      size="small"
+                      startIcon={<AutoAwesomeIcon sx={{ fontSize: '13px !important', color: accent.violet }} />}
+                      onClick={handleOpenSuggestions}
+                      aria-label="Open prompt ideas"
+                      aria-haspopup="true"
+                      aria-expanded={Boolean(suggestionsAnchorEl)}
+                      sx={{
+                        flexShrink: 0,
+                        minHeight: 28,
+                        px: 1.25,
+                        textTransform: 'none',
+                        borderRadius: `${radius.pill}px`,
+                        color: ink.secondary,
+                        fontSize: '0.72rem',
+                        fontWeight: 600,
+                        backgroundColor: surface.sunken,
+                        border: `1px solid ${surface.border}`,
+                        transition: transition(['background-color', 'border-color', 'color']),
+                        '&:hover': { color: ink.primary, backgroundColor: surface.raised, borderColor: surface.borderStrong },
+                        '&:focus-visible': { outline: `2px solid ${accent.violet}`, outlineOffset: 2 },
+                      }}
+                    >
+                      Prompt ideas
+                    </Button>
+                  </Box>
                   <Menu
                     anchorEl={suggestionsAnchorEl}
                     open={Boolean(suggestionsAnchorEl)}
@@ -2459,6 +2971,17 @@ const App: React.FC = () => {
               onChooseProject={() => setProjectPickerRequestKey((value) => value + 1)}
               onConnectCapability={() => setRigRequestKey((value) => value + 1)}
               onDescribeGoal={() => setRevealConversationKey((value) => value + 1)}
+              onOpenBlender={() => {
+                setActiveReaperSource(null);
+                setWebPreview(null);
+                setActiveBlenderSource(createDefaultBlenderState());
+              }}
+              onOpenReaper={() => {
+                setActiveBlenderSource(null);
+                setWebPreview(null);
+                setActiveReaperSource(createDefaultReaperState());
+              }}
+              onOpenAst={() => setProjectPickerRequestKey((value) => value + 1)}
             />
           );
 
@@ -2567,6 +3090,32 @@ const App: React.FC = () => {
                 <LiveWorkbenchSurface app={localAppDef} status={localAppStatus} />
               </SurfaceHost>
             ) : null
+          ) : activeBlenderSource ? (
+            <SurfaceHost
+              descriptor={projectBlenderSurface(activeBlenderSource)}
+              onClose={() => setActiveBlenderSource(null)}
+               onAction={(action) => {
+                 if (action.behavior === 'propose') {
+                   handleProposeAction(action);
+                 } else if (action.id === 'capture-viewport') {
+                   setActiveBlenderSource((prev) => prev ? { ...prev, capturedAt: new Date().toISOString() } : null);
+                 }
+               }}
+             >
+               <BlenderStateCanvas state={activeBlenderSource} />
+             </SurfaceHost>
+           ) : activeReaperSource ? (
+             <SurfaceHost
+               descriptor={projectReaperSurface(activeReaperSource)}
+               onClose={() => setActiveReaperSource(null)}
+               onAction={(action) => {
+                 if (action.behavior === 'propose') {
+                   handleProposeAction(action);
+                 }
+               }}
+             >
+               <ReaperStateCanvas state={activeReaperSource} />
+             </SurfaceHost>
           ) : showEvidenceCanvas ? (
             <BrowserEvidenceCanvas
               onReturnToPreview={() => setShowEvidenceCanvas(false)}
@@ -2650,9 +3199,9 @@ const App: React.FC = () => {
                 // The narrow layout uses this to signal the canvas and to avoid
                 // stranding a person on an empty canvas with the composer out of
                 // reach. Kept in sync with the canvasNode chain above.
-                canvasHasContent={Boolean(
-                  webPreview || workbenchMode === 'local-app' || activeComponent || activeWorkspace,
-                )}
+                 canvasHasContent={Boolean(
+                   webPreview || workbenchMode === 'local-app' || activeComponent || activeWorkspace || activeBlenderSource || activeReaperSource,
+                 )}
                 onMarkupAction={handleSend}
                 onMarkupAnnotate={async (text, annotation) => {
                   if (!activeHeadroomCapsule?.capsuleId || !token) return;

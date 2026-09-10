@@ -309,8 +309,10 @@ export const TranscriptTurn: React.FC<Props> = ({ message, onSelectFile, onSugge
                 color: ink.primary,
                 border: `1px solid ${accent.violetBorder}`,
                 cursor: 'pointer',
-                transition: transition(['background-color']),
-                '&:hover': { backgroundColor: accent.violetHover },
+                transition: transition(['background-color', 'transform']),
+                animationDelay: `${index * 35}ms`,
+                '&:hover': { backgroundColor: accent.violetHover, transform: 'translateY(-1px)' },
+                '&:active': { transform: 'scale(0.98)' },
               }}
             />
           ))}
