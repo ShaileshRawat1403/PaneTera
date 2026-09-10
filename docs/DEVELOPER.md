@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Node.js 18+ and npm
+- Node.js 22 and npm. `.nvmrc` pins the version, so `nvm use` in the repository root selects it. `npm run dev`, `npm test`, `npm run lint`, and `npm run build` stop immediately with an explanation on an older Node.
 - Git
 - (Optional) Chrome for browser operator features
 
