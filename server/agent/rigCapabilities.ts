@@ -3,6 +3,7 @@ import { RigRuntime } from '../rig/runtime';
 import { RigRegistry } from '../rig/registry';
 import { logTypedAudit } from '../auditRecord';
 import { rigAuditFields } from '../rig/auditClassification';
+import { validateProposedArguments } from '../rig/canonical';
 import { rigRegistry, rigApprovals, rigFindCapability } from '../rig/routes';
 import type { OperatorPrincipal } from '../operatorPrincipal';
 import type { McpConnection } from '../rig/types';
@@ -45,12 +46,23 @@ export function createRigCapabilities(
             throw new Error(`Capability "${tool.capabilityId}" is not enabled for proposals.`);
           }
 
+          const validation = validateProposedArguments(capability.inputSchema, arguments_);
+          if (!validation.ok) {
+            logTypedAudit({
+              event: 'rig.invocation.proposal-invalid',
+              ...rigAuditFields('rig.invocation.proposal-invalid', undefined, principal),
+              correlation: { connectionId: connection.connectionId },
+              details: { capabilityId: tool.capabilityId, error: validation.error },
+            });
+            throw new Error(`Proposal for "${tool.capabilityId}" was rejected: ${validation.error}`);
+          }
+
           const proposal = approvals.propose({
             connectionId: connection.connectionId,
             capabilityId: capability.capabilityId,
             capabilityDigest: tool.capabilityDigest || capability.structuralDigest,
-            arguments: arguments_ && typeof arguments_ === 'object' && !Array.isArray(arguments_) ? arguments_ : {},
-            displayArguments: arguments_ ?? {},
+            arguments: validation.arguments,
+            displayArguments: validation.arguments,
           });
 
           logTypedAudit({
@@ -75,7 +87,7 @@ export function createRigCapabilities(
                 connectionId: tool.connectionId,
                 capabilityId: tool.capabilityId,
                 toolName: rawToolName,
-                arguments: arguments_,
+                arguments: validation.arguments,
                 proposalId: proposal.proposalId,
                 expiresAt: proposal.expiresAt,
               },
@@ -89,9 +101,9 @@ export function createRigCapabilities(
               connectionId: tool.connectionId,
               capabilityId: tool.capabilityId,
               capabilityDigest: tool.capabilityDigest || capability.structuralDigest,
-              arguments: arguments_,
-              displayArguments: arguments_,
-              summary: `Call ${tool.connectionId} capability "${rawToolName}" with arguments ${JSON.stringify(arguments_)}`,
+              arguments: validation.arguments,
+              displayArguments: validation.arguments,
+              summary: `Call ${tool.connectionId} capability "${rawToolName}" with arguments ${JSON.stringify(validation.arguments)}`,
               expiresAt: proposal.expiresAt,
             },
             evidence: {

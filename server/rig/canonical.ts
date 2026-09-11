@@ -142,6 +142,27 @@ export function validateToolArguments(
   return { valid: true };
 }
 
+/**
+ * Validates proposal arguments before anything enters the approval queue.
+ * The returned object is what is stored, shown to the reviewer, and executed
+ * once approved (ADR-005).
+ */
+export function validateProposedArguments(
+  schema: Record<string, unknown> | null,
+  args: unknown,
+): { ok: true; arguments: Record<string, unknown> } | { ok: false; error: string } {
+  const value = args === undefined ? {} : args;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return { ok: false, error: 'Proposal arguments must be a JSON object.' };
+  }
+  const record = value as Record<string, unknown>;
+  const limits = checkArgumentLimits(record);
+  if (!limits.ok) return { ok: false, error: limits.error || 'Argument payload limits exceeded.' };
+  const validation = validateToolArguments(schema, record);
+  if (!validation.valid) return { ok: false, error: validation.error || 'Invalid tool arguments.' };
+  return { ok: true, arguments: record };
+}
+
 export function checkArgumentLimits(args: Record<string, unknown>): { ok: boolean; error?: string } {
   const json = JSON.stringify(args);
   if (json.length > 65_536) {

@@ -108,6 +108,7 @@ interface DepsOptions {
   callTool?: RigDataDeps['runtime']['callTool'];
   readResource?: RigDataDeps['runtime']['readResource'];
   getPrompt?: RigDataDeps['runtime']['getPrompt'];
+  getApproval?: RigDataDeps['approvals']['getApproval'];
   claim?: RigDataDeps['approvals']['claim'];
   consume?: RigDataDeps['approvals']['consume'];
   updateThrows?: boolean;
@@ -135,9 +136,12 @@ function makeDeps(options: DepsOptions): { deps: RigDataDeps; consumed: string[]
       getPrompt: options.getPrompt ?? (async () => ({ ok: true })),
     } as never,
     approvals: {
+      getApproval:
+        options.getApproval ??
+        ((() => ({ proposalId: 'prop-1', approvalId: 'appr-1', arguments: {} })) as never),
       claim:
         options.claim ??
-        ((() => ({ approval: { proposalId: 'prop-1', approvalId: 'appr-1' }, claimId: 'claim-1' })) as never),
+        ((() => ({ approval: { proposalId: 'prop-1', approvalId: 'appr-1', arguments: {} }, claimId: 'claim-1' })) as never),
       consume: (options.consume ?? ((approvalId: string) => { consumed.push(approvalId); })) as never,
     } as never,
     provenance: { append: (record: unknown) => { appended.push(record); } } as never,

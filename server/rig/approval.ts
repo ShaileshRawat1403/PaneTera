@@ -25,6 +25,19 @@ export class CapabilityApprovalStore {
     return this.read().proposals.filter((p) => Date.parse(p.expiresAt) > Date.now());
   }
 
+  /** Unexpired proposals that have not been approved: the review queue. */
+  listPendingProposals(): ProposedCapabilityCall[] {
+    const file = this.read();
+    const approved = new Set(file.approvals.map((a) => a.proposalId));
+    return file.proposals.filter((p) => Date.parse(p.expiresAt) > Date.now() && !approved.has(p.proposalId));
+  }
+
+  getApproval(approvalId: string): ApprovedCapabilityCall | null {
+    const found = this.read().approvals.find((a) => a.approvalId === approvalId);
+    if (!found || Date.parse(found.expiresAt) <= Date.now()) return null;
+    return found;
+  }
+
   getProposal(proposalId: string): ProposedCapabilityCall | null {
     const found = this.read().proposals.find((p) => p.proposalId === proposalId);
     if (!found || Date.parse(found.expiresAt) <= Date.now()) return null;
@@ -54,7 +67,15 @@ export class CapabilityApprovalStore {
     if (!proposal || Date.parse(proposal.expiresAt) <= Date.now()) {
       throw new Error('Proposal is missing or expired.');
     }
+    if (file.approvals.some((a) => a.proposalId === proposalId)) {
+      throw new Error('Proposal has already been approved.');
+    }
+    if (digest(proposal.arguments) !== proposal.argumentsDigest) {
+      throw new Error('Proposal arguments no longer match their digest.');
+    }
 
+    // An approval authorizes one immutable payload: the stored proposal's
+    // arguments are copied here and nothing supplied later can replace them.
     const approval: ApprovedCapabilityCall = {
       approvalId: randomUUID(),
       proposalId,
@@ -62,6 +83,7 @@ export class CapabilityApprovalStore {
       capabilityId: proposal.capabilityId,
       capabilityDigest: proposal.capabilityDigest,
       argumentsDigest: proposal.argumentsDigest,
+      arguments: JSON.parse(JSON.stringify(proposal.arguments)) as Record<string, unknown>,
       approvedAt: new Date().toISOString(),
       expiresAt: proposal.expiresAt,
       consumption: { state: 'unconsumed' },
@@ -76,7 +98,11 @@ export class CapabilityApprovalStore {
     connectionId: string;
     capabilityId: string;
     capabilityDigest: string;
-    arguments: unknown;
+    /**
+     * Arguments the caller believes it is running. Never executed: when
+     * present they must match the approved digest, as a defence.
+     */
+    arguments?: unknown;
   }): { approval: ApprovedCapabilityCall; claimId: string } {
     const file = this.read();
     const approval = file.approvals.find((a) => a.approvalId === approvalId);
@@ -86,11 +112,14 @@ export class CapabilityApprovalStore {
     if (approval.consumption.state !== 'unconsumed') {
       throw new Error('Approval has already been claimed.');
     }
+    if (!approval.arguments || digest(approval.arguments) !== approval.argumentsDigest) {
+      throw new Error('Approved arguments are missing or no longer match the approved digest.');
+    }
     if (
       approval.connectionId !== expected.connectionId
       || approval.capabilityId !== expected.capabilityId
       || approval.capabilityDigest !== expected.capabilityDigest
-      || approval.argumentsDigest !== digest(expected.arguments)
+      || (expected.arguments !== undefined && approval.argumentsDigest !== digest(expected.arguments))
     ) {
       throw new Error('Connection, capability, or arguments changed after approval.');
     }
