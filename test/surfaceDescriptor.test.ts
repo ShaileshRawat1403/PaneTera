@@ -339,6 +339,7 @@ describe('projectLocalAppSurface', () => {
     const source = makeLocalAppSource();
     const d = projectLocalAppSurface(source);
     assert.strictEqual(d.kind, 'local-app');
+    assert.strictEqual(d.appId, 'openpencil-001');
     assert.strictEqual(d.identity.title, 'OpenPencil');
     assert.strictEqual(d.identity.subtitle, 'http://127.0.0.1:4000');
     assert.strictEqual(d.identity.icon, 'app');
