@@ -435,3 +435,20 @@ Managed children run with `isolationMode: 'none'`. That is a declared runtime
 limitation, not isolation: Rig continues to report memory, CPU,
 file-descriptor, and filesystem limits as unenforced. Sandboxed execution
 remains future work and is not implied by this amendment.
+
+### Launch identity binds executed source
+
+An approval must bind what will execute, not only the program that starts it.
+Launch verification digests the executable and, by content, every absolute
+file argument: for a managed application that is the tsx CLI and the MCP
+server entry. These digests are part of the launch digest the reviewer
+approves and are shown in the review.
+
+- `RigRuntime.connect` recomputes the launch identity and refuses to start a
+  child whose identity differs from the approved digest.
+- On startup, an approved managed record whose executable, loader, or server
+  source has changed is reconciled to `approval-required` with
+  `changedFields: ['launchIdentity']`.
+
+The binding covers the files named in `argv`. Modules those files import are
+not yet digested; binding a full import graph is future work.

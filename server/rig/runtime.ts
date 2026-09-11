@@ -56,6 +56,12 @@ export class RigRuntime {
 
     if (record.transport.kind === 'stdio') {
       verifiedLaunch = await verifyStdioSpec(record.transport);
+      // An approval binds the launch identity it reviewed. If the executable,
+      // loader, or server source changed since, that approval no longer
+      // describes what would run, so nothing is started.
+      if (record.launchSpecDigest && verifiedLaunch.launchSpecDigest !== record.launchSpecDigest) {
+        throw new Error('Launch identity changed after approval. Review and approve the connection again.');
+      }
       endpointRef = verifiedLaunch.executablePath;
       transport = new GovernedStdioTransport({
         executablePath: verifiedLaunch.executablePath,

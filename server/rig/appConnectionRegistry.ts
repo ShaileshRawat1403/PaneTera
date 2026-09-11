@@ -27,6 +27,7 @@ import { logTypedAudit } from '../auditRecord';
 import { rigAuditFields } from './auditClassification';
 import { digest } from './canonical';
 import { connectionIdForName, type RigRegistry } from './registry';
+import { verifyStdioSpec } from './transportSecurity';
 import type { McpTransportSpec, StdioTransportSpec } from './types';
 
 const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
@@ -152,6 +153,13 @@ async function declare(registry: RegistryAccess, app: AppMcpConnection): Promise
   }
 
   const changedFields = transportDifferences(existing.transport, expected);
+  if (changedFields.length === 0 && existing.launchSpecDigest) {
+    // Same specification, but an approval bound the content it launched. If
+    // the executable, loader, or MCP server source changed since, that
+    // approval no longer describes what would run.
+    const current = await verifyStdioSpec(expected);
+    if (current.launchSpecDigest !== existing.launchSpecDigest) changedFields.push('launchIdentity');
+  }
   if (changedFields.length === 0) return { connectionId: app.connectionId, outcome: 'unchanged' };
 
   if (existing.state === 'connected' || existing.state === 'starting') {

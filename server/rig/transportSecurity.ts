@@ -9,6 +9,13 @@ import { connectionIdFromAuthRef } from './keychain';
 
 const SECRET_NAMES = /(?:token|secret|password|passwd|api[_-]?key|credential|authorization|cookie)/i;
 
+/** Content identity of one absolute file argument in a launch specification. */
+export interface ArgvFileDigest {
+  index: number;
+  path: string;
+  digest: string;
+}
+
 export interface VerifiedLaunchSpec {
   executablePath: string;
   executableDigest: string;
@@ -17,6 +24,8 @@ export interface VerifiedLaunchSpec {
   cwd: string;
   env: Record<string, string>;
   launchSpecDigest: string;
+  /** Every absolute file argument, bound by content (for example a runtime loader and the MCP server entry). */
+  argvFileDigests: ArgvFileDigest[];
   isolationMode: 'none' | 'container';
 }
 
@@ -50,6 +59,22 @@ export async function verifyStdioSpec(spec: StdioTransportSpec): Promise<Verifie
     entryPointDigest = await fileDigest(resolvedEntry);
   }
 
+  // Bind every absolute file argument by content, so an approval covers the
+  // code that runs, not only the program that starts it. A loader such as
+  // tsx is argv[0]; the MCP server source behind it is a later argument.
+  const argvFileDigests: ArgvFileDigest[] = [];
+  for (const [index, arg] of spec.argv.entries()) {
+    if (!path.isAbsolute(arg)) continue;
+    let resolved: string;
+    try {
+      resolved = await fs.promises.realpath(arg);
+    } catch {
+      continue;
+    }
+    if (!(await fs.promises.stat(resolved)).isFile()) continue;
+    argvFileDigests.push({ index, path: resolved, digest: await fileDigest(resolved) });
+  }
+
   const env: Record<string, string> = { PATH: '/usr/bin:/bin', LANG: 'C.UTF-8' };
   const environmentForDigest: Array<Record<string, string>> = [];
   for (const binding of [...spec.environment].sort((a, b) => a.name.localeCompare(b.name))) {
@@ -68,12 +93,13 @@ export async function verifyStdioSpec(spec: StdioTransportSpec): Promise<Verifie
     executableDigest,
     entryPointDigest,
     argv: spec.argv,
+    argvFiles: argvFileDigests,
     cwd,
     environment: environmentForDigest,
     limitsProfile: 'rig-v1',
     isolationMode: spec.isolationMode,
   });
-  return { executablePath, executableDigest, entryPointDigest, argv: [...spec.argv], cwd, env, launchSpecDigest, isolationMode: spec.isolationMode };
+  return { executablePath, executableDigest, entryPointDigest, argv: [...spec.argv], cwd, env, launchSpecDigest, argvFileDigests, isolationMode: spec.isolationMode };
 }
 
 export function isPrivateAddress(address: string): boolean {

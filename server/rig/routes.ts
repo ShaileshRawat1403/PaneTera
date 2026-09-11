@@ -148,6 +148,7 @@ async function connectionReview(record: McpConnection): Promise<ConnectionReview
       executablePath: verified.executablePath,
       executableDigest: verified.executableDigest,
       entryPointDigest: verified.entryPointDigest,
+      argvFileDigests: verified.argvFileDigests,
       argv: verified.argv,
       cwd: verified.cwd,
       environment: record.transport.environment.map((binding) => ({
