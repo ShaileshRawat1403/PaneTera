@@ -73,6 +73,11 @@ export const RIG_EVENT_CLASS: Record<string, RigAuditClass> = {
 
   // System-observed runtime, transport, and discovery events.
   'rig.connection.connected': { actorClass: 'system', outcome: 'success', policyDecision: 'allowed' },
+  // PaneTera declaring or reconciling its own managed connections. Neither
+  // starts a process; the connection waits for operator approval.
+  'rig.connection.registered': { actorClass: 'system', outcome: 'success', policyDecision: 'approval-required' },
+  'rig.connection.reconciled': { actorClass: 'system', outcome: 'success', policyDecision: 'approval-required' },
+  'rig.connection.registration-failed': { actorClass: 'system', outcome: 'error', policyDecision: 'allowed' },
   'rig.connection.failed': { actorClass: 'system', outcome: 'error', policyDecision: 'allowed' },
   'rig.connection.transport-failed': { actorClass: 'system', outcome: 'error', policyDecision: 'allowed' },
   'rig.capabilities.changed': { actorClass: 'system', outcome: 'success', policyDecision: 'allowed' },

@@ -27,6 +27,7 @@ import { handleOrchestratorQuery } from './orchestrator';
 import { runToolLoop } from './agentLoop';
 import type { AgentToolCall, ModelTurn, ToolExecution } from './agentLoop';
 import { rigRegistry, rigRuntime } from './rig/routes';
+import { ensureAppConnections, type AppConnectionRegistration } from './rig/appConnectionRegistry';
 import { RigToolAdapter } from './rig/adapter';
 import { createRigCapabilities, mergeCapabilities } from './agent/rigCapabilities';
 import { createBrowserActionCapabilities } from './agent/browserActionCapabilities';
@@ -2823,20 +2824,26 @@ let shuttingDown = false;
 function shutdown(): void {
   if (shuttingDown) return;
   shuttingDown = true;
-  setTimeout(() => process.exit(0), 300).unref();
+  // Rig owns the MCP child processes it started: close them (SIGTERM, then
+  // SIGKILL) before exiting. The unref'd fallback bounds the wait.
+  setTimeout(() => process.exit(0), 2000).unref();
   try { stopAllWorkspaceAdapters(); } catch { /* best effort on shutdown */ }
   try { httpServer?.close(); } catch { /* best effort on shutdown */ }
-  process.exit(0);
+  rigRuntime.disconnectAll().catch(() => undefined).finally(() => process.exit(0));
 }
 export interface PaneTeraServerHandle {
   httpServer: ReturnType<typeof app.listen>;
+  /** Settles once managed application connections have been declared. */
+  registration: Promise<AppConnectionRegistration[]>;
 }
 
 /**
- * Start the PaneTera backend: listen and own process shutdown.
+ * Start the PaneTera backend: listen, declare managed application
+ * connections, and own process shutdown.
  *
- * Importing this module only defines the app. Listening and signal handling
- * happen here, so a test can import the app without side effects.
+ * Importing this module only defines the app. Listening, persistent
+ * registration against the app-data directory, and signal handling all happen
+ * here, so a test can import the app without touching operator state.
  */
 export function startPaneTeraServer(options: { port?: number } = {}): PaneTeraServerHandle {
   if (httpServer) throw new Error('The PaneTera server is already started in this process.');
@@ -2845,9 +2852,23 @@ export function startPaneTeraServer(options: { port?: number } = {}): PaneTeraSe
     console.log(`🚀 PaneTera backend listening on http://127.0.0.1:${port}`);
   });
   httpServer = server;
+
+  // Declares nothing in core PaneTera. An integration declares its
+  // application once it is safe and truthful; declaring starts no process.
+  // A failure to declare is a configuration error, recorded as
+  // rig.connection.registration-failed.
+  const registration = ensureAppConnections(rigRegistry).then((results) => {
+    for (const result of results) {
+      if (result.outcome === 'failed') {
+        console.error(`[Rig] Could not declare the ${result.connectionId} connection: ${result.error}`);
+      }
+    }
+    return results;
+  });
+
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
-  return { httpServer: server };
+  return { httpServer: server, registration };
 }
 
 /** True when this file is the process entrypoint, not a module someone imported. */
