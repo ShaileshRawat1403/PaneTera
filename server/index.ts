@@ -15,11 +15,12 @@ import { getWorkspaceAdapter, stopWorkspaceAdapter, stopAllWorkspaceAdapters } f
 import { getWorkspaceCatalogPath, getPortalYamlPath } from './appData';
 import { fingerprint, normalizeAuditRecord } from './auditRecord';
 import { auditOperatorAction } from './operatorAudit';
+import { resolveAuditLogPath } from './audit';
 import { authenticatePortalRequest, operatorPrincipalForRequest } from './operatorPrincipal';
 import { issueEventTicket, consumeEventTicket } from './eventTicket';
 import * as fs from 'fs';
 import * as yaml from 'js-yaml';
-import { getTesseraAppDataDir } from './appData';
+import { getTesseraAppDataDir, isTestProcess } from './appData';
 import { validateWorkspaceCatalog, validatePortalCatalog } from './configValidation';
 import { FEATURES } from './features';
 import { handleOrchestratorQuery } from './orchestrator';
@@ -62,7 +63,9 @@ import { requestLogger } from './logging/logger';
 import { metricsMiddleware } from './logging/metrics';
 import { manifestCache, historyCache } from './middleware/cache';
 
-dotenv.config();
+// A test process never loads the operator's .env: its secrets and settings are
+// real state. Tests supply what they need explicitly.
+if (!isTestProcess()) dotenv.config();
 
 export const app = express();
 const PORT = Number(process.env.PORT) || 4000;
@@ -2323,8 +2326,8 @@ app.post('/api/myai-workspaces/query', async (req: Request, res: Response) => {
 
 // 6. Retrieve recent audit logs (latest 50 records)
 app.get('/api/myai-workspaces/audit', (req: Request, res: Response) => {
-  const logPath = path.resolve(__dirname, 'audit.log');
   try {
+    const logPath = resolveAuditLogPath();
     if (!fs.existsSync(logPath)) {
       return res.json({ logs: [] });
     }
@@ -2809,11 +2812,7 @@ app.get('/api/evidence', (_req, res) => {
   }
 });
 
-const httpServer = process.env.NODE_ENV !== 'test'
-  ? app.listen(PORT, '127.0.0.1', () => {
-      console.log(`🚀 PaneTera backend listening on http://127.0.0.1:${PORT}`);
-    })
-  : null;
+let httpServer: ReturnType<typeof app.listen> | null = null;
 
 // Fast, idempotent shutdown so `tsx watch` restarts and Ctrl+C exit promptly
 // rather than being force-killed after a 5s timeout. Every cleanup step is
@@ -2829,5 +2828,41 @@ function shutdown(): void {
   try { httpServer?.close(); } catch { /* best effort on shutdown */ }
   process.exit(0);
 }
-process.on('SIGINT', shutdown);
-process.on('SIGTERM', shutdown);
+export interface PaneTeraServerHandle {
+  httpServer: ReturnType<typeof app.listen>;
+}
+
+/**
+ * Start the PaneTera backend: listen and own process shutdown.
+ *
+ * Importing this module only defines the app. Listening and signal handling
+ * happen here, so a test can import the app without side effects.
+ */
+export function startPaneTeraServer(options: { port?: number } = {}): PaneTeraServerHandle {
+  if (httpServer) throw new Error('The PaneTera server is already started in this process.');
+  const port = options.port ?? PORT;
+  const server = app.listen(port, '127.0.0.1', () => {
+    console.log(`🚀 PaneTera backend listening on http://127.0.0.1:${port}`);
+  });
+  httpServer = server;
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
+  return { httpServer: server };
+}
+
+/** True when this file is the process entrypoint, not a module someone imported. */
+function isProcessEntrypoint(): boolean {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  try {
+    return fs.realpathSync(path.resolve(entry)) === fs.realpathSync(__filename);
+  } catch {
+    return false;
+  }
+}
+
+// `tsx watch server/index.ts` and `node --import tsx server/index.ts` start the
+// server. Importing the module (tests, tooling) never does.
+if (isProcessEntrypoint() && process.env.NODE_ENV !== 'test') {
+  startPaneTeraServer();
+}

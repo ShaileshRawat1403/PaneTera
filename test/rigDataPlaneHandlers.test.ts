@@ -20,7 +20,7 @@ process.env.NODE_ENV = 'test';
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import { readFileSync, existsSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { resolveAuditLogPath } from '../server/audit';
 import {
   handleInvocation,
   handleResourceRead,
@@ -34,7 +34,7 @@ import type { CapabilityCard, McpConnection } from '../server/rig/types';
 import type { Request } from 'express';
 import { authenticatePortalRequest, operatorPrincipalForRequest } from '../server/operatorPrincipal';
 
-const AUDIT_LOG = fileURLToPath(new URL('../server/audit.log', import.meta.url));
+const AUDIT_LOG = resolveAuditLogPath();
 
 /** Every typed record whose correlation connectionId matches, read back from the log. */
 function recordsForConnection(connectionId: string): Record<string, unknown>[] {
