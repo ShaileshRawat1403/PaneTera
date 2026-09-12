@@ -1,12 +1,3 @@
-// Boots the real composed app in-process. NODE_ENV must be set to 'test'
-// *before* server/index.ts is evaluated, or the module opens its own listener
-// on PORT and starts the file watcher as an import side effect -- handles that
-// nothing here owns and nothing closes, so the runner hung until it timed out.
-// ES imports are hoisted above statements, so the app is pulled in dynamically
-// below rather than with a static import. Type-only imports stay static: they
-// are erased and carry no side effect.
-process.env.NODE_ENV = 'test';
-
 // Boots the real composed app in-process. NODE_ENV must be 'test' before
 // server/index.ts is evaluated, or the module opens its own listener on PORT
 // and starts the file watcher as an import side effect -- handles that nothing
@@ -16,6 +7,9 @@ process.env.NODE_ENV = 'test';
 // dynamically inside runTests() instead. These files transpile to CJS, which
 // has no top-level await, so the import cannot sit at module scope either.
 process.env.NODE_ENV = 'test';
+// server/index.ts exits at import without a PORTAL_TOKEN. Set a throwaway one
+// unconditionally so this test never inherits a real developer token.
+process.env.PORTAL_TOKEN = 'test-only-portal-token';
 
 import assert from 'assert';
 import http from 'http';

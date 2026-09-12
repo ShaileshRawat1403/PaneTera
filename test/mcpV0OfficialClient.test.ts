@@ -7,6 +7,9 @@
 // dynamically inside runTests() instead. These files transpile to CJS, which
 // has no top-level await, so the import cannot sit at module scope either.
 process.env.NODE_ENV = 'test';
+// server/index.ts exits at import without a PORTAL_TOKEN. Set a throwaway one
+// unconditionally so this test never inherits a real developer token.
+process.env.PORTAL_TOKEN = 'test-only-portal-token';
 
 import assert from 'assert';
 import http from 'http';
