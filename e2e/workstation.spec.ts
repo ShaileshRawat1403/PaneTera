@@ -24,8 +24,15 @@ test.describe('workstation surfaces', () => {
   });
 
   test('the Headroom drawer opens', async ({ page }) => {
-    await page.getByLabel('Toggle Headroom drawer').click();
-    await expect(page.getByText(/Headroom/i).first()).toBeVisible();
+    // Assert the toggle's accessible contract and the drawer it controls. A
+    // page-wide text search also matches the kept-mounted, hidden Quick
+    // Switcher entry ("Headroom Context & Memory").
+    const toggle = page.getByLabel('Toggle Headroom drawer');
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await expect(toggle).toHaveAttribute('aria-controls', 'headroom-drawer');
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.locator('#headroom-drawer')).toBeVisible();
   });
 
   test('the audit log opens', async ({ page }) => {
