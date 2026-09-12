@@ -85,6 +85,8 @@ npm run preview
 
 Tests use Node.js built-in test runner with `tsx`. Every test process gets its own temporary app-data directory, audit log, and run history through `test/support/isolatedAppData.mjs`; server code refuses the real locations from a test process, so a test run without that preload fails instead of touching your PaneTera state.
 
+Importing `server/index.ts` does not listen, declare managed application connections, or install shutdown handlers; only `startPaneTeraServer()` (called when the file is run directly) does. Importing is not side-effect free: module-scope stores such as the Rig registry and approval store still initialise against the selected app-data location, which in tests is the isolated temporary directory.
+
 ```bash
 # Run all tests (takes ~30s)
 npm test

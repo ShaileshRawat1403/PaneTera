@@ -2841,9 +2841,13 @@ export interface PaneTeraServerHandle {
  * Start the PaneTera backend: listen, declare managed application
  * connections, and own process shutdown.
  *
- * Importing this module only defines the app. Listening, persistent
- * registration against the app-data directory, and signal handling all happen
- * here, so a test can import the app without touching operator state.
+ * Importing this module does not listen, declare managed application
+ * connections, or install process shutdown handlers; those happen only here.
+ * Importing is not side-effect free: module-scope stateful stores (the Rig
+ * registry, approval and provenance stores, local scope grants) still
+ * initialise against the selected app-data location. Test processes are
+ * guaranteed an isolated temporary app-data location, so importing the app in
+ * a test cannot touch real PaneTera state.
  */
 export function startPaneTeraServer(options: { port?: number } = {}): PaneTeraServerHandle {
   if (httpServer) throw new Error('The PaneTera server is already started in this process.');

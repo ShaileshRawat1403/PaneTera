@@ -398,7 +398,10 @@ Blender and REAPER integration experiment (tag
 - Server startup (`startPaneTeraServer`) owns shutdown: `disconnectAll()`
   terminates each child's process group (SIGTERM, then SIGKILL) and refuses
   new connections, bounded by a fallback timer. Importing the server module
-  owns nothing.
+  does not listen, declare managed connections, or install shutdown handlers.
+  It is not side-effect free: module-scope stores (registry, approvals,
+  provenance) still initialise against the selected app-data location, which
+  test processes are guaranteed to have isolated to temporary state.
 
 ### Managed connection declarations
 
