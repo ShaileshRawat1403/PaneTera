@@ -15,11 +15,11 @@ process.env.NODE_ENV = 'test';
 import { describe, it, afterEach } from 'node:test';
 import assert from 'node:assert';
 import { readFileSync, existsSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { resolveAuditLogPath } from '../server/audit';
 import { browserEvidenceReadService, UnauthorizedAccessError } from '../server/browserEvidenceReadService';
 import { browserGetCapture } from '../server/mcp/browserOperatorServer';
 
-const AUDIT_LOG = fileURLToPath(new URL('../server/audit.log', import.meta.url));
+const AUDIT_LOG = resolveAuditLogPath();
 
 /** Every typed record whose transaction id matches, read back from the log. */
 function recordsForTransaction(txn: string): Record<string, unknown>[] {

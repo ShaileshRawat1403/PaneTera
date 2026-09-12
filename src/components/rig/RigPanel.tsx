@@ -40,6 +40,16 @@ interface Props {
   onResourcesChanged?: () => void;
 }
 
+/**
+ * A proposal awaiting review. `arguments` is the stored copy the server
+ * executes on approval; the editable field never replaces it (ADR-005).
+ */
+interface PendingProposal {
+  proposalId: string;
+  capabilityId?: string;
+  arguments?: Record<string, unknown>;
+}
+
 async function rigRequest<T>(token: string, url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
     ...init,
@@ -116,7 +126,7 @@ function RigPanelSession({ token, onClose, onResourcesChanged }: Props): React.R
   const [notice, setNotice] = useState<{ severity: 'error' | 'info'; text: string } | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [toolArguments, setToolArguments] = useState<Record<string, string>>({});
-  const [proposals, setProposals] = useState<Record<string, { proposalId: string }>>({});
+  const [proposals, setProposals] = useState<Record<string, PendingProposal>>({});
   const [results, setResults] = useState<Record<string, unknown>>({});
   const [review, setReview] = useState<{ connectionId: string; value: Record<string, unknown> } | null>(null);
   const [removeConnectionId, setRemoveConnectionId] = useState<string | null>(null);
@@ -167,12 +177,29 @@ function RigPanelSession({ token, onClose, onResourcesChanged }: Props): React.R
     setProvenanceLoading(false);
   }, [token]);
 
+  // The review queue lives on the server, so a proposal created anywhere (the
+  // composer, an agent run) is reviewed here with its stored arguments.
+  const loadProposals = useCallback(async () => {
+    try {
+      const payload = await rigRequest<{ proposals?: PendingProposal[] }>(token, '/api/rig/proposals');
+      if (!Array.isArray(payload.proposals)) return;
+      const pending = payload.proposals.filter((proposal) => typeof proposal.capabilityId === 'string');
+      setProposals((current) => ({
+        ...current,
+        ...Object.fromEntries(pending.map((proposal) => [proposal.capabilityId as string, proposal])),
+      }));
+    } catch (error: unknown) {
+      setNotice({ severity: 'error', text: `Pending proposals could not be loaded: ${error instanceof Error ? error.message : String(error)}` });
+    }
+  }, [token]);
+
   // Token isolation is handled by remounting the session (see RigPanel), so this
   // instance always belongs to a single token and simply loads on mount.
   useEffect(() => {
     void load();
     void loadProvenance();
-  }, [load, loadProvenance]);
+    void loadProposals();
+  }, [load, loadProvenance, loadProposals]);
 
   const connectionsView = useMemo(
     () => resolveRigConnectionsView({ loaded: connectionsLoaded, connections, error: connectionsError }),
@@ -338,7 +365,7 @@ function RigPanelSession({ token, onClose, onResourcesChanged }: Props): React.R
     try {
       const raw = toolArguments[capability.capabilityId]?.trim() || '{}';
       const args = JSON.parse(raw);
-      const payload = await rigRequest<{ proposal: { proposalId: string } }>(token, '/api/rig/proposals', {
+      const payload = await rigRequest<{ proposal: PendingProposal }>(token, '/api/rig/proposals', {
         method: 'POST',
         body: JSON.stringify({ connectionId, capabilityId: capability.capabilityId, arguments: args }),
       });
@@ -353,7 +380,6 @@ function RigPanelSession({ token, onClose, onResourcesChanged }: Props): React.R
     if (!proposal) return;
     setBusy(capability.capabilityId);
     try {
-      const args = JSON.parse(toolArguments[capability.capabilityId]?.trim() || '{}');
       const approved = await rigRequest<{ approval: { approvalId: string } }>(
         token,
         `/api/rig/proposals/${encodeURIComponent(proposal.proposalId)}/approve`,
@@ -365,7 +391,6 @@ function RigPanelSession({ token, onClose, onResourcesChanged }: Props): React.R
           connectionId,
           capabilityId: capability.capabilityId,
           approvalId: approved.approval.approvalId,
-          arguments: args,
         }),
       });
       setResults((current) => ({ ...current, [capability.capabilityId]: invoked.result }));
@@ -807,7 +832,16 @@ function RigPanelSession({ token, onClose, onResourcesChanged }: Props): React.R
                                         </Button>
                                       }
                                     >
-                                      Review the exact connection, capability, and arguments before running once.
+                                      Review the exact connection, capability, and arguments before running once. Approval runs these stored arguments; editing the field above does not change this proposal.
+                                      {proposals[capability.capabilityId].arguments && (
+                                        <Box
+                                          component="pre"
+                                          data-testid="proposal-stored-arguments"
+                                          sx={{ m: 0, mt: 0.75, fontFamily: typography.mono, fontSize: '0.72rem', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+                                        >
+                                          {JSON.stringify(proposals[capability.capabilityId].arguments, null, 2)}
+                                        </Box>
+                                      )}
                                     </Alert>
                                   ) : (
                                     <Button

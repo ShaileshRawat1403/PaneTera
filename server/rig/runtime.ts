@@ -24,10 +24,31 @@ export interface ConnectedInventory {
 
 export class RigRuntime {
   private active = new Map<string, ActiveConnection>();
+  /** Connection attempts in flight, so one connection never starts two children. */
+  private connecting = new Map<string, Promise<ConnectedInventory>>();
+  private shuttingDown = false;
 
   constructor(private readonly onFault?: (connectionId: string, error: Error) => void | Promise<void>) {}
 
+  /**
+   * Start one connection. A second attempt for the same connection while one
+   * is in flight is refused rather than spawning a duplicate child.
+   */
   async connect(record: McpConnection): Promise<ConnectedInventory> {
+    if (this.shuttingDown) throw new Error('Rig is shutting down; no new connections start.');
+    if (this.connecting.has(record.connectionId)) {
+      throw new Error('A connection attempt is already in progress for this Rig connection.');
+    }
+    const attempt = this.connectOnce(record);
+    this.connecting.set(record.connectionId, attempt);
+    try {
+      return await attempt;
+    } finally {
+      if (this.connecting.get(record.connectionId) === attempt) this.connecting.delete(record.connectionId);
+    }
+  }
+
+  private async connectOnce(record: McpConnection): Promise<ConnectedInventory> {
     await this.disconnect(record.connectionId);
     let transport: Transport;
     let verifiedLaunch: VerifiedLaunchSpec | null = null;
@@ -35,6 +56,12 @@ export class RigRuntime {
 
     if (record.transport.kind === 'stdio') {
       verifiedLaunch = await verifyStdioSpec(record.transport);
+      // An approval binds the launch identity it reviewed. If the executable,
+      // loader, or server source changed since, that approval no longer
+      // describes what would run, so nothing is started.
+      if (record.launchSpecDigest && verifiedLaunch.launchSpecDigest !== record.launchSpecDigest) {
+        throw new Error('Launch identity changed after approval. Review and approve the connection again.');
+      }
       endpointRef = verifiedLaunch.executablePath;
       transport = new GovernedStdioTransport({
         executablePath: verifiedLaunch.executablePath,
@@ -59,16 +86,23 @@ export class RigRuntime {
       try { await client.close(); } catch { try { await transport.close(); } catch { /* already closed */ } }
       throw error;
     }
-    this.active.set(record.connectionId, { client, transport });
+    if (this.shuttingDown) {
+      try { await client.close(); } catch { try { await transport.close(); } catch { /* already closed */ } }
+      throw new Error('Rig is shutting down; no new connections start.');
+    }
+    // Faults are attributed only while this transport is still the active one,
+    // so a late close from a replaced child cannot evict or fault its successor.
+    const entry: ActiveConnection = { client, transport };
+    this.active.set(record.connectionId, entry);
     const existingError = transport.onerror;
     const existingClose = transport.onclose;
     transport.onerror = (error) => {
       existingError?.(error);
-      if (this.active.has(record.connectionId)) this.reportFault(record.connectionId, error);
+      if (this.active.get(record.connectionId) === entry) this.reportFault(record.connectionId, error);
     };
     transport.onclose = () => {
       existingClose?.();
-      if (this.active.has(record.connectionId)) {
+      if (this.active.get(record.connectionId) === entry) {
         this.active.delete(record.connectionId);
         this.reportFault(record.connectionId, new Error('MCP transport closed unexpectedly.'));
       }
@@ -88,6 +122,17 @@ export class RigRuntime {
     this.active.delete(connectionId);
     if (!active) return;
     try { await active.client.close(); } catch { await active.transport.close(); }
+  }
+
+  /**
+   * Close every active connection, terminating each child's process group,
+   * and refuse new connections. Parent shutdown calls this so PaneTera ends
+   * the processes it started instead of leaving them to the operating system.
+   */
+  async disconnectAll(): Promise<void> {
+    this.shuttingDown = true;
+    const closing = [...this.active.keys()].map((connectionId) => this.disconnect(connectionId));
+    await Promise.allSettled([...closing, ...this.connecting.values()]);
   }
 
   async discover(connectionId: string, previous?: CapabilitySnapshot): Promise<CapabilitySnapshot> {

@@ -3,15 +3,19 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "node scripts/check-node-version.mjs",
     "dev": "concurrently --kill-others-on-fail \"npm run dev:client\" \"npm run dev:server\"",
     "dev:client": "vite",
     "dev:server": "tsx watch server/index.ts",
+    "prelint": "node scripts/check-node-version.mjs",
     "lint": "eslint . && tsc --noEmit --project tsconfig.json",
+    "prebuild": "node scripts/check-node-version.mjs",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --import tsx --test --test-concurrency=1 --test-timeout=30000 $(find test -name '*.test.ts' -o -name '*.test.tsx')",
+    "pretest": "node scripts/check-node-version.mjs",
+    "test": "node --import tsx --import ./test/support/isolatedAppData.mjs --test --test-concurrency=1 --test-timeout=30000 $(find test -name '*.test.ts' -o -name '*.test.tsx')",
     "test:core": "npm test",
-    "test:coverage": "node --import tsx --experimental-test-coverage --test --test-concurrency=1 --test-timeout=30000 $(find test -name '*.test.ts' -o -name '*.test.tsx')",
+    "test:coverage": "node --import tsx --import ./test/support/isolatedAppData.mjs --experimental-test-coverage --test --test-concurrency=1 --test-timeout=30000 $(find test -name '*.test.ts' -o -name '*.test.tsx')",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"
   },
@@ -29,7 +33,8 @@
     "js-yaml": "^4.1.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "uuid": "^14.0.1"
+    "uuid": "^14.0.1",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",

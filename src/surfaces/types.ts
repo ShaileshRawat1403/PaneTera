@@ -109,8 +109,21 @@ export interface SurfaceDescriptor {
   /** Stable surface identifier, derived from the upstream source. */
   id: string;
 
-  /** What kind of upstream source this surface projects. */
+  /**
+   * What class of upstream source this surface projects.
+   *
+   * A category, not an application list: a concrete application is named by
+   * `appId`, and transport (MCP, stdio, iframe, socket bridge) is never
+   * encoded here.  See docs/adr/ADR-003-SURFACE-SOURCE-TAXONOMY.md.
+   */
   kind: 'browser' | 'local-app' | 'mcp' | 'artifact' | 'workspace';
+
+  /**
+   * Registered application identity for `kind: 'local-app'` surfaces.
+   * Same key as RegisteredApp.appId and, for Rig-backed applications, the
+   * Rig connectionId.
+   */
+  appId?: string;
 
   /** Zone 1: Identity & Context. */
   identity: {

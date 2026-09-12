@@ -376,3 +376,82 @@ teaches the wrong default to every future one.
 
 The Browser Operator façade is unaffected. It is in-process and inbound, and
 remains governed by ADR-001.
+
+## Amendment 2026-09-11: Managed Process Lifecycle
+
+Accepted for core PaneTera. It hardens the existing stdio lifecycle; it does
+not redesign it and does not introduce sandboxing. The gaps were found in the
+Blender and REAPER integration experiment (tag
+`integration/blender-reaper-governed-poc-2026-09-11`).
+
+### Ownership
+
+- `RigRuntime` owns every child it starts, from approved launch to
+  disconnect or shutdown.
+- One connection attempt runs at a time per connection. A concurrent attempt
+  is refused rather than starting a second child.
+- A transport fault is attributed only while that transport is still the
+  active one, so a late close from a replaced child cannot evict or fault its
+  successor.
+- An unexpected exit records `rig.connection.transport-failed` and marks the
+  connection `unreachable`.
+- Server startup (`startPaneTeraServer`) owns shutdown: `disconnectAll()`
+  terminates each child's process group (SIGTERM, then SIGKILL) and refuses
+  new connections, bounded by a fallback timer. Importing the server module
+  does not listen, declare managed connections, or install shutdown handlers.
+  It is not side-effect free: module-scope stores (registry, approvals,
+  provenance) still initialise against the selected app-data location, which
+  test processes are guaranteed to have isolated to temporary state.
+
+### Managed connection declarations
+
+- PaneTera-managed applications are declared through
+  `ensureAppConnections`. Core PaneTera declares none; an integration declares
+  its application only once it is safe and truthful. Declaring starts no
+  process.
+- A declaration names an absolute MCP server entry. PaneTera derives the
+  launch specification; the declaration cannot supply environment.
+- A managed record whose launch specification differs is reconciled and
+  returned to `approval-required`, with digests and the prior connection
+  approval cleared.
+- Registration, reconciliation, and registration failure are audited
+  (`rig.connection.registered`, `rig.connection.reconciled`,
+  `rig.connection.registration-failed`). Changed fields are reported by name
+  only; binding values are never recorded.
+- A record that is not PaneTera-managed, or that is running, is never
+  overwritten; the attempt is recorded as a registration failure.
+- An application that is not running is a normal disconnected state and is
+  never a registration failure.
+
+### Explicit launch identity, no ambient environment
+
+A managed launch is `process.execPath`, the absolute tsx CLI, and the absolute
+MCP server entry, with an empty environment. `PATH`, `NODE_ENV`, and
+credentials are never persisted: the child does not read them, and persisting
+them made the runtime depend on whichever Node was first on `PATH` and on the
+environment of whatever process last reconciled the record. Launch
+verification already rejects secret-named bindings.
+
+### Isolation
+
+Managed children run with `isolationMode: 'none'`. That is a declared runtime
+limitation, not isolation: Rig continues to report memory, CPU,
+file-descriptor, and filesystem limits as unenforced. Sandboxed execution
+remains future work and is not implied by this amendment.
+
+### Launch identity binds executed source
+
+An approval must bind what will execute, not only the program that starts it.
+Launch verification digests the executable and, by content, every absolute
+file argument: for a managed application that is the tsx CLI and the MCP
+server entry. These digests are part of the launch digest the reviewer
+approves and are shown in the review.
+
+- `RigRuntime.connect` recomputes the launch identity and refuses to start a
+  child whose identity differs from the approved digest.
+- On startup, an approved managed record whose executable, loader, or server
+  source has changed is reconciled to `approval-required` with
+  `changedFields: ['launchIdentity']`.
+
+The binding covers the files named in `argv`. Modules those files import are
+not yet digested; binding a full import graph is future work.

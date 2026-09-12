@@ -112,6 +112,11 @@ export interface ApprovedCapabilityCall {
   capabilityId: string;
   capabilityDigest: string;
   argumentsDigest: string;
+  /**
+   * Immutable copy of the approved proposal's arguments. It is the only
+   * argument set an invocation may execute (ADR-005).
+   */
+  arguments: Record<string, unknown>;
   approvedAt: string;
   expiresAt: string;
   consumption:

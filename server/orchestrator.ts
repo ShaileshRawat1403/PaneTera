@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { getWorkspaceAdapter } from './mcpAdapter';
 import { browserEvidenceStore } from './browserEvidenceStore';
+import { resolveAuditLogPath } from './audit';
 
 export interface ToolsUsed {
   tool: string;
@@ -276,7 +277,7 @@ export async function handleOrchestratorQuery(
       toolOutputs.gitStatus = git;
     } 
     else if (intent === 'explain_security_block' || intent === 'explain_audit_event') {
-      const logPath = path.resolve(__dirname, 'audit.log');
+      const logPath = resolveAuditLogPath();
       if (fs.existsSync(logPath)) {
         const rawLogs = fs.readFileSync(logPath, 'utf8').trim().split('\n');
         toolOutputs.auditLogs = rawLogs.slice(-20).map(l => JSON.parse(l));

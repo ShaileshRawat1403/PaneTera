@@ -5,6 +5,64 @@
 
 import path from 'path';
 import fs from 'fs/promises';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+
+const execFileAsync = promisify(execFile);
+
+/** Environment variables that would point git at some other repository. */
+const GIT_LOCATION_VARIABLES = ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_COMMON_DIR'];
+
+async function canonicalPath(value: string): Promise<string> {
+  try {
+    return await fs.realpath(value);
+  } catch {
+    return path.resolve(value);
+  }
+}
+
+/**
+ * Whether `absPath` is the top level of a Git working tree: a normal checkout
+ * (`.git` directory), a linked worktree, or a submodule (a `.git` file that
+ * points at the real git directory).
+ *
+ * Detection stays shallow: the directory itself must contain a `.git` entry.
+ * Git is the source of truth. Only when git cannot run does a `.git`
+ * directory, or a `.git` file whose `gitdir:` target exists, count.
+ */
+export async function detectGitRepository(absPath: string, options: { gitBinary?: string } = {}): Promise<boolean> {
+  const marker = path.join(absPath, '.git');
+  let markerIsDirectory = false;
+  let markerIsFile = false;
+  try {
+    const stat = await fs.lstat(marker);
+    markerIsDirectory = stat.isDirectory();
+    markerIsFile = stat.isFile();
+  } catch {
+    return false;
+  }
+
+  const env = { ...process.env };
+  for (const name of GIT_LOCATION_VARIABLES) delete env[name];
+  try {
+    const { stdout } = await execFileAsync(options.gitBinary ?? 'git', ['rev-parse', '--show-toplevel'], { cwd: absPath, env, timeout: 5000 });
+    return (await canonicalPath(stdout.trim())) === (await canonicalPath(absPath));
+  } catch (error: unknown) {
+    const code = (error as NodeJS.ErrnoException).code;
+    // Git ran and did not recognise a working tree here.
+    if (code !== 'ENOENT' && code !== 'EACCES') return false;
+  }
+
+  if (markerIsDirectory) return true;
+  if (!markerIsFile) return false;
+  try {
+    const pointer = (await fs.readFile(marker, 'utf8')).match(/^gitdir:\s*(.+?)\s*$/m);
+    if (!pointer) return false;
+    return (await fs.stat(path.resolve(absPath, pointer[1]))).isDirectory();
+  } catch {
+    return false;
+  }
+}
 
 export interface RepoSetupProposal {
   workspaceName: string;
@@ -155,12 +213,9 @@ export async function resolveRepoSetupTarget(
     warnings.push(`Failed to read directory entries: ${e.message}`);
   }
 
-  // Check git presence
+  // Check git presence. A worktree or submodule has a .git file, not a directory.
   if (files.includes('.git')) {
-    try {
-      const gitStat = await fs.stat(path.join(absPath, '.git'));
-      gitDetected = gitStat.isDirectory();
-    } catch {}
+    gitDetected = await detectGitRepository(absPath);
   }
 
   if (!gitDetected) {

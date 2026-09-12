@@ -96,27 +96,41 @@ export function snapshotDigest(snapshot: Pick<CapabilitySnapshot, 'tools' | 'res
   };
 }
 
+/** Whether a JSON Schema property accepts null: a null type or union, nullable, a null enum or const, or a null anyOf/oneOf branch. */
+function allowsNull(schema: unknown): boolean {
+  if (!schema || typeof schema !== 'object') return false;
+  const property = schema as Record<string, unknown>;
+  if (property.type === 'null' || (Array.isArray(property.type) && property.type.includes('null'))) return true;
+  if (property.nullable === true || property.const === null) return true;
+  if (Array.isArray(property.enum) && property.enum.includes(null)) return true;
+  return ['anyOf', 'oneOf'].some((key) => Array.isArray(property[key]) && (property[key] as unknown[]).some(allowsNull));
+}
+
 export function validateToolArguments(
   schema: Record<string, unknown> | null,
   args: Record<string, unknown>
 ): { valid: boolean; error?: string } {
   if (!schema || typeof schema !== 'object') return { valid: true };
 
-  const required = Array.isArray(schema.required) ? (schema.required as string[]) : [];
-  for (const field of required) {
-    if (args[field] === undefined || args[field] === null) {
-      return { valid: false, error: `Missing required field: ${field}` };
-    }
-  }
-
   const properties = schema.properties && typeof schema.properties === 'object' && !Array.isArray(schema.properties)
     ? (schema.properties as Record<string, Record<string, unknown>>)
     : null;
+
+  // A required field is missing when absent. Null only counts as missing when
+  // the field's schema does not allow null.
+  const required = Array.isArray(schema.required) ? (schema.required as string[]) : [];
+  for (const field of required) {
+    const value = args[field];
+    if (value === undefined || (value === null && !allowsNull(properties?.[field]))) {
+      return { valid: false, error: `Missing required field: ${field}` };
+    }
+  }
 
   if (properties) {
     for (const [key, value] of Object.entries(args)) {
       const propSchema = properties[key];
       if (!propSchema) continue;
+      if (value === null && allowsNull(propSchema)) continue;
 
       const expectedType = typeof propSchema.type === 'string' ? propSchema.type : null;
       if (!expectedType) continue;
@@ -140,6 +154,27 @@ export function validateToolArguments(
   }
 
   return { valid: true };
+}
+
+/**
+ * Validates proposal arguments before anything enters the approval queue.
+ * The returned object is what is stored, shown to the reviewer, and executed
+ * once approved (ADR-005).
+ */
+export function validateProposedArguments(
+  schema: Record<string, unknown> | null,
+  args: unknown,
+): { ok: true; arguments: Record<string, unknown> } | { ok: false; error: string } {
+  const value = args === undefined ? {} : args;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return { ok: false, error: 'Proposal arguments must be a JSON object.' };
+  }
+  const record = value as Record<string, unknown>;
+  const limits = checkArgumentLimits(record);
+  if (!limits.ok) return { ok: false, error: limits.error || 'Argument payload limits exceeded.' };
+  const validation = validateToolArguments(schema, record);
+  if (!validation.valid) return { ok: false, error: validation.error || 'Invalid tool arguments.' };
+  return { ok: true, arguments: record };
 }
 
 export function checkArgumentLimits(args: Record<string, unknown>): { ok: boolean; error?: string } {

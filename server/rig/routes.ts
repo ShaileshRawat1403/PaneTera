@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto';
 import { logTypedAudit } from '../auditRecord';
 import { operatorPrincipalForRequest, type OperatorPrincipal } from '../operatorPrincipal';
 import { rigAuditFields, rigInvocationFailureFields, type InvocationPhase } from './auditClassification';
-import { checkArgumentLimits, digest, validateToolArguments } from './canonical';
+import { checkArgumentLimits, digest, validateProposedArguments, validateToolArguments } from './canonical';
 import { CapabilityApprovalStore } from './approval';
 import { ProvenanceStore } from './provenance';
 import { RigRegistry } from './registry';
@@ -148,6 +148,7 @@ async function connectionReview(record: McpConnection): Promise<ConnectionReview
       executablePath: verified.executablePath,
       executableDigest: verified.executableDigest,
       entryPointDigest: verified.entryPointDigest,
+      argvFileDigests: verified.argvFileDigests,
       argv: verified.argv,
       cwd: verified.cwd,
       environment: record.transport.environment.map((binding) => ({
@@ -451,31 +452,70 @@ rigRouter.put('/connections/:connectionId/capabilities/:capabilityId', async (re
   }
 });
 
-rigRouter.post('/proposals', (req, res) => {
-  const { connectionId, capabilityId, arguments: args } = req.body ?? {};
-  const connection = registry.get(String(connectionId));
-  const capability = connection ? findCapability(connection, String(capabilityId)) : null;
+/** Dependencies for proposal creation, injectable for tests. */
+export interface RigProposalDeps {
+  registry: Pick<RigRegistry, 'get'>;
+  approvals: Pick<CapabilityApprovalStore, 'propose'>;
+}
+
+/**
+ * Create a proposal (ADR-005). Arguments are validated against the
+ * capability's input schema before anything enters the approval queue, and
+ * the stored copy is what a reviewer sees and an approval later executes.
+ */
+export function handleProposal(
+  deps: RigProposalDeps,
+  input: { connectionId?: unknown; capabilityId?: unknown; arguments?: unknown },
+  principal?: OperatorPrincipal,
+): HandlerResult {
+  const connectionId = String(input.connectionId ?? '');
+  const capabilityId = String(input.capabilityId ?? '');
+  const connection = deps.registry.get(connectionId);
+  const capability = connection ? findCapability(connection, capabilityId) : null;
   if (!connection || connection.state !== 'connected' || !capability || capability.kind !== 'tool') {
-    return replyError(res, 404, 'Connected tool capability not found.');
+    return jbody(404, { error: 'Connected tool capability not found.' });
   }
   if (!capability.enabled || capability.permission !== 'proposable') {
-    return replyError(res, 403, 'Capability is not enabled for proposals.');
+    return jbody(403, { error: 'Capability is not enabled for proposals.' });
   }
-  const proposal = approvals.propose({
+
+  const validation = validateProposedArguments(capability.inputSchema, input.arguments);
+  if (!validation.ok) {
+    logTypedAudit({
+      event: 'rig.invocation.proposal-invalid',
+      ...rigAuditFields('rig.invocation.proposal-invalid', undefined, principal),
+      correlation: { connectionId },
+      details: { capabilityId, error: validation.error },
+    });
+    return jbody(400, { error: validation.error });
+  }
+
+  const proposal = deps.approvals.propose({
     connectionId: connection.connectionId,
     capabilityId: capability.capabilityId,
     capabilityDigest: capability.structuralDigest,
-    arguments: args && typeof args === 'object' && !Array.isArray(args) ? args : {},
-    displayArguments: args ?? {},
+    arguments: validation.arguments,
+    displayArguments: validation.arguments,
   });
   logTypedAudit({
     event: 'rig.invocation.proposed',
-    ...rigAuditFields('rig.invocation.proposed', undefined, operatorPrincipalForRequest(req)),
+    ...rigAuditFields('rig.invocation.proposed', undefined, principal),
     correlation: { connectionId, proposalId: proposal.proposalId },
     details: { capabilityId, argumentsDigest: proposal.argumentsDigest },
   });
-  return res.status(201).json({ proposal });
+  return jbody(201, { proposal });
+}
+
+// The review queue: unexpired proposals awaiting a decision, with the stored
+// arguments an approval would execute.
+rigRouter.get('/proposals', (_req, res) => {
+  res.json({ proposals: approvals.listPendingProposals() });
 });
+
+rigRouter.post('/proposals', (req, res) => sendHandlerResult(
+  res,
+  handleProposal({ registry, approvals }, req.body ?? {}, operatorPrincipalForRequest(req)),
+));
 
 rigRouter.post('/proposals/:proposalId/approve', (req, res) => {
   try {
@@ -501,7 +541,7 @@ export interface RigDataDeps {
    * RigDataDeps structurally cannot approve its own proposal. Widen this and
    * that guarantee is gone for every consumer at once.
    */
-  approvals: Pick<CapabilityApprovalStore, 'claim' | 'consume'>;
+  approvals: Pick<CapabilityApprovalStore, 'getApproval' | 'claim' | 'consume'>;
   provenance: Pick<ProvenanceStore, 'append'>;
 }
 
@@ -513,7 +553,7 @@ export interface RigDataDeps {
  * the coordinator states the broader authority it genuinely holds.
  */
 export type RigApprovalDeps = Omit<RigDataDeps, 'approvals'> & {
-  approvals: Pick<CapabilityApprovalStore, 'claim' | 'consume' | 'approve'>;
+  approvals: Pick<CapabilityApprovalStore, 'getApproval' | 'claim' | 'consume' | 'approve'>;
 };
 
 /**
@@ -627,9 +667,22 @@ export async function handleInvocation(
     return jbody(409, { error: 'Enabled connected tool not found.' });
   }
 
-  const argumentsValue = input.arguments && typeof input.arguments === 'object' && !Array.isArray(input.arguments)
-    ? (input.arguments as Record<string, unknown>)
-    : {};
+  // Execution arguments come only from the approved proposal (ADR-005).
+  // Arguments a caller sends are never executed; the claim checks them
+  // against the approved digest as a defence against a confused caller.
+  const approvalId = String(input.approvalId ?? '');
+  const approved = deps.approvals.getApproval(approvalId);
+  if (!approved || !approved.arguments) {
+    const error = 'Approval is missing, expired, or has no stored arguments.';
+    logTypedAudit({
+      event: 'rig.invocation.failed',
+      ...rigInvocationFailureFields('approval-claim', principal),
+      correlation: { connectionId },
+      details: { phase: 'approval-claim', error },
+    });
+    return jbody(409, { error });
+  }
+  const argumentsValue = approved.arguments;
 
   const limitsCheck = checkArgumentLimits(argumentsValue);
   if (!limitsCheck.ok) {
@@ -658,11 +711,11 @@ export async function handleInvocation(
   let phase: InvocationPhase = 'approval-claim';
   let approval: { proposalId: string; approvalId: string } | undefined;
   try {
-    const claim = deps.approvals.claim(String(input.approvalId ?? ''), {
+    const claim = deps.approvals.claim(approvalId, {
       connectionId,
       capabilityId,
       capabilityDigest: capability.structuralDigest,
-      arguments: argumentsValue,
+      arguments: input.arguments,
     });
     approval = claim.approval;
     const claimId = claim.claimId;
@@ -670,7 +723,7 @@ export async function handleInvocation(
     phase = 'connector-call';
     let output: unknown;
     try {
-      output = await deps.runtime.callTool(connectionId, capability.name, argumentsValue);
+      output = await deps.runtime.callTool(connectionId, capability.name, claim.approval.arguments);
     } catch (callError) {
       // Release the claim, but never let a consumption error mask the call error.
       try { deps.approvals.consume(claim.approval.approvalId, claimId); } catch { /* best effort */ }
@@ -688,7 +741,7 @@ export async function handleInvocation(
       ownerId: 'local-operator',
       sourceIdentity: { kind: 'mcp-connection', id: connectionId },
       parentRecordIds: [],
-      inputDigest: digest(argumentsValue),
+      inputDigest: digest(claim.approval.arguments),
       outputDigest: digest(output),
       createdAt: new Date().toISOString(),
       sourceClass: connection.sourceClass,
