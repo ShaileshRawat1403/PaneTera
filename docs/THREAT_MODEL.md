@@ -153,6 +153,7 @@ requestLogger HTTP line is the only record.
 | DELETE | `/connections/:connectionId` | removes a connection |
 | POST | `/connections/:connectionId/refresh` | refreshes connection credentials |
 | PUT | `/connections/:connectionId/capabilities/:capabilityId` | updates a capability |
+| GET | `/proposals` | none (read); returns unexpired pending proposals, including the stored arguments an approval would execute |
 | POST | `/proposals` | creates a governed proposal |
 | POST | `/proposals/:proposalId/approve` | approves a proposal → execution |
 | POST | `/invocations` | invokes a connected tool |
