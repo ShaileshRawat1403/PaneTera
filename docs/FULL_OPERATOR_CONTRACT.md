@@ -1,7 +1,22 @@
 # Full Operator Contract
 
-**Status:** Feature branch `feature/full-operator-extension`. Not accepted into
-the release line.
+**Status:** EXPERIMENTAL / IMPLEMENTED / NOT GOVERNANCE-ACCEPTED
+
+> [!WARNING]
+> - The implementation is present on `dev` (`chrome-extension/operator/`).
+> - Governed mode is the default, and a missing, unknown, or unreadable setting
+>   falls back to governed.
+> - The ungoverned lane requires an explicit, persisted user opt-in in the
+>   extension popup.
+> - The ungoverned lane is outside PaneTera's accepted governed-execution
+>   contract.
+> - Persistent PaneTera audit and provenance for ungoverned actions are not
+>   implemented. Dispatch events currently reach only the extension console
+>   (`console.debug`).
+> - Current standing: `SECURITY.md` and `docs/CURRENT_IMPLEMENTATION_CHECKPOINT.md`.
+>
+> The contract text below is unchanged. Where it mentions an audit hook or
+> audit sink, that is the console-only callback described above.
 **Scope:** Extends the PaneTera Browser Operator extension with a Claude-class
 capability surface behind an explicit governance toggle.
 

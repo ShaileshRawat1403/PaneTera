@@ -2,26 +2,25 @@
 
 **Product name:** PaneTera
 **Repository name:** `PaneTera`
-**Status:** Canonical product scope
+**Status:** CANONICAL product scope and information architecture
 
 > **PaneTera gives your rig the headroom to work, with one clear pane for
 > context, action, evidence, and judgment.**
 
-## Current product boundary
+## Product boundary
 
-PaneTera currently ships the workstation foundation: one conversation, one
-authoritative canvas, contextual project/Activity/Audit controls, a governed
-composer with transient attachments, strict public website preview, registered
-local-application viewing, and existing proposal/evidence paths.
+This document defines who PaneTera is for, what it is, and the capabilities it
+is designed to provide. It is not an implementation inventory. The capability
+descriptions below state the product destination and its requirements; they do
+not claim that any item exists at a given commit.
 
-The full capability list later in this document is the V1 destination, not a
-claim that every item is already implemented. In particular, arbitrary MCP
-connections, a general Rig registry, MCP-resource attachment, durable Headroom
-capsules, and the work/now/attention/next read model remain deferred. Their
-absence must be represented honestly rather than as disabled menu rows.
+What exists, with evidence, is recorded in
+`docs/CURRENT_IMPLEMENTATION_CHECKPOINT.md`. Delivery sequencing is owned by
+`ROADMAP.md`. Authority between documents is defined in
+`docs/DOCUMENTATION_AUTHORITY.md`.
 
-The executable checkpoint is recorded in
-`docs/CURRENT_IMPLEMENTATION_CHECKPOINT.md`.
+Where a capability is not available in the running product, its absence must be
+represented honestly rather than as disabled menu rows.
 
 ## Canonical naming
 
@@ -233,7 +232,7 @@ decorative desktop companion is not a product requirement.
 
 SQLite, PostgreSQL, and later database integrations belong in Rig as governed
 connectors and appear in the canvas as native data surfaces. They are not direct
-model connections and are not part of the current UI convergence tranche.
+model connections.
 
 The shared database-connector contract must provide:
 
@@ -306,6 +305,11 @@ delegation.
 - Maximum agent, task, or output throughput as the primary success metric.
 
 ## Product sequence
+
+This is the dependency order between product capabilities: each builds on the
+ones before it. It is neither a delivery schedule nor an implementation status.
+Sequencing is owned by `ROADMAP.md`, and implementation status by the
+checkpoint.
 
 1. **Workstation shell:** persistent conversation, dominant canvas, contextual
    drawers, and quiet governance.

@@ -1,3 +1,17 @@
+> [!IMPORTANT]
+> **Status: SUPERSEDED**
+>
+> This document is preserved as historical project context. It must not be used
+> as current implementation, architecture, or agent authority.
+>
+> Replaced by:
+>
+> - [`docs/DOCUMENTATION_AUTHORITY.md`](DOCUMENTATION_AUTHORITY.md)
+> - [`AGENTS.md`](../AGENTS.md)
+> - [`docs/PANETERA_WORKSTATION_CONTRACT.md`](PANETERA_WORKSTATION_CONTRACT.md)
+> - [`docs/CURRENT_IMPLEMENTATION_CHECKPOINT.md`](CURRENT_IMPLEMENTATION_CHECKPOINT.md)
+> - [`ROADMAP.md`](../ROADMAP.md), where future sequencing is relevant
+
 # Agent Context and System Intent
 
 **Status:** Active project guidance  

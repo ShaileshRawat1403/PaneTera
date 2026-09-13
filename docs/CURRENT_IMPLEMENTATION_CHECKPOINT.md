@@ -1,186 +1,216 @@
-# PaneTera Current Development Baseline
+# PaneTera Current Implementation Checkpoint
 
-**Commit:** `a4a1664` (development baseline; not a release)
-**Status:** In development — not release-ready
-**Date:** 2026-07-26
-**Scope:** Workstation, native context, governed Rig/MCP, durable Headroom, browser execution pipeline, model selection, agent runtime, and UI/UX convergence
+**Status:** CURRENT DEVELOPMENT BASELINE. NOT A GA RELEASE.
+**Baseline:** `dev` at `7f124335624f7277d7a72ff337e86cfed1ea44b2`
+**Date:** 2026-09-12
+**Previous checkpoint:** [`docs/checkpoints/2026-07-26-bca10da.md`](checkpoints/2026-07-26-bca10da.md) (HISTORICAL)
 
-No release tag is associated with this baseline. The temporary local tag
-`v0.9.0-alpha-workstation` was removed after product review. A clean build and
-test run establish an engineering checkpoint; they do not establish that the
-product is ready to release.
+This is factual authority. It records what exists at the baseline above and the
+evidence for each claim. It does not define product scope or sequencing. What
+PaneTera must be is defined in
+[`docs/PANETERA_WORKSTATION_CONTRACT.md`](PANETERA_WORKSTATION_CONTRACT.md), and
+what happens next in [`ROADMAP.md`](../ROADMAP.md). See
+[`docs/DOCUMENTATION_AUTHORITY.md`](DOCUMENTATION_AUTHORITY.md).
 
-## What currently works
+## Evidence states
 
-- PaneTera is the only workstation shell; there is no query-string shell fork.
-- Conversation remains visible beside one authoritative canvas.
-- Project selection, Activity, and Audit open contextually without shrinking
-  the canvas.
-- The composer supports natural language, `/` commands, transient context
-  chips, notes, registered-project references, and validated public web
-  references.
-- Attachments do not reach the intent resolver. Native file/folder access is
-  represented by explicit, expiring, revocable grants; Headroom stores redacted
-  metadata and digests rather than source material.
-- File and folder context use the operating system picker and remain distinct
-  from durable registered-project selection.
-- Rig is visible and supports approval-first local stdio and Streamable HTTP
-  MCP connections, bounded discovery, per-capability policy, exact single-use
-  tool approval, resource/prompt retrieval, health, provenance, and audit.
-- Authenticated Streamable HTTP stores bearer credentials as macOS Keychain
-  references, binds them to one validated origin, and removes them when the
-  connection is deleted; credential material never enters connection records.
-- Enabled MCP resources can be explicitly retrieved into the composer context;
-  external declarations remain untrusted and disabled by default.
-- Headroom records every submitted intent before work begins, measures exact
-  material bytes without inventing token precision, records exclusions and
-  freshness, and provides durable editable capsules for resumption.
-- `/rig` and `/headroom` open their actual governed surfaces; they are not
-  placeholder commands.
-- Public website preview rejects credentials, private/loopback destinations,
-  unsupported schemes, and carries no PaneTera authority.
-- Registered local applications, native project surfaces, proposals, results,
-  evidence, and failure states route into the same canvas.
-- Approval is explicit and single-fire at the UI boundary; backend policy and
-  idempotency remain authoritative.
-- The warm graphite design system, contrast rules, reduced motion, landmarks,
-## UX Enhancement Initiatives (Completed)
+| State | Meaning |
+| --- | --- |
+| VERIFIED | Code exists and an automated test or E2E journey proves the stated contract. |
+| PRESENT, NOT ACCEPTANCE-VERIFIED | Code exists, but no suitable acceptance verification was confirmed for the stated behaviour. |
+| IMPLEMENTED, NOT ACCEPTED | Code exists but is intentionally outside the accepted normative product contract. |
+| LEGACY SUPPORTED | An existing compatibility path remains operational but is not the architecture for new work. |
 
-### Initiative C: Richer MCP UI & Schema Cards
-- `RichSchemaFormView.tsx`: Expanded field types (boolean, number, select, textarea, code, url, date, file, array)
-- `StatusBoardView.tsx`: Interactive verification checkboxes
-- `ProposedActionCard.tsx`: Inline diff viewer and evidence links
-- `NativeWorkbenchRenderer.tsx`: View prioritization and smart routing
+VERIFIED is an engineering state. It does not mean a capability has met the
+contract's release acceptance conditions, which also require real-Chrome UX and
+accessibility acceptance and explicit user approval. This checkpoint claims none
+of those conditions as satisfied.
 
-### Initiative D: Browser Evidence Split-Pane Canvas
-- `BrowserEvidenceCanvas.tsx`: Split-pane layout (300px list + detail)
-- `ExtractionCard.tsx`: Type-specific rendering for extractions
-- `BrowserLiveSurface.tsx`: "Capture as evidence" button
-- Server: `getRecentExtractions()` method and `browser_list_extractions` tool
+Where the cited tests run:
 
-### Initiative B: Interactive Canvas Markup Pen
-- `CanvasSelectionProvider.tsx`: Selection state management
-- `MarkupToolbar.tsx`: Explain/Search/Annotate actions
-- `FilePreviewPanel.tsx`: Line-range selection
-- `headroom/store.ts`: Annotations array in HeadroomCapsule
+- `test/` runs under `npm test`, the full suite in the CI job
+  `lint · test:core · build`.
+- `e2e/` runs under `npm run test:e2e`, the CI job `e2e (playwright)`.
+- `chrome-extension/test/` runs under the extension's own `npm run test:unit`.
+  Neither the root `npm test` nor CI runs it.
 
-### Initiative A: Canvas Start & Surface Polish
-- `EmptyState.tsx`, `LoadingState.tsx`, `ErrorState.tsx`, `SuccessState.tsx`: State component library
+## Baseline verification
 
-### Feature Suite: Agent Runtime & Browser Execution (2026-07-26)
+| Check | Result | Evidence |
+| --- | --- | --- |
+| CI on `7f12433` (push to `dev`) | All three jobs succeeded | GitHub Actions run 34694807535 |
+| Lint (`eslint`, `tsc`) | 0 errors, 205 warnings | Run 34694807535 |
+| Unit and integration suite | 1,352 tests in 308 suites: 1,351 passed, 0 failed, 1 skipped (the older-Node refusal test skips when no Node 20 binary is available) | Run 34694807535 |
+| E2E journeys | 13 passed | Run 34694807535, `e2e (playwright)` |
+| Production build | 1,187 modules transformed | Run 34694807535 |
+| Secret scan | gitleaks passed | Run 34694807535 |
 
-#### Agent Runtime Integration
-- `server/agent/` with `runStore`, `capabilities`, `runtime`, `browserRunCoordinator`, `openaiResponsesProvider`, `providerFactory`, `types`
-- `server/agent/rigCapabilities.ts` bridges `RigToolAdapter` → `AgentCapability[]`
-- `POST /api/agent/run` endpoint for governed agent execution
-- `AgentRunCard` renders run results with status chips, event timeline, cancel/approve buttons
+## Workstation
 
-#### Model Selection & Provider Routing
-- 10-model `modelStore.ts` across 4 providers (OpenAI, Anthropic, Google, Ollama)
-- `useModelSelection` hook with localStorage persistence
-- Glassmorphic `ModelSelector` dropdown in Composer action bar
-- Server-side provider routing based on model ID prefix
-- Model badge on assistant messages showing which model generated the response
+| Capability | State | Code | Verification |
+| --- | --- | --- | --- |
+| Workstation shell: persistent conversation, one canvas, contextual drawers | VERIFIED | `src/components/workstation/WorkstationShell.tsx` | `test/workstationShell.test.tsx`, `test/workstationLayout.test.ts`, `test/workstationBreakpoint.test.tsx`; `e2e/workstation.spec.ts` (Rig and Headroom drawers, audit log, project switcher, gateway state) |
+| Authoritative canvas (one `main` landmark) | VERIFIED | `WorkstationShell.tsx` (`workstation-canvas`) | `e2e/workstation.spec.ts` ("the single authoritative canvas is present") |
+| Work, now, attention, and next brief | VERIFIED | `src/components/workstation/ContextBriefPanel.tsx` | `test/contextBrief.test.ts`. Usability for release condition 4 is not acceptance-verified. |
+| Cockpit status bar | VERIFIED | `src/components/workstation/CockpitStatusBar.tsx` | `test/cockpitStatusBar.test.ts` |
+| Public web preview: untrusted, refuses credentials and private destinations | VERIFIED | `server/index.ts` (`POST /api/web-preview/probe`) | `test/addressSafety.test.ts`, `test/webPreviewOutcome.test.ts` |
 
-#### Browser Operator Execution Pipeline
-- Chrome extension routes: `GET /actions/pending`, `POST /actions/preview-result`, `GET /actions/claim`, `POST /actions/complete`
-- Inspection routes: `GET /inspections/pending`, `POST /inspections/complete`
-- Observation polling: `GET /observations/pending`, `POST /observations/complete`, `POST /observations/request`
-- UI approval routes: `POST /api/agent/run/:runId/approve-browser`, `/reject-browser`
-- Extended action types: `browser.click.execute`, `browser.fill.execute`, `browser.scroll.execute`, `browser.select.execute`
-- MCP execution tools: `browser_propose_click`, `browser_propose_fill`, `browser_propose_scroll`, `browser_inspect_elements`, `browser_get_action_status`
-- `UnifiedApprovalCard` routes browser-action proposals to `BrowserActionProposalCard`
+## Rig
 
-#### Context Brief & Evidence
-- `ContextBriefPanel` renders 4-question read model (What/Now/Attention/Next)
-- `BrowserEvidenceCanvas` with auto-refresh (10s polling)
-- `/evidence` command opens evidence browsing surface
-- `BrowserLiveSurface` "Capture as evidence" button wired to governed pipeline
-- `BrowserTelemetryCanvas` capture wired to observations API
+| Capability | State | Code | Verification |
+| --- | --- | --- | --- |
+| Rig registry: approval-first connection records | VERIFIED | `server/rig/registry.ts`, `server/rig/routes.ts` | `test/rigFoundation.test.ts`, `test/appConnectionRegistry.test.ts`, `e2e/rig.spec.ts` |
+| Governed stdio MCP connections | VERIFIED | `server/rig/governedStdio.ts`, `server/rig/transportSecurity.ts` | `test/rigIntegration.test.ts` (governed stdio transport), `test/rigGenericRegression.test.ts` (real stdio MCP server), `e2e/rig.spec.ts` (record, review, and approve an arbitrary stdio server) |
+| Streamable HTTP MCP connections: private destinations refused, credentials bound to one origin | VERIFIED | `server/rig/transportSecurity.ts` (`isPrivateAddress`), `server/rig/boundFetch.ts` | `test/rigIntegration.test.ts` ("uses a keychain-backed bearer token directly and strips it after a cross-origin redirect") |
+| Capability discovery | VERIFIED | `server/rig/runtime.ts` | `test/rigLifecycle.test.ts`, `test/rigDataPlaneHandlers.test.ts`, `e2e/rig.spec.ts` |
+| Capability enablement; external declarations disabled and denied by default | VERIFIED | `server/rig/routes.ts` (`PUT /connections/:connectionId/capabilities/:capabilityId`) | `test/rigFoundation.test.ts` ("defaults every external capability to disabled and denied"), `e2e/rig.spec.ts` (enable the echo tool) |
+| Capability invocation | VERIFIED | `server/rig/routes.ts` (`handleInvocation`, `POST /invocations`) | `test/rigDataPlaneHandlers.test.ts`, `test/rigProposalBinding.test.ts`, `e2e/rig.spec.ts` (approve and run; result labelled untrusted) |
+| Resource and prompt retrieval | VERIFIED | `server/rig/routes.ts` (`POST /resources/read`, `POST /prompts/get`) | `test/rigIntegration.test.ts`, `test/rigGenericRegression.test.ts`, `test/mcpResourceInspector.test.tsx` |
+| Proposal-time validation | VERIFIED | `server/rig/routes.ts` (`handleProposal`), `server/rig/canonical.ts` (`validateProposedArguments`) | `test/rigProposalBinding.test.ts`, `test/rigArgumentValidation.test.ts`, `test/rigGenericRegression.test.ts` |
+| Immutable approved argument binding; a proposal is approved once | VERIFIED | `server/rig/approval.ts` | `test/rigProposalBinding.test.ts`, `test/rigPanelProposalReview.test.tsx` |
+| Defensive invocation validation of the stored payload | VERIFIED | `server/rig/routes.ts` (`handleInvocation`) | `test/rigProposalBinding.test.ts` ("handleInvocation executes only the approved arguments"), `test/rigGenericRegression.test.ts` |
+| Agent-originated Rig proposals validated the same way | VERIFIED | `server/agent/rigCapabilities.ts` | `test/rigGenericRegression.test.ts` (agent proposals) |
+| Agent use of `auto-invocable` Rig tools: direct execution without a proposal | PRESENT, NOT ACCEPTANCE-VERIFIED | `server/rig/types.ts`, `server/rig/routes.ts`, `server/rig/adapter.ts`, `server/agent/rigCapabilities.ts`, `server/rig/appConnectionRegistry.ts` | No dedicated test exercises the direct path or the server-side source-class refusal; see the note below this table |
+| Rig provenance: hash chain and rotation | VERIFIED | `server/rig/provenance.ts` | `test/provenanceChainIntegrity.test.ts`, `test/provenanceRotation.test.ts`, `test/rigProvenance.test.tsx` |
+| Connection lifecycle ownership | VERIFIED | `server/rig/runtime.ts` (`connect`, `disconnectAll`), `server/index.ts` (`startPaneTeraServer`) | `test/rigLifecycle.test.ts` |
+| Explicit stdio launch identity: executable, arguments, working directory, environment, and content of file arguments | VERIFIED | `server/rig/transportSecurity.ts` (`verifyStdioSpec`) | `test/launchIdentity.test.ts` |
+| Launch or source drift returns a connection to review | VERIFIED | `server/rig/runtime.ts`, `server/rig/appConnectionRegistry.ts` | `test/launchIdentity.test.ts`, `test/appConnectionRegistry.test.ts` |
+| Managed application declarations: `APP_CONNECTIONS` is empty | VERIFIED | `server/rig/appConnectionRegistry.ts` | `test/appConnectionRegistry.test.ts` ("core PaneTera declares no applications") |
+| No Blender or REAPER code or managed declarations in core | VERIFIED | No `blender` or `reaper` reference in `server/`, `src/`, or `chrome-extension/` | Repository search at this baseline |
+| HTTP bearer credentials held as macOS Keychain references | PRESENT, NOT ACCEPTANCE-VERIFIED | `server/rig/keychain.ts` (compiled helper) | Reference format and origin binding covered by `test/rigFoundation.test.ts` and `test/rigIntegration.test.ts`; real Keychain storage is not exercised in CI |
 
-#### Intent Classification
-- `POST /api/classify-intent` endpoint using `gpt-4o-mini` for ambiguous prompts
-- Client-side fallback when deterministic matcher falls to `converse`
+Launch identity digests the files named in a connection's arguments, not their
+full import graph (ADR-002).
 
-#### Keyboard Shortcuts & Export
-- `Cmd+M`: Opens model selector dropdown
-- `Cmd+Shift+C`: Copies conversation as Markdown to clipboard
-- `Cmd+Shift+E`: Downloads conversation as `.md` and `.json` files
-- `src/utils/exportConversation.ts`: Export utilities
+Agent use of `auto-invocable` Rig tools at this baseline:
 
-#### Glassmorphic UI & Micro-Animations
-- Glass tokens: `glass.raisedRgb` with `blur(24px) saturate(180%)`
-- Micro-animations in `src/theme/motion.ts` (all respect `prefers-reduced-motion`)
-- Glassmorphic top bar and dropdowns
+- Capability permissions are `denied`, `proposable`, and `auto-invocable`
+  (`server/rig/types.ts`).
+- Disabled and `denied` capabilities are never offered to agents
+  (`server/rig/adapter.ts`).
+- A `proposable` capability creates a validated proposal that requires approval
+  (`server/agent/rigCapabilities.ts`).
+- An enabled `auto-invocable` capability maps to observe risk and executes
+  directly through `runtime.callTool`, without a proposal
+  (`server/agent/rigCapabilities.ts`).
+- PaneTera does not independently prove that an `auto-invocable` tool is
+  semantically read-only.
+- `auto-invocable` may be assigned only to capabilities of `panetera-managed`
+  connections. The Rig capability-policy route refuses it for
+  `local-user-installed` and `remote-external` connections with `403`
+  (`server/rig/routes.ts`).
+- Core `APP_CONNECTIONS` is empty at this baseline
+  (`server/rig/appConnectionRegistry.ts`), so core declares no managed
+  application integration that uses this path. Connection records persisted by
+  earlier or integration builds can still carry `panetera-managed`.
+- Verification: `test/rigDataPlaneHandlers.test.ts` uses `auto-invocable` only
+  as a fixture for the approval-bound invocation handler, and
+  `test/typedErrorClientParsing.test.ts` only parses the refusal message on the
+  client. Neither exercises the direct agent path or the server-side refusal.
 
-## Remaining release-candidate work
+## Headroom and grants
 
-- Complete the final visual/accessibility pass across the remaining legacy
-  canvas cards and test the primary journeys at the release viewport set.
-- Generic capability proposals and provenance records.
-- Team, cloud, mobile, marketplace, or unattended-agent operation.
+| Capability | State | Code | Verification |
+| --- | --- | --- | --- |
+| Durable Headroom capsules: create, edit, resume, delete | VERIFIED | `server/headroom/store.ts`, `server/headroom/routes.ts` | `test/headroom.test.ts` ("Headroom capsules are durable and editable"), `e2e/headroom.spec.ts` |
+| Headroom envelopes persist hashes and measurements, not material, with redaction | VERIFIED | `server/headroom/store.ts` | `test/headroom.test.ts` |
+| Local selection scopes: expiring and revocable | VERIFIED | `server/headroom/localScopeStore.ts` | `test/headroom.test.ts` |
+| Native file and folder grants: 15-minute expiry, digest, revocation, traversal refusal | VERIFIED | `server/native/picker.ts`, `server/native/routes.ts`, `src/components/workstation/NativePickerModal.tsx` | `test/nativePicker.test.tsx`. The operating-system picker journey is not automated. |
 
-## Verification record
+## Browser Operator (governed path)
 
-The latest engineering verification passed:
+| Capability | State | Code | Verification |
+| --- | --- | --- | --- |
+| Governed browser actions: preview, operator approval, then extension claim | VERIFIED | `server/browserActionStore.ts` (approval requires a successful preview), `server/browserGateway.ts` (`/actions/pending`, `/actions/claim`, `/actions/complete`), `server/agent/routes.ts` (`approve-browser`, `reject-browser`) | `test/browserActionStorePersistence.test.ts`, `test/browserAgentJourney.test.ts`, `test/browserGatewayActorAudit.test.ts`. The real Chrome journey is not automated in CI. |
+| Browser Operator MCP facade and evidence tools | VERIFIED | `server/mcp/browserOperatorServer.ts`, `server/mcp/browserMcpRoute.ts` | `test/mcpV0.test.ts`, `test/mcpV0OfficialClient.test.ts` |
 
-- `npm run lint`;
-- the complete 36-file `npm test` command;
-- `npm run build`;
-- `git diff --check`;
-- integrated Chrome inspection of the Rig and Headroom drawers, both transport
-  forms, authenticated HTTP lifecycle, backend-interruption recovery, the
-  one-line work/now/attention/next guidance, and `/rig` and `/headroom`
-  dispatch into their real surfaces.
+## Agent runtime and models
 
-Automated integration uses real MCP protocol sessions over governed stdio and
-Streamable HTTP, and exercises tool, resource, and prompt discovery/use. It
-also proves external declarations default to denied, approvals bind exact
-arguments and digests, resources require explicit retrieval and provenance,
-and Headroom persists hashes/measurements without raw material.
+| Capability | State | Code | Verification |
+| --- | --- | --- | --- |
+| Agent runtime, run store, and queue | VERIFIED | `server/agent/runtime.ts`, `server/agent/runStore.ts`, `server/agent/runQueue.ts` | `test/agentRuntime.test.ts`, `test/agentLoop.test.ts`, `test/agentRunQueue.test.ts`, `test/agentRunStore.test.ts` |
+| Model selection and provider routing | PRESENT, NOT ACCEPTANCE-VERIFIED | `server/modelStore.ts`, `server/modelRoutes.ts`, `src/hooks/useModelSelection.ts` | `test/modelFallback.test.ts` and `test/openaiResponsesProvider.test.ts` cover fallback and one provider; live provider calls are not exercised |
 
-The authenticated MCP acceptance journey recorded a Keychain-backed HTTP
-connection, approved and connected it, discovered and enabled tool/resource/
-prompt capabilities, performed an exact approved invocation, retrieved a prompt
-and resource, inspected provenance, attached that resource to the composer, and
-verified that the assistant treated its material as available but untrusted.
-The connection and credential were then removed and the same deterministic
-connection identifier was successfully recreated, proving lifecycle cleanup.
+## Platform and engineering baseline
 
-The Headroom acceptance journey inspected the exact envelope source and byte
-accounting, pinned it into a capsule, edited and saved its objective and
-decisions, resumed it, deleted it, and cleared the composer context. No
-acceptance connection, capsule, or attached context remains; immutable audit
-and provenance records are intentionally retained.
+| Capability | State | Code | Verification |
+| --- | --- | --- | --- |
+| Master-token authentication on protected routes | VERIFIED | `server/index.ts` | `test/authNegativeIntegration.test.ts` |
+| Workspace filesystem policy | VERIFIED | `server/mcpAdapter.ts`, `server/workspaceReader.ts`, `server/myai-policy.json` | `test/workspaceReader.test.ts`, `test/staticStructureScan.test.ts`, `test/mcpAdapterAudit.test.ts` |
+| Workspace command execution (`POST /api/execute`) disabled outside tests | PRESENT, NOT ACCEPTANCE-VERIFIED | `server/features.ts` (`commandExecution: isTest`), `server/index.ts` | Enforced in code; no test covers the production refusal |
+| Node 22 baseline | VERIFIED | `.nvmrc`, `package.json` (`engines`), `scripts/check-node-version.mjs` | `test/nodeVersionPreflight.test.ts` (its older-Node refusal case skips where no Node 20 binary exists, including CI); CI `node-version: '22'` |
+| Test and app-data isolation | VERIFIED | `test/support/isolatedAppData.mjs`, `server/appData.ts`, `server/audit.ts`, `server/agent/runHistory.ts` | `test/testIsolation.test.ts` |
+| Git worktree and submodule detection | VERIFIED | `server/repoSetup.ts` (`detectGitRepository`) | `test/repoGitDetection.test.ts` |
+| CI baseline: lint, full suite, build, SBOM, secret scan, Playwright on PRs and pushes to `dev` and `master` | VERIFIED | `.github/workflows/ci.yml` | Run 34694807535 |
 
-Live Chrome geometry at a 1405×727 content viewport measured approximately
-393px conversation and 1012px canvas (72% canvas), with no horizontal overflow.
-Opening Activity produced zero canvas-width delta.
+## Implemented but not accepted
 
-The production build splits React, UI, general vendor, Rig, and Headroom chunks;
-no generated chunk exceeds Vite's warning threshold.
+| Capability | State | Code | Verification |
+| --- | --- | --- | --- |
+| Full Operator (browser extension) | IMPLEMENTED, NOT ACCEPTED (EXPERIMENTAL) | `chrome-extension/operator/` (`mode.js`, `dispatch.js`, `guards.js`), `chrome-extension/messageRouting.js`, `chrome-extension/popup.html` | `chrome-extension/test/operator-mode.test.js`, `operator-dispatch.test.js`, `operator-guards.test.js` passed when run directly on 2026-09-12; not run by root `npm test` or CI |
 
-## Release gate
+- The implementation exists on `dev`.
+- The default mode is governed. A missing, unknown, or unreadable setting
+  resolves to governed (`operator/mode.js`).
+- Ungoverned mode requires an explicit, persisted user opt-in in the extension
+  popup, which shows a warning.
+- When ungoverned, the extension executes navigation, script evaluation, direct
+  input, and diagnostic operations without PaneTera approval
+  (`operator/dispatch.js`).
+- Ungoverned dispatch produces no persistent PaneTera audit or provenance
+  record. The extension's audit callback terminates at
+  `console.debug('[operator]', event)` (`messageRouting.js`), and the PaneTera
+  server has no reference to this lane.
+- A thin safety floor (`operator/guards.js`) applies to some page-acting
+  operations even when ungoverned, and fails open when a tab URL cannot be
+  resolved. It does not make the lane governed.
+- Full Operator is therefore EXPERIMENTAL and NOT GOVERNANCE-ACCEPTED. Whether it
+  is removed, build-gated, brought under Rig, or connected to PaneTera audit is
+  an open security and product decision.
 
-Do not create a release tag until all of the following are true and have been
-accepted in the running product:
+## Legacy supported paths
 
-1. File and folder attachment use distinct native local-system selection and
-   explicit, auditable scope grants; project selection remains a durable
-   workspace operation.
-2. Rig provides governed MCP connection records, discovery, capability review,
-   resource attachment, approval, invocation, health, and audit according to
-   `RIG_MCP_CONNECTION_ARCHITECTURE.md` and ADR-002.
-3. Headroom provides durable bounded context, provenance, freshness, inclusion
-   controls, capacity accounting, and session/project resumption without
-   fabricated token precision.
-4. The work/now/attention/next read model is usable without dashboard clutter.
-5. The primary journeys pass automated checks and real Chrome UX/accessibility
-   verification, with no known critical or high-severity defects.
-6. The user explicitly approves a named release candidate.
+| Capability | State | Code | Verification |
+| --- | --- | --- | --- |
+| Soothsayer live-app integration | LEGACY SUPPORTED | `server/liveApp.ts`, `server/workflowIntents.ts`, `server/index.ts` (`SoothsayerWorkbench` routing) | `test/liveAppWorkbench.test.ts`, `test/workflowIntent.test.ts` |
 
-Intermediate commits may record reversible engineering progress. They are not
-releases and must not be tagged as though they were.
+- Soothsayer is implemented and tested as a bespoke, preview-only live-app
+  integration: `show soothsayer ui` and `show soothsayer workflows` open its
+  workbench in the canvas, using embed URLs signed with a timestamped HMAC whose
+  secret stays on the server.
+- This path predates Rig. It does not use the Rig registry, approval, lifecycle
+  ownership, or launch identity.
+- It is not the architectural template for new application integrations. New
+  integrations use governed Rig contracts.
 
-No future phase may weaken the current truth, authority, web-preview, focus, or
-single-canvas boundaries.
+## Release history
+
+| Field | Value |
+| --- | --- |
+| Tag | `v0.9.0-rc1` |
+| Tagged | 2026-07-31 |
+| Tag target | `80b436fa0ea153a4c928cdeba0938853b1141ece` |
+| Standing | HISTORICAL SUPERSEDED RELEASE CANDIDATE |
+| GA | No. The annotated tag message says "Not GA". |
+| Current development baseline | `7f124335624f7277d7a72ff337e86cfed1ea44b2` |
+
+PaneTera has no GA release. Release acceptance conditions are defined in the
+Workstation Contract; this checkpoint does not claim that they are met.
+
+## Known limitations at this baseline
+
+- Ungoverned Full Operator actions have no persistent PaneTera audit.
+- Launch identity does not digest a connection's full import graph.
+- The Rig review surface approves and runs in one interaction; execution uses
+  the stored payload.
+- Importing `server/index.ts` initialises module-scope stores against the
+  selected app-data location; tests isolate that location.
+- Real Chrome, native picker, and Keychain journeys are not automated in CI.
+- Open findings are recorded in section 4 of `docs/THREAT_MODEL.md`.
+
+## Keeping this checkpoint valid
+
+A PR that materially changes the shipped capability boundary states
+`Checkpoint: updated` or `Checkpoint: still valid` in its description. A new
+frozen snapshot is cut under `docs/checkpoints/` at meaningful milestone merges.
+See rule 5 in `docs/DOCUMENTATION_AUTHORITY.md`.
