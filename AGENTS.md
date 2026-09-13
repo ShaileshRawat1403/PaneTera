@@ -46,12 +46,17 @@ current proving environment, not the audience boundary.
   unavailable or degraded state.
 - Rig is the governed surface for external applications, tools, and MCP servers.
 - Consequential mutations go through the applicable proposal and approval path.
-  For Rig capabilities, a proposal is validated when it is created, approval
-  stores the reviewed arguments, execution uses only that stored payload, and
-  invocation validates it again (ADR-005).
+  A Rig capability whose policy is `proposable` runs only through a proposal: the
+  proposal is validated when it is created, approval stores the reviewed
+  arguments, execution uses only that stored payload, and invocation validates it
+  again (ADR-005). A capability explicitly enabled as `auto-invocable` (observe
+  risk) may execute directly within that policy; `denied` and disabled
+  capabilities are never offered to agents.
 - An approved stdio connection is bound to its launch identity. Changing its
-  executable, arguments, working directory, environment, or the files it runs
-  requires review and approval again (ADR-002). Do not work around this.
+  executable, arguments, working directory, environment, or the content of an
+  absolute file argument bound by its launch specification requires review and
+  approval again (ADR-002). The identity does not cover the full import graph of
+  those files. Do not work around this.
 - Do not add arbitrary command execution or mutation outside the governed
   contracts, and do not broaden command allowlists unless a narrow, test-backed
   use case requires it.

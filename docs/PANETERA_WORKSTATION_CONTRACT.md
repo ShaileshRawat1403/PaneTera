@@ -136,17 +136,22 @@ Browser observations are evidence and never application authority.
 
 ## Governed execution contract
 
-- Consequential actions, including tool invocation through Rig, run only
-  through a proposal that a person reviews and explicitly approves. An approval
-  authorizes one execution.
+- Consequential actions, and every capability whose policy is `proposable`, run
+  only through a proposal that a person reviews and explicitly approves. An
+  approval authorizes one execution.
+- A capability that a person has explicitly enabled with the `auto-invocable`
+  policy, intended for observe or read use, may execute directly, without a
+  proposal, within that configured policy. A `denied` or disabled capability is
+  never offered for execution.
 - A proposal is validated against the capability's declared input contract when
   it is created. Invalid arguments never reach approval.
 - The approved arguments are the reviewed execution payload. Execution uses that
   stored payload; a caller cannot substitute different arguments after approval.
 - Invocation validates the stored payload again before execution.
 - An approved external process connection is bound to its launch identity: the
-  executable, arguments, working directory, environment, and the content of the
-  files it runs. Any change to that identity requires review and approval again.
+  executable, arguments, working directory, environment, and content digests of
+  the absolute file arguments explicitly bound by the launch specification. Any
+  change to that identity requires review and approval again.
 - External capability declarations are untrusted and disabled until a person
   enables them.
 - Governed actions produce audit and provenance records attributed to the acting

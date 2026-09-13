@@ -23,9 +23,11 @@ every future surface.
    ├──► /api/workbench  (workbenchRouter)         (index.ts:73)
    │         route-level:  NONE — open by design (FINDING-001 on /audit)
    │
-   └──► [GLOBAL MASTER TOKEN GATE]  (index.ts:75-80)
-            authenticatePortalRequest(req, TOKEN, { allowQueryToken: /api/events })
-            → 401 on failure; query-token honored ONLY for /api/events
+   └──► [GLOBAL MASTER TOKEN GATE]  (index.ts, token authentication middleware)
+            authenticatePortalRequest(req, TOKEN): Authorization header only
+            → 401 on failure; the master token is never read from a URL
+            GET /api/events alone authenticates with a single-use ?ticket=
+            minted by POST /api/events/ticket behind this gate
    │
    └──► /api/rig, /api/headroom, /api/native-grants, /api/tessera,
          /api/agent, /api/models, /api/schemas, and every app-level
@@ -36,7 +38,8 @@ Auth primitives:
 
 | Primitive | Where | Semantics |
 | --- | --- | --- |
-| Global master token | `index.ts:75` | Bearer header (`Authorization: Bearer …`); 401 on missing/mismatch. Query token `?token=` only when `req.path === '/api/events'`. |
+| Global master token | `index.ts` (token authentication middleware) | Bearer header (`Authorization: Bearer …`); 401 on missing/mismatch. The master token is never accepted in a query string, on any route. |
+| Event-stream ticket | `eventTicket.ts` (`issueEventTicket`, `consumeEventTicket`) | Minted by `POST /api/events/ticket` for a caller that presented the header credential. 32 random bytes (hex); 30-second TTL; spent on first presentation, valid or not; bounded store. Accepted only by `GET /api/events` as `?ticket=`; 401 otherwise. |
 | `requirePortalToken` | `browserGateway.ts:90` | Same `authenticatePortalRequest` against `PORTAL_TOKEN`; 401. Used for portal-UI-facing browser routes. |
 | `requireExtensionToken` | `browserGateway.ts:70` | In-memory browser-extension session token; 401 if not in `sessions`. |
 | `checkLoopbackBinding` | `browserGateway.ts:79` | 403 unless request IP is loopback. Applied to the whole `/api/browser` router. |
@@ -102,7 +105,8 @@ requestLogger HTTP line is the only record.
 
 | Method | Path | Mutation authority | Audit |
 | --- | --- | --- | --- |
-| GET | `/api/events` | opens an SSE stream (query token permitted) | — |
+| POST | `/api/events/ticket` | mints a single-use, 30-second event-stream ticket (header credential required) | — |
+| GET | `/api/events` | opens an SSE stream; authenticates with a single-use `?ticket=`, never the master token | — |
 | GET | `/api/health` | none (read) | — |
 | POST | `/api/memory/remember` | writes memory via rook bridge (feature-gated) | — |
 | GET | `/api/memory/recall` | none (read) | — |
@@ -254,10 +258,12 @@ connections, so it must never be mounted with the public routers above it.
   `GET /api/workbench/apps/:id/status`): open by design — the browser UI has
   no login and must render live-app tabs. Compensating control: loopback
   binding. `status` probes stay bounded to loopback apps.
-- **EventSource token transport** (`GET /api/events`): the only route that
-  accepts the master token in the query string (`?token=`). This is a
-  deliberate exception for `EventSource` (no headers in SSE). It must never
-  be widened; query tokens leak into logs and proxies.
+- **Event-stream ticket transport** (`GET /api/events`): `EventSource` cannot
+  set headers, so the stream authenticates with a single-use ticket in the
+  query string (`?ticket=`). A caller mints it with `POST /api/events/ticket`
+  using the header credential; it expires after 30 seconds and is spent on first
+  presentation, so a reconnect needs a new ticket. The master token itself is
+  never accepted in a URL, on this or any route (FINDING-004, fixed).
 - **Redirects**: `GET /api/workbench/apps/:appId/status` follows at most 3
   redirects and only to valid loopback URLs (remote redirects → invalid). The
   `portal-embed` signed iframe path is served by the remote app itself
@@ -270,7 +276,7 @@ connections, so it must never be mounted with the public routers above it.
 | FINDING-001 (FIXED) | `POST /api/workbench/audit` previously accepted unauthenticated audit writes from any loopback client, a spoofable audit ledger. | medium (loopback-only, single-operator POC) | Fixed: `requirePortalToken` now guards the write path and the negative auth test asserts 401. No active caller existed, so the fix broke nothing. |
 | FINDING-002 | `apiLimiter` and `strictLimiter` are defined in `middleware/rateLimiter.ts` and `apiLimiter` is imported in `index.ts`, but no global `app.use(apiLimiter)` exists. Only `agentRunLimiter` is mounted (`/api/agent/run`). There is no general request-rate limit. | low (master token already gates Layer B/C) | Decide whether to mount a global limiter behind the token gate, or remove the dead import. |
 | FINDING-003 | `GET /api/browser/health` and `POST /api/browser/pairing/exchange` are reachable without any credential (loopback-bound). `health` is harmless; `exchange` is code-gated by design. | low | Documented, not a defect. Revisit if the server ever binds beyond loopback. |
-| FINDING-004 | `GET /api/events` accepts the master token in the query string. Token-in-URL risks are accepted for SSE; revisit if an SSE-with-headers transport becomes available. | low | Keep the exception scoped to exactly this one path. |
+| FINDING-004 (FIXED) | Historical behavior: `GET /api/events` accepted the master token in the query string (`?token=`) as an `EventSource` exception, which put the credential into URLs, access logs, and Referer headers. Current behavior: a query-string master token is refused on every route, including `/api/events`; an authenticated caller mints a short-lived, single-use ticket with `POST /api/events/ticket`, and the stream accepts only that ticket. | low (loopback-only) | Fixed: the token-in-URL exception was removed. `test/authNegativeIntegration.test.ts` asserts 401 for a query-string master token on `/api/events` and elsewhere, and that a minted ticket opens the stream only once; `test/eventTicketAndCors.test.ts` covers ticket entropy, single use, TTL, and bounded storage. |
 | FINDING-005 | `express.json` parses bodies (up to 2 mb) before the global token gate, so unauthenticated callers can cost a bounded body parse. | low | Optionally move the JSON parser behind the token gate; note the browser/MCP routers need it earlier. |
 
 ## 5. Reserved routes — operator drive-path (Phase 2)
@@ -292,7 +298,9 @@ and must emit typed audit records on enqueue and every drive step.
 - Every route in Layers A (own-auth), B, and C refuses a missing credential
   with 401 (exceptions: `/mcp/browser` GET/DELETE → 405, `health` → 200).
 - A representative route per layer refuses a wrong credential with 401.
-- Query-token is honored on `/api/events` and rejected everywhere else.
+- A query-string master token is refused on every route, including
+  `/api/events`; a ticket minted with the header credential opens the event
+  stream only once.
 - Documented-open surfaces keep their classified behavior, including the
   FINDING-001 audit write, so a fix that moves them into the 401 sweep is
   visible when it lands.

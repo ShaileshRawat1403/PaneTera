@@ -132,8 +132,14 @@ See `docs/FULL_OPERATOR_CONTRACT.md` and the checkpoint for current standing.
 
 ### Agent runtime and models
 
-- Model providers are reasoning engines without authority of their own. Agent
-  use of Rig tools goes through the governed proposal path.
+- Model providers are reasoning engines without authority of their own.
+- Agents are offered only Rig capabilities that a person has enabled; `denied`
+  and disabled capabilities are never offered. Each use follows the capability's
+  policy: a `proposable` capability creates a validated proposal that must be
+  approved before it executes, and an `auto-invocable` capability (observe risk)
+  executes directly, without a proposal. PaneTera does not independently verify
+  that an `auto-invocable` tool is read-only; that classification is the
+  person's policy decision.
 - Agent run creation is rate limited. Provider credentials are read on the
   server from its environment.
 
