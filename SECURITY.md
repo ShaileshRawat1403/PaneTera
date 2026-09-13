@@ -140,6 +140,10 @@ See `docs/FULL_OPERATOR_CONTRACT.md` and the checkpoint for current standing.
   executes directly, without a proposal. PaneTera does not independently verify
   that an `auto-invocable` tool is read-only; that classification is the
   person's policy decision.
+- `auto-invocable` is permitted only for capabilities of `panetera-managed`
+  connections. User-installed (`local-user-installed`) and `remote-external`
+  capabilities cannot be made automatic; the Rig capability-policy route
+  refuses that with `403`.
 - Agent run creation is rate limited. Provider credentials are read on the
   server from its environment.
 

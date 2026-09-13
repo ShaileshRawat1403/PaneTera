@@ -51,7 +51,9 @@ current proving environment, not the audience boundary.
   arguments, execution uses only that stored payload, and invocation validates it
   again (ADR-005). A capability explicitly enabled as `auto-invocable` (observe
   risk) may execute directly within that policy; `denied` and disabled
-  capabilities are never offered to agents.
+  capabilities are never offered to agents. Do not make external or
+  user-installed Rig capabilities `auto-invocable`; current Rig policy permits
+  that mode only for `panetera-managed` capabilities.
 - An approved stdio connection is bound to its launch identity. Changing its
   executable, arguments, working directory, environment, or the content of an
   absolute file argument bound by its launch specification requires review and

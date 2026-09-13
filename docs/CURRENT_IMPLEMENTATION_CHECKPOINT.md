@@ -70,6 +70,7 @@ Where the cited tests run:
 | Immutable approved argument binding; a proposal is approved once | VERIFIED | `server/rig/approval.ts` | `test/rigProposalBinding.test.ts`, `test/rigPanelProposalReview.test.tsx` |
 | Defensive invocation validation of the stored payload | VERIFIED | `server/rig/routes.ts` (`handleInvocation`) | `test/rigProposalBinding.test.ts` ("handleInvocation executes only the approved arguments"), `test/rigGenericRegression.test.ts` |
 | Agent-originated Rig proposals validated the same way | VERIFIED | `server/agent/rigCapabilities.ts` | `test/rigGenericRegression.test.ts` (agent proposals) |
+| Agent use of `auto-invocable` Rig tools: direct execution without a proposal | PRESENT, NOT ACCEPTANCE-VERIFIED | `server/rig/types.ts`, `server/rig/routes.ts`, `server/rig/adapter.ts`, `server/agent/rigCapabilities.ts`, `server/rig/appConnectionRegistry.ts` | No dedicated test exercises the direct path or the server-side source-class refusal; see the note below this table |
 | Rig provenance: hash chain and rotation | VERIFIED | `server/rig/provenance.ts` | `test/provenanceChainIntegrity.test.ts`, `test/provenanceRotation.test.ts`, `test/rigProvenance.test.tsx` |
 | Connection lifecycle ownership | VERIFIED | `server/rig/runtime.ts` (`connect`, `disconnectAll`), `server/index.ts` (`startPaneTeraServer`) | `test/rigLifecycle.test.ts` |
 | Explicit stdio launch identity: executable, arguments, working directory, environment, and content of file arguments | VERIFIED | `server/rig/transportSecurity.ts` (`verifyStdioSpec`) | `test/launchIdentity.test.ts` |
@@ -80,6 +81,32 @@ Where the cited tests run:
 
 Launch identity digests the files named in a connection's arguments, not their
 full import graph (ADR-002).
+
+Agent use of `auto-invocable` Rig tools at this baseline:
+
+- Capability permissions are `denied`, `proposable`, and `auto-invocable`
+  (`server/rig/types.ts`).
+- Disabled and `denied` capabilities are never offered to agents
+  (`server/rig/adapter.ts`).
+- A `proposable` capability creates a validated proposal that requires approval
+  (`server/agent/rigCapabilities.ts`).
+- An enabled `auto-invocable` capability maps to observe risk and executes
+  directly through `runtime.callTool`, without a proposal
+  (`server/agent/rigCapabilities.ts`).
+- PaneTera does not independently prove that an `auto-invocable` tool is
+  semantically read-only.
+- `auto-invocable` may be assigned only to capabilities of `panetera-managed`
+  connections. The Rig capability-policy route refuses it for
+  `local-user-installed` and `remote-external` connections with `403`
+  (`server/rig/routes.ts`).
+- Core `APP_CONNECTIONS` is empty at this baseline
+  (`server/rig/appConnectionRegistry.ts`), so core declares no managed
+  application integration that uses this path. Connection records persisted by
+  earlier or integration builds can still carry `panetera-managed`.
+- Verification: `test/rigDataPlaneHandlers.test.ts` uses `auto-invocable` only
+  as a fixture for the approval-bound invocation handler, and
+  `test/typedErrorClientParsing.test.ts` only parses the refusal message on the
+  client. Neither exercises the direct agent path or the server-side refusal.
 
 ## Headroom and grants
 
