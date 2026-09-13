@@ -1,42 +1,26 @@
 # PaneTera Workstation Contract
 
-**Status:** Locked canonical product and design contract
+**Status:** CANONICAL product, governance, and design contract
 **Product:** PaneTera
 **Audience:** Any AI-assisted builder, researcher, creator, analyst, operator,
 or decision-maker
 **Deployment:** Single-user, local-first, desktop-first V1
 
-## Current development baseline
+## Authority and implementation status
 
-Commit `a4a1664` records a tested development baseline for the workstation
-shell, composer foundation, contextual Activity and Audit surfaces, project
-selection, registered local-application routing, governed proposal
-presentation, and strict public web-preview path. It is not a release candidate
-and has no release tag. The legacy three-column shell is no longer an alternate
-product surface.
+This contract states what PaneTera must be. It does not record what any
+particular commit implements. Implementation status, its evidence, and the
+standing of experimental and legacy capabilities belong to
+`docs/CURRENT_IMPLEMENTATION_CHECKPOINT.md`. Authority between documents is
+defined in `docs/DOCUMENTATION_AUTHORITY.md`.
 
-The following are release blockers and must not be inferred from the current
-interface:
+A capability named here is required, governed, prohibited, or outside V1. Its
+presence in this contract is never a claim that it exists today.
 
-- a general Rig registry or arbitrary external MCP connection;
-- MCP capability discovery, resource attachment, or invocation;
-- durable Headroom capsules or persisted composer context;
-- the read model for work, now, attention, and next;
-- generic cross-capability proposal and provenance contracts.
-
-File and folder selection are also incomplete: they currently reuse the
-registered-project chooser. The finished interaction must allow explicit native
-selection from the local system while preserving least authority, provenance,
-and auditability. Choosing a project, choosing a file, and choosing a folder
-are three different grants and must not be cosmetic variants of one flow.
-
-PaneTera must not receive a release tag until the user-visible Rig and Headroom
-capabilities are complete, the native attachment model is accepted, the
-primary journeys are verified in Chrome, and the user explicitly approves the
-release candidate.
-
-See `docs/CURRENT_IMPLEMENTATION_CHECKPOINT.md` for the exact implemented
-boundary, release gates, and verification record.
+Choosing a project, choosing a file, and choosing a folder are three different
+grants and must not be cosmetic variants of one flow. File and folder selection
+use explicit native selection from the local system while preserving least
+authority, provenance, and auditability.
 
 ## Product promise
 
@@ -150,6 +134,31 @@ Public preview rules:
 
 Browser observations are evidence and never application authority.
 
+## Governed execution contract
+
+- Consequential actions, including tool invocation through Rig, run only
+  through a proposal that a person reviews and explicitly approves. An approval
+  authorizes one execution.
+- A proposal is validated against the capability's declared input contract when
+  it is created. Invalid arguments never reach approval.
+- The approved arguments are the reviewed execution payload. Execution uses that
+  stored payload; a caller cannot substitute different arguments after approval.
+- Invocation validates the stored payload again before execution.
+- An approved external process connection is bound to its launch identity: the
+  executable, arguments, working directory, environment, and the content of the
+  files it runs. Any change to that identity requires review and approval again.
+- External capability declarations are untrusted and disabled until a person
+  enables them.
+- Governed actions produce audit and provenance records attributed to the acting
+  principal.
+- A capability that can act outside this contract is not part of the accepted
+  governed product surface until it is brought under the contract or explicitly
+  accepted.
+
+The underlying decisions are recorded in ADR-002 (external MCP transport
+security, lifecycle, and launch identity) and ADR-005 (intent and proposal
+fidelity).
+
 ## V1 capabilities
 
 - Multi-project selection and resumption.
@@ -187,15 +196,32 @@ governed. Cloud multi-tenancy, team collaboration, mobile authoring, an MCP
 marketplace, unattended autonomous swarms, arbitrary shell execution, and
 infrastructure monitoring are outside V1.
 
-## Canonical implementation sequence
+## Release acceptance conditions
 
-1. Promote the PaneTera workstation to the only shell and remove the legacy UI.
-2. Stabilise intent resolution and the unified surface router.
-3. Extract shared authentication, Audit, Activity, notifications, and dialogs.
-4. Establish Rig as a contextual capability and connection surface.
-5. Add the read model for work, now, attention, and next.
-6. Add durable Headroom capsules and changed-understanding records.
-7. Complete governed proposal, execution, verification, and audit loops.
+PaneTera must not receive a GA or release designation until every condition
+below is satisfied and accepted in the running product. This contract does not
+record whether a condition is currently satisfied; the checkpoint does.
 
-Each phase must preserve authoritative truth boundaries and pass lint, build,
-tests, keyboard checks, and integrated browser verification.
+1. Project, file, and folder selection are distinct grants. File and folder
+   attachment use explicit native local-system selection with least authority,
+   expiry, revocation, and audit; project selection remains a durable workspace
+   operation.
+2. Rig provides governed connection records, discovery, capability review,
+   resource attachment, approval, invocation, health, lifecycle ownership, and
+   audit, according to `RIG_MCP_CONNECTION_ARCHITECTURE.md`, ADR-002, and
+   ADR-005.
+3. Headroom provides durable bounded context, provenance, freshness, inclusion
+   controls, capacity accounting, and session and project resumption without
+   fabricated precision.
+4. The work, now, attention, and next read model is usable without dashboard
+   clutter.
+5. Every capability presented as supported operates within the governed
+   execution contract. Experimental capabilities outside it are removed,
+   disabled, or explicitly accepted first.
+6. The primary journeys pass automated checks and real Chrome UX and
+   accessibility verification, with no known critical or high-severity defects.
+7. The user explicitly approves a named release candidate.
+
+Work toward these conditions preserves authoritative truth boundaries and
+passes lint, build, tests, keyboard checks, and integrated browser
+verification. Delivery sequencing is owned by `ROADMAP.md`.
